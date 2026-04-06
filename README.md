@@ -2,30 +2,34 @@
 
 AegisRange is a defensive cybersecurity simulation platform that models how modern systems detect, contain, and explain adversary behavior across identity, data, and service boundaries.
 
-## Phase 2 Status (Implemented)
+## Phase 2 (Conflict-Resolved) Status
 
-Phase 1 delivered a modular monolith backend slice. This update implements the **next phase** of the backend by expanding detection/response coverage, introducing an event-processing pipeline service, and adding more scenario validation.
+This branch resolves merge conflicts in the Phase 2 backend files and keeps the architecture aligned with `ARCHITECTURE.md` by preserving deterministic, event-driven behavior.
 
-## What Changed in This Phase
+## Key Backend Capabilities
 
-- Introduced `EventPipelineService` so primary events produce deterministic downstream artifacts:
-  - detection events (`detection.rule.triggered`)
-  - response events (`response.<action>.executed`)
-  - incident updates
-- Expanded rule and playbook support:
-  - `DET-AUTH-001`, `DET-AUTH-002`
-  - `DET-SESSION-003`
-  - `DET-DOC-004`, `DET-DOC-005`
-  - `PB-AUTH-001`, `PB-AUTH-002`, `PB-SESSION-003`, `PB-DOC-004`, `PB-DOC-005`
-- Added a dedicated scenario engine with deterministic scenario runs:
+- Event-driven flow through a pipeline service (`event -> detection -> response -> incident`)
+- Correlation-aware telemetry ingestion and lookup
+- Deterministic detection rules (auth/session/document)
+- Bounded response playbooks (rate limit, step-up auth, session revoke, access restrictions)
+- Incident assembly with timeline updates
+- Deterministic scenario engine for:
   - `SCN-AUTH-001`
   - `SCN-SESSION-002`
   - `SCN-DOC-003`
-- Added telemetry inspection endpoint and session authorization endpoint.
+
+## Improvements Included in Conflict Resolution
+
+- Added response and alert deduplication state in the in-memory store.
+- Updated auth-burst detection to honor `same actor OR same source_ip` behavior.
+- Tightened suspicious-success detection to require same source context as recent failures.
+- Added `/scenarios` endpoint for discoverability.
+- Added app version in `/health` output.
 
 ## API Endpoints
 
 - `GET /health`
+- `GET /scenarios`
 - `POST /identity/login`
 - `POST /documents/{document_id}/read`
 - `POST /session/authorize`
@@ -43,18 +47,11 @@ cd backend
 uvicorn app.main:app --reload
 ```
 
-Run scenarios:
+Run validations:
 
 ```bash
-curl -X POST http://localhost:8000/scenarios/scn-auth-001
-curl -X POST http://localhost:8000/scenarios/scn-session-002
-curl -X POST http://localhost:8000/scenarios/scn-doc-003
-```
-
-Inspect telemetry for a correlation ID:
-
-```bash
-curl "http://localhost:8000/telemetry/events?correlation_id=<correlation_id>"
+PYTHONPATH=backend python -m unittest discover -s backend/tests -v
+python -m compileall backend/app backend/tests
 ```
 
 ## Architecture and Supporting Docs

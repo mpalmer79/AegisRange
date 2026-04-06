@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
@@ -17,27 +18,53 @@ from app.services.response_service import ResponseOrchestrator
 from app.services.scenario_service import ScenarioEngine
 from app.store import STORE
 
-app = FastAPI(title="AegisRange Phase 2 API", version="0.2.0")
 
-telemetry_service = TelemetryService(STORE)
-detection_service = DetectionService(telemetry_service)
-identity_service = IdentityService(STORE)
-document_service = DocumentService()
-response_service = ResponseOrchestrator(STORE)
-incident_service = IncidentService(STORE)
-pipeline_service = EventPipelineService(
-    telemetry=telemetry_service,
-    detection=detection_service,
-    response=response_service,
-    incidents=incident_service,
-    store=STORE,
-)
-scenario_engine = ScenarioEngine(
-    identity=identity_service,
-    documents=document_service,
-    pipeline=pipeline_service,
-    store=STORE,
-)
+@dataclass
+class ServiceContext:
+    telemetry: TelemetryService
+    detection: DetectionService
+    identity: IdentityService
+    documents: DocumentService
+    response: ResponseOrchestrator
+    incidents: IncidentService
+    pipeline: EventPipelineService
+    scenarios: ScenarioEngine
+
+
+def _build_context() -> ServiceContext:
+    telemetry = TelemetryService(STORE)
+    detection = DetectionService(telemetry)
+    identity = IdentityService(STORE)
+    documents = DocumentService()
+    response = ResponseOrchestrator(STORE)
+    incidents = IncidentService(STORE)
+    pipeline = EventPipelineService(
+        telemetry=telemetry,
+        detection=detection,
+        response=response,
+        incidents=incidents,
+        store=STORE,
+    )
+    scenarios = ScenarioEngine(
+        identity=identity,
+        documents=documents,
+        pipeline=pipeline,
+        store=STORE,
+    )
+    return ServiceContext(
+        telemetry=telemetry,
+        detection=detection,
+        identity=identity,
+        documents=documents,
+        response=response,
+        incidents=incidents,
+        pipeline=pipeline,
+        scenarios=scenarios,
+    )
+
+
+app = FastAPI(title="AegisRange Phase 2 API", version="0.2.1")
+ctx = _build_context()
 
 
 class LoginRequest(BaseModel):
@@ -73,12 +100,23 @@ async def correlation_middleware(request: Request, call_next):
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "ok", "version": app.version, "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.get("/scenarios")
+def list_scenarios() -> dict[str, object]:
+    return {
+        "supported_scenarios": [
+            {"scenario_id": "SCN-AUTH-001", "route": "/scenarios/scn-auth-001"},
+            {"scenario_id": "SCN-SESSION-002", "route": "/scenarios/scn-session-002"},
+            {"scenario_id": "SCN-DOC-003", "route": "/scenarios/scn-doc-003"},
+        ]
+    }
 
 
 @app.post("/identity/login")
 def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict[str, str | bool | None]:
-    result = identity_service.authenticate(payload.username, payload.password)
+    result = ctx.identity.authenticate(payload.username, payload.password)
     event_type = "authentication.login.success" if result.success else "authentication.login.failure"
 
     event = Event(
@@ -102,7 +140,7 @@ def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(def
         confidence=Confidence.LOW,
         payload={"username": payload.username, "authentication_method": "password"},
     )
-    pipeline_service.process(event)
+    ctx.pipeline.process(event)
 
     return {
         "success": result.success,
@@ -116,7 +154,7 @@ def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(def
 
 @app.post("/documents/{document_id}/read")
 def read_document(document_id: str, payload: ReadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict[str, str | bool]:
-    allowed, document = document_service.can_read(payload.actor_role, document_id)
+    allowed, document = ctx.documents.can_read(payload.actor_role, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -144,7 +182,7 @@ def read_document(document_id: str, payload: ReadRequest, request: Request, x_so
             "classification": document.classification,
         },
     )
-    pipeline_service.process(event)
+    ctx.pipeline.process(event)
 
     return {
         "allowed": allowed,
@@ -183,24 +221,24 @@ def session_authorize(
         confidence=Confidence.LOW,
         payload={"route": payload.route, "session_id": payload.session_id},
     )
-    pipeline_service.process(event)
+    ctx.pipeline.process(event)
 
     return {"authorized": not blocked, "session_id": payload.session_id}
 
 
 @app.post("/scenarios/scn-auth-001")
 def run_scenario_auth_001(request: Request) -> dict[str, object]:
-    return scenario_engine.run_auth_001(request.state.correlation_id)
+    return ctx.scenarios.run_auth_001(request.state.correlation_id)
 
 
 @app.post("/scenarios/scn-session-002")
 def run_scenario_session_002(request: Request) -> dict[str, object]:
-    return scenario_engine.run_session_002(request.state.correlation_id)
+    return ctx.scenarios.run_session_002(request.state.correlation_id)
 
 
 @app.post("/scenarios/scn-doc-003")
 def run_scenario_doc_003(request: Request) -> dict[str, object]:
-    return scenario_engine.run_doc_003(request.state.correlation_id)
+    return ctx.scenarios.run_doc_003(request.state.correlation_id)
 
 
 @app.get("/incidents/{correlation_id}")
@@ -224,7 +262,7 @@ def get_incident(correlation_id: str) -> dict[str, object]:
 
 @app.get("/telemetry/events")
 def get_events(correlation_id: str | None = None) -> dict[str, object]:
-    events = telemetry_service.lookup_events(correlation_id=correlation_id)
+    events = ctx.telemetry.lookup_events(correlation_id=correlation_id)
     return {
         "total": len(events),
         "events": [

@@ -32,12 +32,20 @@ class DetectionService:
         if event.event_type != "authentication.login.failure":
             return None
 
-        failures = self.telemetry.lookup_events(
+        failures_actor = self.telemetry.lookup_events(
             actor_id=event.actor_id,
             event_types={"authentication.login.failure"},
             since_minutes=2,
         )
-        if len(failures) < 5:
+        failures_source = self.telemetry.lookup_events(
+            source_ip=event.source_ip,
+            event_types={"authentication.login.failure"},
+            since_minutes=2,
+        )
+
+        # DET-AUTH-001 allows same actor OR same source context.
+        candidate_failures = failures_actor if len(failures_actor) >= len(failures_source) else failures_source
+        if len(candidate_failures) < 5:
             return None
 
         return Alert(
@@ -47,9 +55,9 @@ class DetectionService:
             confidence=Confidence.MEDIUM,
             actor_id=event.actor_id,
             correlation_id=event.correlation_id,
-            contributing_event_ids=[failure.event_id for failure in failures],
-            summary=f"Detected {len(failures)} authentication failures in 2 minutes.",
-            payload={"failure_count": len(failures), "source_ip": event.source_ip},
+            contributing_event_ids=[failure.event_id for failure in candidate_failures],
+            summary=f"Detected {len(candidate_failures)} authentication failures in 2 minutes.",
+            payload={"failure_count": len(candidate_failures), "source_ip": event.source_ip},
         )
 
     def _detect_suspicious_success_after_failures(self, event: Event) -> Alert | None:
@@ -66,6 +74,10 @@ class DetectionService:
 
         latest_failure = failures[-1]
         if event.timestamp < latest_failure.timestamp:
+            return None
+
+        # Require same source context for Phase 2 deterministic interpretation.
+        if event.source_ip != latest_failure.source_ip:
             return None
 
         time_delta = event.timestamp - latest_failure.timestamp

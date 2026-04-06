@@ -34,6 +34,7 @@ class TelemetryService:
         self,
         *,
         actor_id: str | None = None,
+        source_ip: str | None = None,
         correlation_id: str | None = None,
         session_id: str | None = None,
         event_types: set[str] | None = None,
@@ -43,6 +44,8 @@ class TelemetryService:
 
         if actor_id:
             events = (event for event in events if event.actor_id == actor_id)
+        if source_ip:
+            events = (event for event in events if event.source_ip == source_ip)
         if correlation_id:
             events = (event for event in events if event.correlation_id == correlation_id)
         if session_id:
@@ -66,6 +69,7 @@ class TelemetryService:
     def _index(self, event: Event) -> None:
         if event.event_type == "authentication.login.failure":
             self.store.login_failures_by_actor[event.actor_id].append(event)
+            self.store.login_failures_by_source[event.source_ip].append(event)
         if event.event_type == "document.read.success":
             self.store.document_reads_by_actor[event.actor_id].append(event)
         if event.event_type.startswith("authorization.") and event.session_id:

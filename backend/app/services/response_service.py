@@ -22,8 +22,16 @@ class ResponseOrchestrator:
             return []
 
         responses = handler(alert)
-        self.store.responses.extend(responses)
-        return responses
+        novel_responses: list[ResponseAction] = []
+        for response in responses:
+            signature = (response.playbook_id, response.actor_id, response.correlation_id)
+            if signature in self.store.response_signatures:
+                continue
+            self.store.response_signatures.add(signature)
+            novel_responses.append(response)
+
+        self.store.responses.extend(novel_responses)
+        return novel_responses
 
     def _auth_failure_containment(self, alert: Alert) -> list[ResponseAction]:
         self.store.rate_limited_actors.add(alert.actor_id)

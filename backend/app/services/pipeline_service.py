@@ -34,9 +34,17 @@ class EventPipelineService:
         if not alerts:
             return {"alerts": 0, "responses": 0}
 
-        self.store.alerts.extend(alerts)
-        total_responses = 0
+        novel_alerts: list[Alert] = []
         for alert in alerts:
+            signature = (alert.rule_id, tuple(sorted(alert.contributing_event_ids)))
+            if signature in self.store.alert_signatures:
+                continue
+            self.store.alert_signatures.add(signature)
+            novel_alerts.append(alert)
+
+        self.store.alerts.extend(novel_alerts)
+        total_responses = 0
+        for alert in novel_alerts:
             self._emit_detection_event(alert, source_event=event)
             incident = self.incidents.register_alert(alert, source_event=event)
             responses = self.response.execute(alert)
@@ -45,7 +53,7 @@ class EventPipelineService:
                 self._emit_response_event(response_action, source_event=event)
                 self.incidents.register_response(incident, response_action)
 
-        return {"alerts": len(alerts), "responses": total_responses}
+        return {"alerts": len(novel_alerts), "responses": total_responses}
 
     def _emit_detection_event(self, alert: Alert, source_event: Event) -> None:
         detection_event = Event(
