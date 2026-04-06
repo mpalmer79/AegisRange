@@ -36,7 +36,7 @@ class EventPipelineService:
 
         novel_alerts: list[Alert] = []
         for alert in alerts:
-            signature = (alert.rule_id, tuple(sorted(alert.contributing_event_ids)))
+            signature = (alert.rule_id, alert.actor_id, alert.correlation_id)
             if signature in self.store.alert_signatures:
                 continue
             self.store.alert_signatures.add(signature)

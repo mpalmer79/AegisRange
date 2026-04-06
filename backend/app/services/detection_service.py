@@ -44,7 +44,8 @@ class DetectionService:
         )
 
         # DET-AUTH-001 allows same actor OR same source context.
-        candidate_failures = failures_actor if len(failures_actor) >= len(failures_source) else failures_source
+        actor_scope = len(failures_actor) >= len(failures_source)
+        candidate_failures = failures_actor if actor_scope else failures_source
         if len(candidate_failures) < 5:
             return None
 
@@ -57,7 +58,7 @@ class DetectionService:
             correlation_id=event.correlation_id,
             contributing_event_ids=[failure.event_id for failure in candidate_failures],
             summary=f"Detected {len(candidate_failures)} authentication failures in 2 minutes.",
-            payload={"failure_count": len(candidate_failures), "source_ip": event.source_ip},
+            payload={"failure_count": len(candidate_failures), "source_ip": event.source_ip, "scope": "actor" if actor_scope else "source_ip"},
         )
 
     def _detect_suspicious_success_after_failures(self, event: Event) -> Alert | None:

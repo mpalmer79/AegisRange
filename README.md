@@ -2,29 +2,28 @@
 
 AegisRange is a defensive cybersecurity simulation platform that models how modern systems detect, contain, and explain adversary behavior across identity, data, and service boundaries.
 
-## Phase 2 (Conflict-Resolved) Status
+## Phase 2 Backend Status
 
-This branch resolves merge conflicts in the Phase 2 backend files and keeps the architecture aligned with `ARCHITECTURE.md` by preserving deterministic, event-driven behavior.
+This repository currently provides a deterministic, event-driven Phase 2 backend slice aligned to `ARCHITECTURE.md`.
 
-## Key Backend Capabilities
+## Core Capabilities
 
-- Event-driven flow through a pipeline service (`event -> detection -> response -> incident`)
-- Correlation-aware telemetry ingestion and lookup
-- Deterministic detection rules (auth/session/document)
-- Bounded response playbooks (rate limit, step-up auth, session revoke, access restrictions)
+- Event pipeline (`event -> detection -> response -> incident`)
+- Correlation-aware telemetry ingest and lookup
+- Deterministic detection rules (authentication, session, and document activity)
+- Bounded, explainable response playbooks
 - Incident assembly with timeline updates
-- Deterministic scenario engine for:
+- Scenario-driven validation:
   - `SCN-AUTH-001`
   - `SCN-SESSION-002`
   - `SCN-DOC-003`
 
-## Improvements Included in Conflict Resolution
+## Practical Runtime Behaviors
 
-- Added response and alert deduplication state in the in-memory store.
-- Updated auth-burst detection to honor `same actor OR same source_ip` behavior.
-- Tightened suspicious-success detection to require same source context as recent failures.
-- Added `/scenarios` endpoint for discoverability.
-- Added app version in `/health` output.
+- Alert and response deduplication prevents repeated containment actions on equivalent signals.
+- Authentication burst detection supports same-actor and same-source patterns.
+- Suspicious login success correlation requires source-context continuity.
+- Scenario discovery endpoint lists executable scenario IDs and routes.
 
 ## API Endpoints
 
@@ -47,7 +46,7 @@ cd backend
 uvicorn app.main:app --reload
 ```
 
-Run validations:
+Validation commands:
 
 ```bash
 PYTHONPATH=backend python -m unittest discover -s backend/tests -v

@@ -6,7 +6,7 @@ from app.models import Alert, Event, Incident, ResponseAction
 
 
 class InMemoryStore:
-    """In-memory Phase 2 store with rule indexes and deduplication state."""
+    """In-memory Phase 2 store with correlation indexes and deduplication state."""
 
     def __init__(self) -> None:
         self.events: list[Event] = []
@@ -28,7 +28,7 @@ class InMemoryStore:
         self.authz_events_by_session: defaultdict[str, list[Event]] = defaultdict(list)
 
         # Deduplication
-        self.alert_signatures: set[tuple[str, tuple[str, ...]]] = set()
+        self.alert_signatures: set[tuple[str, str, str]] = set()
         self.response_signatures: set[tuple[str, str, str]] = set()
 
     def reset(self) -> None:
