@@ -63,7 +63,7 @@ def _build_context() -> ServiceContext:
     )
 
 
-app = FastAPI(title="AegisRange Phase 2 API", version="0.2.1")
+app = FastAPI(title="AegisRange Phase 2 API", version="0.3.0")
 ctx = _build_context()
 
 
@@ -73,6 +73,12 @@ class LoginRequest(BaseModel):
 
 
 class ReadRequest(BaseModel):
+    actor_id: str
+    actor_role: str
+    session_id: str | None = None
+
+
+class DownloadRequest(BaseModel):
     actor_id: str
     actor_role: str
     session_id: str | None = None
@@ -110,6 +116,7 @@ def list_scenarios() -> dict[str, object]:
             {"scenario_id": "SCN-AUTH-001", "route": "/scenarios/scn-auth-001"},
             {"scenario_id": "SCN-SESSION-002", "route": "/scenarios/scn-session-002"},
             {"scenario_id": "SCN-DOC-003", "route": "/scenarios/scn-doc-003"},
+            {"scenario_id": "SCN-DOC-004", "route": "/scenarios/scn-doc-004"},
         ]
     }
 
@@ -192,6 +199,54 @@ def read_document(document_id: str, payload: ReadRequest, request: Request, x_so
     }
 
 
+@app.post("/documents/{document_id}/download")
+def download_document(document_id: str, payload: DownloadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict[str, str | bool]:
+    if payload.actor_id in STORE.download_restricted_actors:
+        allowed = False
+        document = ctx.documents.documents.get(document_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        error_message = "download_restricted"
+    else:
+        allowed, document = ctx.documents.can_download(payload.actor_role, document_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        error_message = None if allowed else "classification_mismatch"
+
+    event = Event(
+        event_type="document.download.success" if allowed else "document.download.failure",
+        category="document",
+        actor_id=payload.actor_id,
+        actor_type="user",
+        actor_role=payload.actor_role,
+        target_type="document",
+        target_id=document_id,
+        request_id=_request_id(),
+        correlation_id=request.state.correlation_id,
+        session_id=payload.session_id,
+        source_ip=x_source_ip,
+        user_agent="phase2-client",
+        origin="api",
+        status="success" if allowed else "failure",
+        status_code="200" if allowed else "403",
+        error_message=error_message,
+        severity=Severity.INFORMATIONAL,
+        confidence=Confidence.LOW,
+        payload={
+            "document_id": document.document_id,
+            "classification": document.classification,
+        },
+    )
+    ctx.pipeline.process(event)
+
+    return {
+        "allowed": allowed,
+        "document_id": document.document_id,
+        "classification": document.classification,
+        "download_restricted": payload.actor_id in STORE.download_restricted_actors,
+    }
+
+
 @app.post("/session/authorize")
 def session_authorize(
     payload: AuthorizationCheckRequest,
@@ -239,6 +294,11 @@ def run_scenario_session_002(request: Request) -> dict[str, object]:
 @app.post("/scenarios/scn-doc-003")
 def run_scenario_doc_003(request: Request) -> dict[str, object]:
     return ctx.scenarios.run_doc_003(request.state.correlation_id)
+
+
+@app.post("/scenarios/scn-doc-004")
+def run_scenario_doc_004(request: Request) -> dict[str, object]:
+    return ctx.scenarios.run_doc_004(request.state.correlation_id)
 
 
 @app.get("/incidents/{correlation_id}")

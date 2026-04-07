@@ -86,6 +86,15 @@ class PipelinePhase2Tests(unittest.TestCase):
         self.assertEqual(self.store.alerts[0].rule_id, "DET-DOC-004")
         self.assertEqual(self.store.responses[0].playbook_id, "PB-DOC-004")
 
+    def test_read_to_download_exfiltration_pattern(self) -> None:
+        correlation_id = f"corr-{uuid4()}"
+        summary = self.scenarios.run_doc_004(correlation_id)
+
+        self.assertEqual(summary["scenario_id"], "SCN-DOC-004")
+        self.assertGreaterEqual(summary["alerts_total"], 1)
+        self.assertTrue(any(alert.rule_id == "DET-DOC-006" for alert in self.store.alerts))
+        self.assertIn("user-bob", summary["download_restricted_actors"])
+
 
 if __name__ == "__main__":
     unittest.main()

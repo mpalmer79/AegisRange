@@ -21,6 +21,7 @@ class DetectionService:
             self._detect_token_reuse_conflicting_origin,
             self._detect_restricted_document_access,
             self._detect_abnormal_bulk_reads,
+            self._detect_read_to_download_staging,
         ):
             match = detector(event)
             if match:
@@ -77,7 +78,6 @@ class DetectionService:
         if event.timestamp < latest_failure.timestamp:
             return None
 
-        # Require same source context for Phase 2 deterministic interpretation.
         if event.source_ip != latest_failure.source_ip:
             return None
 
@@ -170,4 +170,45 @@ class DetectionService:
             contributing_event_ids=[read.event_id for read in reads],
             summary=f"Detected {len(reads)} document reads in 5 minutes.",
             payload={"document_count": len(reads)},
+        )
+
+    def _detect_read_to_download_staging(self, event: Event) -> Alert | None:
+        if event.event_type != "document.download.success":
+            return None
+
+        reads = self.telemetry.lookup_events(
+            actor_id=event.actor_id,
+            event_types={"document.read.success"},
+            since_minutes=5,
+        )
+        downloads = self.telemetry.lookup_events(
+            actor_id=event.actor_id,
+            event_types={"document.download.success"},
+            since_minutes=5,
+        )
+
+        read_docs = {item.payload.get("document_id") for item in reads}
+        download_docs = {item.payload.get("document_id") for item in downloads}
+        overlap_docs = sorted(doc for doc in read_docs.intersection(download_docs) if doc)
+
+        if len(overlap_docs) < 3:
+            return None
+
+        contributing_ids = [item.event_id for item in reads if item.payload.get("document_id") in overlap_docs]
+        contributing_ids.extend([item.event_id for item in downloads if item.payload.get("document_id") in overlap_docs])
+
+        return Alert(
+            rule_id="DET-DOC-006",
+            rule_name="Read-To-Download Exfiltration Pattern",
+            severity=Severity.CRITICAL,
+            confidence=Confidence.HIGH,
+            actor_id=event.actor_id,
+            correlation_id=event.correlation_id,
+            contributing_event_ids=contributing_ids,
+            summary="Detected staged read-to-download behavior for overlapping sensitive documents.",
+            payload={
+                "overlap_documents": overlap_docs,
+                "overlap_count": len(overlap_docs),
+                "session_id": event.session_id,
+            },
         )

@@ -25,6 +25,7 @@ class InMemoryStore:
         self.login_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self.login_failures_by_source: defaultdict[str, list[Event]] = defaultdict(list)
         self.document_reads_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
+        self.document_downloads_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self.authz_events_by_session: defaultdict[str, list[Event]] = defaultdict(list)
 
         # Deduplication

@@ -17,12 +17,14 @@ This repository currently provides a deterministic, event-driven Phase 2 backend
   - `SCN-AUTH-001`
   - `SCN-SESSION-002`
   - `SCN-DOC-003`
+  - `SCN-DOC-004` (read-to-download exfiltration pattern)
 
 ## Practical Runtime Behaviors
 
 - Alert and response deduplication prevents repeated containment actions on equivalent signals.
 - Authentication burst detection supports same-actor and same-source patterns.
 - Suspicious login success correlation requires source-context continuity.
+- Read-to-download staging is detected as `DET-DOC-006` and maps to `PB-DOC-006` containment.
 - Scenario discovery endpoint lists executable scenario IDs and routes.
 
 ## API Endpoints
@@ -31,10 +33,12 @@ This repository currently provides a deterministic, event-driven Phase 2 backend
 - `GET /scenarios`
 - `POST /identity/login`
 - `POST /documents/{document_id}/read`
+- `POST /documents/{document_id}/download`
 - `POST /session/authorize`
 - `POST /scenarios/scn-auth-001`
 - `POST /scenarios/scn-session-002`
 - `POST /scenarios/scn-doc-003`
+- `POST /scenarios/scn-doc-004`
 - `GET /telemetry/events`
 - `GET /incidents/{correlation_id}`
 - `POST /admin/reset`

@@ -15,6 +15,7 @@ class ResponseOrchestrator:
             "DET-SESSION-003": self._session_hijack_containment,
             "DET-DOC-004": self._restricted_access_enforcement,
             "DET-DOC-005": self._bulk_access_constraint,
+            "DET-DOC-006": self._read_to_download_containment,
         }
 
         handler = handlers.get(alert.rule_id)
@@ -103,3 +104,34 @@ class ResponseOrchestrator:
                 payload={"document_count": alert.payload.get("document_count")},
             )
         ]
+
+    def _read_to_download_containment(self, alert: Alert) -> list[ResponseAction]:
+        self.store.download_restricted_actors.add(alert.actor_id)
+        responses = [
+            ResponseAction(
+                playbook_id="PB-DOC-006",
+                action_type="download_block",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={"overlap_documents": alert.payload.get("overlap_documents", [])},
+            )
+        ]
+
+        session_id = str(alert.payload.get("session_id", ""))
+        if session_id:
+            self.store.revoked_sessions.add(session_id)
+            responses.append(
+                ResponseAction(
+                    playbook_id="PB-DOC-006",
+                    action_type="session_revocation",
+                    actor_id=alert.actor_id,
+                    correlation_id=alert.correlation_id,
+                    reason="Critical read-to-download pattern requires containment.",
+                    related_alert_id=alert.alert_id,
+                    payload={"session_id": session_id},
+                )
+            )
+
+        return responses

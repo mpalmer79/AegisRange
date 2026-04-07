@@ -128,6 +128,50 @@ class ScenarioEngine:
 
         return self._summary("SCN-DOC-003", correlation_id)
 
+    def run_doc_004(self, correlation_id: str) -> dict[str, object]:
+        """SCN-DOC-004: read-to-download exfiltration pattern."""
+        document_ids = ["doc-001", "doc-002", "doc-003"]
+
+        for doc_id in document_ids:
+            allowed, doc = self.documents.can_read("admin", doc_id)
+            if not allowed or not doc:
+                raise RuntimeError("Scenario setup failed: expected admin read access")
+            self.pipeline.process(
+                self._new_event(
+                    event_type="document.read.success",
+                    category="document",
+                    actor_id="user-bob",
+                    actor_role="admin",
+                    correlation_id=correlation_id,
+                    target_type="document",
+                    target_id=doc.document_id,
+                    session_id="session-user-bob",
+                    source_ip="198.51.100.10",
+                    payload={"document_id": doc.document_id, "classification": doc.classification, "sensitivity_score": 90},
+                )
+            )
+
+        for doc_id in document_ids:
+            allowed, doc = self.documents.can_download("admin", doc_id)
+            if not allowed or not doc:
+                raise RuntimeError("Scenario setup failed: expected admin download access")
+            self.pipeline.process(
+                self._new_event(
+                    event_type="document.download.success",
+                    category="document",
+                    actor_id="user-bob",
+                    actor_role="admin",
+                    correlation_id=correlation_id,
+                    target_type="document",
+                    target_id=doc.document_id,
+                    session_id="session-user-bob",
+                    source_ip="198.51.100.10",
+                    payload={"document_id": doc.document_id, "classification": doc.classification, "sensitivity_score": 90},
+                )
+            )
+
+        return self._summary("SCN-DOC-004", correlation_id)
+
     def _summary(self, scenario_id: str, correlation_id: str) -> dict[str, object]:
         incident = self.store.incidents_by_correlation.get(correlation_id)
         return {

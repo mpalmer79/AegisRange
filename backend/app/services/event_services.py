@@ -72,5 +72,7 @@ class TelemetryService:
             self.store.login_failures_by_source[event.source_ip].append(event)
         if event.event_type == "document.read.success":
             self.store.document_reads_by_actor[event.actor_id].append(event)
+        if event.event_type == "document.download.success":
+            self.store.document_downloads_by_actor[event.actor_id].append(event)
         if event.event_type.startswith("authorization.") and event.session_id:
             self.store.authz_events_by_session[event.session_id].append(event)
