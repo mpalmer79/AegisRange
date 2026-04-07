@@ -9,7 +9,7 @@ from app.store import InMemoryStore
 
 
 class EventPipelineService:
-    """Pipeline orchestration: emitted events can produce detections, responses, and incidents."""
+    """Phase 2 orchestration: every emitted event can produce detections/responses/incidents."""
 
     def __init__(
         self,

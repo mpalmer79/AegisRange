@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
@@ -13,58 +12,17 @@ from app.services.document_service import DocumentService
 from app.services.event_services import TelemetryService
 from app.services.identity_service import IdentityService
 from app.services.incident_service import IncidentService
-from app.services.pipeline_service import EventPipelineService
 from app.services.response_service import ResponseOrchestrator
-from app.services.scenario_service import ScenarioEngine
 from app.store import STORE
 
+app = FastAPI(title="AegisRange Phase 1 API", version="0.1.0")
 
-@dataclass
-class ServiceContext:
-    telemetry: TelemetryService
-    detection: DetectionService
-    identity: IdentityService
-    documents: DocumentService
-    response: ResponseOrchestrator
-    incidents: IncidentService
-    pipeline: EventPipelineService
-    scenarios: ScenarioEngine
-
-
-def _build_context() -> ServiceContext:
-    telemetry = TelemetryService(STORE)
-    detection = DetectionService(telemetry)
-    identity = IdentityService(STORE)
-    documents = DocumentService()
-    response = ResponseOrchestrator(STORE)
-    incidents = IncidentService(STORE)
-    pipeline = EventPipelineService(
-        telemetry=telemetry,
-        detection=detection,
-        response=response,
-        incidents=incidents,
-        store=STORE,
-    )
-    scenarios = ScenarioEngine(
-        identity=identity,
-        documents=documents,
-        pipeline=pipeline,
-        store=STORE,
-    )
-    return ServiceContext(
-        telemetry=telemetry,
-        detection=detection,
-        identity=identity,
-        documents=documents,
-        response=response,
-        incidents=incidents,
-        pipeline=pipeline,
-        scenarios=scenarios,
-    )
-
-
-app = FastAPI(title="AegisRange Phase 3 API", version="0.4.0")
-ctx = _build_context()
+telemetry_service = TelemetryService(STORE)
+detection_service = DetectionService(telemetry_service)
+identity_service = IdentityService(STORE)
+document_service = DocumentService()
+response_service = ResponseOrchestrator(STORE)
+incident_service = IncidentService(STORE)
 
 
 class LoginRequest(BaseModel):
@@ -78,22 +36,19 @@ class ReadRequest(BaseModel):
     session_id: str | None = None
 
 
-class DownloadRequest(BaseModel):
-    actor_id: str
-    actor_role: str
-    session_id: str | None = None
+def _emit_and_process(event: Event) -> None:
+    telemetry_service.emit(event)
+    incident_service.register_event(event)
 
+    alerts = detection_service.evaluate(event)
+    if not alerts:
+        return
 
-class AuthorizationCheckRequest(BaseModel):
-    actor_id: str
-    actor_role: str
-    session_id: str
-    route: str
-
-
-class IncidentStatusUpdateRequest(BaseModel):
-    status: str
-    reason: str = "manual analyst update"
+    STORE.alerts.extend(alerts)
+    for alert in alerts:
+        incident = incident_service.register_alert(alert, source_event=event)
+        for response in response_service.execute(alert):
+            incident_service.register_response(incident, response)
 
 
 def _request_id() -> str:
@@ -111,24 +66,12 @@ async def correlation_middleware(request: Request, call_next):
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "version": app.version, "timestamp": datetime.utcnow().isoformat()}
-
-
-@app.get("/scenarios")
-def list_scenarios() -> dict[str, object]:
-    return {
-        "supported_scenarios": [
-            {"scenario_id": "SCN-AUTH-001", "route": "/scenarios/scn-auth-001"},
-            {"scenario_id": "SCN-SESSION-002", "route": "/scenarios/scn-session-002"},
-            {"scenario_id": "SCN-DOC-003", "route": "/scenarios/scn-doc-003"},
-            {"scenario_id": "SCN-DOC-004", "route": "/scenarios/scn-doc-004"},
-        ]
-    }
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/identity/login")
 def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict[str, str | bool | None]:
-    result = ctx.identity.authenticate(payload.username, payload.password)
+    result = identity_service.authenticate(payload.username, payload.password)
     event_type = "authentication.login.success" if result.success else "authentication.login.failure"
 
     event = Event(
@@ -143,7 +86,7 @@ def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(def
         correlation_id=request.state.correlation_id,
         session_id=result.session_id,
         source_ip=x_source_ip,
-        user_agent="phase3-client",
+        user_agent="phase1-client",
         origin="api",
         status="success" if result.success else "failure",
         status_code="200" if result.success else "401",
@@ -152,7 +95,7 @@ def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(def
         confidence=Confidence.LOW,
         payload={"username": payload.username, "authentication_method": "password"},
     )
-    ctx.pipeline.process(event)
+    _emit_and_process(event)
 
     return {
         "success": result.success,
@@ -160,13 +103,12 @@ def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(def
         "actor_role": result.actor_role,
         "session_id": result.session_id,
         "step_up_required": result.actor_id in STORE.step_up_required,
-        "rate_limited": result.actor_id in STORE.rate_limited_actors,
     }
 
 
 @app.post("/documents/{document_id}/read")
 def read_document(document_id: str, payload: ReadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict[str, str | bool]:
-    allowed, document = ctx.documents.can_read(payload.actor_role, document_id)
+    allowed, document = document_service.can_read(payload.actor_role, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -182,7 +124,7 @@ def read_document(document_id: str, payload: ReadRequest, request: Request, x_so
         correlation_id=request.state.correlation_id,
         session_id=payload.session_id,
         source_ip=x_source_ip,
-        user_agent="phase3-client",
+        user_agent="phase1-client",
         origin="api",
         status="success" if allowed else "failure",
         status_code="200" if allowed else "403",
@@ -194,116 +136,74 @@ def read_document(document_id: str, payload: ReadRequest, request: Request, x_so
             "classification": document.classification,
         },
     )
-    ctx.pipeline.process(event)
+    _emit_and_process(event)
 
-    return {
-        "allowed": allowed,
-        "document_id": document.document_id,
-        "classification": document.classification,
-        "download_restricted": payload.actor_id in STORE.download_restricted_actors,
-    }
-
-
-@app.post("/documents/{document_id}/download")
-def download_document(document_id: str, payload: DownloadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict[str, str | bool]:
-    if payload.actor_id in STORE.download_restricted_actors:
-        allowed = False
-        document = ctx.documents.documents.get(document_id)
-        if document is None:
-            raise HTTPException(status_code=404, detail="Document not found")
-        error_message = "download_restricted"
-    else:
-        allowed, document = ctx.documents.can_download(payload.actor_role, document_id)
-        if document is None:
-            raise HTTPException(status_code=404, detail="Document not found")
-        error_message = None if allowed else "classification_mismatch"
-
-    event = Event(
-        event_type="document.download.success" if allowed else "document.download.failure",
-        category="document",
-        actor_id=payload.actor_id,
-        actor_type="user",
-        actor_role=payload.actor_role,
-        target_type="document",
-        target_id=document_id,
-        request_id=_request_id(),
-        correlation_id=request.state.correlation_id,
-        session_id=payload.session_id,
-        source_ip=x_source_ip,
-        user_agent="phase3-client",
-        origin="api",
-        status="success" if allowed else "failure",
-        status_code="200" if allowed else "403",
-        error_message=error_message,
-        severity=Severity.INFORMATIONAL,
-        confidence=Confidence.LOW,
-        payload={
-            "document_id": document.document_id,
-            "classification": document.classification,
-        },
-    )
-    ctx.pipeline.process(event)
-
-    return {
-        "allowed": allowed,
-        "document_id": document.document_id,
-        "classification": document.classification,
-        "download_restricted": payload.actor_id in STORE.download_restricted_actors,
-    }
-
-
-@app.post("/session/authorize")
-def session_authorize(
-    payload: AuthorizationCheckRequest,
-    request: Request,
-    x_source_ip: str = Header(default="127.0.0.1"),
-) -> dict[str, str | bool]:
-    blocked = payload.session_id in STORE.revoked_sessions
-
-    event = Event(
-        event_type="authorization.check.failure" if blocked else "authorization.check.success",
-        category="session",
-        actor_id=payload.actor_id,
-        actor_type="user",
-        actor_role=payload.actor_role,
-        target_type="session",
-        target_id=payload.session_id,
-        request_id=_request_id(),
-        correlation_id=request.state.correlation_id,
-        session_id=payload.session_id,
-        source_ip=x_source_ip,
-        user_agent="phase3-client",
-        origin="api",
-        status="failure" if blocked else "success",
-        status_code="403" if blocked else "200",
-        error_message="session_revoked" if blocked else None,
-        severity=Severity.INFORMATIONAL,
-        confidence=Confidence.LOW,
-        payload={"route": payload.route, "session_id": payload.session_id},
-    )
-    ctx.pipeline.process(event)
-
-    return {"authorized": not blocked, "session_id": payload.session_id}
+    return {"allowed": allowed, "document_id": document.document_id, "classification": document.classification}
 
 
 @app.post("/scenarios/scn-auth-001")
 def run_scenario_auth_001(request: Request) -> dict[str, object]:
-    return ctx.scenarios.run_auth_001(request.state.correlation_id)
+    """Credential Abuse with Suspicious Success: 4 failures then success."""
+    correlation_id = request.state.correlation_id
 
+    for _ in range(4):
+        identity_service.authenticate("alice", "wrong")
+        failure = Event(
+            event_type="authentication.login.failure",
+            category="authentication",
+            actor_id="user-alice",
+            actor_type="user",
+            actor_role="analyst",
+            target_type="identity",
+            target_id="alice",
+            request_id=_request_id(),
+            correlation_id=correlation_id,
+            source_ip="203.0.113.10",
+            user_agent="scenario-engine",
+            origin="internal",
+            status="failure",
+            status_code="401",
+            error_message="invalid_credentials",
+            severity=Severity.INFORMATIONAL,
+            confidence=Confidence.LOW,
+            payload={"username": "alice", "authentication_method": "password"},
+        )
+        _emit_and_process(failure)
 
-@app.post("/scenarios/scn-session-002")
-def run_scenario_session_002(request: Request) -> dict[str, object]:
-    return ctx.scenarios.run_session_002(request.state.correlation_id)
+    success_result = identity_service.authenticate("alice", "correct-horse")
+    success_event = Event(
+        event_type="authentication.login.success",
+        category="authentication",
+        actor_id=success_result.actor_id,
+        actor_type="user",
+        actor_role=success_result.actor_role,
+        target_type="identity",
+        target_id="alice",
+        request_id=_request_id(),
+        correlation_id=correlation_id,
+        session_id=success_result.session_id,
+        source_ip="203.0.113.10",
+        user_agent="scenario-engine",
+        origin="internal",
+        status="success",
+        status_code="200",
+        severity=Severity.INFORMATIONAL,
+        confidence=Confidence.LOW,
+        payload={"username": "alice", "authentication_method": "password"},
+    )
+    _emit_and_process(success_event)
 
+    incident = STORE.incidents_by_correlation.get(correlation_id)
 
-@app.post("/scenarios/scn-doc-003")
-def run_scenario_doc_003(request: Request) -> dict[str, object]:
-    return ctx.scenarios.run_doc_003(request.state.correlation_id)
-
-
-@app.post("/scenarios/scn-doc-004")
-def run_scenario_doc_004(request: Request) -> dict[str, object]:
-    return ctx.scenarios.run_doc_004(request.state.correlation_id)
+    return {
+        "scenario_id": "SCN-AUTH-001",
+        "correlation_id": correlation_id,
+        "events_total": len([e for e in STORE.events if e.correlation_id == correlation_id]),
+        "alerts_total": len([a for a in STORE.alerts if a.correlation_id == correlation_id]),
+        "responses_total": len([r for r in STORE.responses if r.correlation_id == correlation_id]),
+        "incident_id": incident.incident_id if incident else None,
+        "step_up_required": "user-alice" in STORE.step_up_required,
+    }
 
 
 @app.get("/incidents/{correlation_id}")
@@ -322,45 +222,6 @@ def get_incident(correlation_id: str) -> dict[str, object]:
         "containment_status": incident.containment_status,
         "event_ids": incident.event_ids,
         "timeline": [entry.__dict__ for entry in incident.timeline],
-    }
-
-
-@app.post("/incidents/{correlation_id}/status")
-def update_incident_status(correlation_id: str, payload: IncidentStatusUpdateRequest) -> dict[str, object]:
-    try:
-        incident = ctx.incidents.transition_status(correlation_id, payload.status, payload.reason)
-    except ValueError as exc:
-        detail = str(exc)
-        if detail == "Incident not found":
-            raise HTTPException(status_code=404, detail=detail) from exc
-        raise HTTPException(status_code=400, detail=detail) from exc
-
-    return {
-        "incident_id": incident.incident_id,
-        "correlation_id": incident.correlation_id,
-        "status": incident.status,
-        "containment_status": incident.containment_status,
-        "updated_at": incident.updated_at.isoformat(),
-        "closed_at": incident.closed_at.isoformat() if incident.closed_at else None,
-    }
-
-
-@app.get("/telemetry/events")
-def get_events(correlation_id: str | None = None) -> dict[str, object]:
-    events = ctx.telemetry.lookup_events(correlation_id=correlation_id)
-    return {
-        "total": len(events),
-        "events": [
-            {
-                "event_id": event.event_id,
-                "event_type": event.event_type,
-                "category": event.category,
-                "actor_id": event.actor_id,
-                "correlation_id": event.correlation_id,
-                "status": event.status,
-            }
-            for event in events
-        ],
     }
 
 

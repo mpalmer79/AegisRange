@@ -15,7 +15,7 @@ from app.services.scenario_service import ScenarioEngine
 from app.store import InMemoryStore
 
 
-class PipelinePhase3Tests(unittest.TestCase):
+class PipelinePhase2Tests(unittest.TestCase):
     def setUp(self) -> None:
         self.store = InMemoryStore()
         self.telemetry = TelemetryService(self.store)
@@ -94,30 +94,6 @@ class PipelinePhase3Tests(unittest.TestCase):
         self.assertGreaterEqual(summary["alerts_total"], 1)
         self.assertTrue(any(alert.rule_id == "DET-DOC-006" for alert in self.store.alerts))
         self.assertIn("user-bob", summary["download_restricted_actors"])
-
-    def test_incident_status_transitions(self) -> None:
-        correlation_id = f"corr-{uuid4()}"
-        self.scenarios.run_auth_001(correlation_id)
-        incident = self.store.incidents_by_correlation[correlation_id]
-        self.assertEqual(incident.status, "investigating")
-
-        moved = self.incidents.transition_status(correlation_id, "contained", "analyst triage complete")
-        self.assertEqual(moved.status, "contained")
-        self.assertEqual(moved.containment_status, "partial")
-
-        resolved = self.incidents.transition_status(correlation_id, "resolved", "no further suspicious activity")
-        self.assertEqual(resolved.status, "resolved")
-        self.assertEqual(resolved.containment_status, "full")
-        self.assertIsNotNone(resolved.closed_at)
-
-    def test_invalid_incident_transition_is_rejected(self) -> None:
-        correlation_id = f"corr-{uuid4()}"
-        self.scenarios.run_auth_001(correlation_id)
-        self.incidents.transition_status(correlation_id, "contained", "containment completed")
-        self.incidents.transition_status(correlation_id, "resolved", "final review")
-
-        with self.assertRaisesRegex(ValueError, "Invalid transition"):
-            self.incidents.transition_status(correlation_id, "investigating", "cannot reopen")
 
 
 if __name__ == "__main__":

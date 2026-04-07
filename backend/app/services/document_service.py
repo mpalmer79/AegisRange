@@ -19,8 +19,6 @@ class Document:
 
 
 class DocumentService:
-    """Deterministic document authorization service used by scenarios and APIs."""
-
     def __init__(self) -> None:
         self.documents = {
             "doc-001": Document(document_id="doc-001", classification="public"),
@@ -29,12 +27,6 @@ class DocumentService:
         }
 
     def can_read(self, actor_role: str, document_id: str) -> tuple[bool, Document | None]:
-        return self._can_access(actor_role, document_id)
-
-    def can_download(self, actor_role: str, document_id: str) -> tuple[bool, Document | None]:
-        return self._can_access(actor_role, document_id)
-
-    def _can_access(self, actor_role: str, document_id: str) -> tuple[bool, Document | None]:
         document = self.documents.get(document_id)
         if not document:
             return False, None
