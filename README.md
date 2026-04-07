@@ -59,6 +59,12 @@ PYTHONPATH=backend python -m unittest discover -s backend/tests -v
 python -m compileall backend/app backend/tests
 ```
 
+If your PR shows GitHub merge conflicts against `main`, you can use the helper script:
+
+```bash
+bash scripts/resolve_pr_conflicts.sh
+```
+
 ## Architecture and Supporting Docs
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)
