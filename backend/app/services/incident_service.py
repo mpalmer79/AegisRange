@@ -46,7 +46,7 @@ class IncidentService:
             )
 
         if incident is None:
-            # Medium/low confidence detections are kept as alerts without incident creation in Phase 1.
+            # Medium/low confidence detections are retained as alerts without incident creation.
             return Incident(
                 incident_type="none",
                 primary_actor_id=alert.actor_id,
