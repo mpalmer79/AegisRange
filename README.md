@@ -2,47 +2,38 @@
 
 AegisRange is a defensive cybersecurity simulation platform that models how modern systems detect, contain, and explain adversary behavior across identity, data, and service boundaries.
 
-## Phase 2+ Backend Status
+## Phase 1 Status (Implemented)
 
-This repository currently provides a deterministic, event-driven Phase 2 backend slice aligned to `ARCHITECTURE.md`.
+Phase 1 in `ARCHITECTURE.md` defines a modular monolith with an event-driven flow.
 
-## Core Capabilities
+This repository now includes a first working backend slice under `backend/app` with:
 
-- Event pipeline (`event -> detection -> response -> incident`)
-- Correlation-aware telemetry ingest and lookup
-- Deterministic detection rules (authentication, session, and document activity)
-- Bounded, explainable response playbooks
-- Incident assembly with timeline updates
-- Incident lifecycle state transitions (`open -> investigating -> contained -> resolved`)
-- Scenario-driven validation:
-  - `SCN-AUTH-001`
-  - `SCN-SESSION-002`
-  - `SCN-DOC-003`
-  - `SCN-DOC-004` (read-to-download exfiltration pattern)
+- FastAPI entrypoint (`main.py`)
+- telemetry normalization and event storage
+- deterministic detection rules
+- controlled response orchestration
+- incident creation and timeline updates
+- deterministic scenario execution for `SCN-AUTH-001`
 
-## Practical Runtime Behaviors
+## Implemented Modules
 
-- Alert and response deduplication prevents repeated containment actions on equivalent signals.
-- Authentication burst detection supports same-actor and same-source patterns.
-- Suspicious login success correlation requires source-context continuity.
-- Read-to-download staging is detected as `DET-DOC-006` and maps to `PB-DOC-006` containment.
-- Scenario discovery endpoint lists executable scenario IDs and routes.
+Within the monolith, boundaries are represented as services:
 
-## API Endpoints
+- **Identity Module**: basic authentication and session creation
+- **Document Module**: document authorization checks by role/classification
+- **Telemetry Module**: canonical event emission and lookup
+- **Detection Engine**: deterministic rules (`DET-AUTH-001`, `DET-AUTH-002`, `DET-DOC-005`)
+- **Response Orchestrator**: playbook actions (`PB-AUTH-001`, `PB-AUTH-002`, `PB-DOC-005`)
+- **Incident Service**: incident creation, enrichment, and timeline entries
+- **Scenario Engine**: `SCN-AUTH-001` end-to-end simulation
+
+## API Endpoints (Phase 1)
 
 - `GET /health`
-- `GET /scenarios`
 - `POST /identity/login`
 - `POST /documents/{document_id}/read`
-- `POST /documents/{document_id}/download`
-- `POST /session/authorize`
 - `POST /scenarios/scn-auth-001`
-- `POST /scenarios/scn-session-002`
-- `POST /scenarios/scn-doc-003`
-- `POST /scenarios/scn-doc-004`
-- `GET /telemetry/events`
 - `GET /incidents/{correlation_id}`
-- `POST /incidents/{correlation_id}/status`
 - `POST /admin/reset`
 
 ## Run Locally
@@ -52,11 +43,16 @@ cd backend
 uvicorn app.main:app --reload
 ```
 
-Validation commands:
+Then execute scenario:
 
 ```bash
-PYTHONPATH=backend python -m unittest discover -s backend/tests -v
-python -m compileall backend/app backend/tests
+curl -X POST http://localhost:8000/scenarios/scn-auth-001
+```
+
+Use the returned `correlation_id` to inspect incident state:
+
+```bash
+curl http://localhost:8000/incidents/<correlation_id>
 ```
 
 ## Architecture and Supporting Docs
