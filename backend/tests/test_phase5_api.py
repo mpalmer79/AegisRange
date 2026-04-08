@@ -85,7 +85,8 @@ class TestIncidentNotesEndpoint(APITestBase):
         )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertEqual(data["author"], "analyst-1")
+        # Author is now attributed to the authenticated platform user, not the client-supplied value
+        self.assertEqual(data["author"], "admin")
         self.assertIn("note_id", data)
 
     def test_get_notes(self) -> None:

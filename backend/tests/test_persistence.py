@@ -205,8 +205,6 @@ class TestPersistenceRoundTrip(unittest.TestCase):
         client.post("/admin/reset")
         resp = client.post("/scenarios/scn-auth-001")
         data = resp.json()
-        events_count = data["events_total"]
-        alerts_count = data["alerts_total"]
         corr_id = data["correlation_id"]
 
         # Manually save (middleware won't fire for test env)

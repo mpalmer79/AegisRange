@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
@@ -336,7 +336,6 @@ class ReportService:
                 tactics_covered.add(mapping["tactic"])
                 techniques_covered.add(mapping["technique"])
 
-        total_tactics = len({m["tactic"] for m in MITRE_RULE_MAPPING.values()})
         total_techniques = len({m["technique"] for m in MITRE_RULE_MAPPING.values()})
 
         coverage_percentage = round(

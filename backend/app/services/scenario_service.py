@@ -24,7 +24,7 @@ class ScenarioEngine:
         self.pipeline = pipeline
         self.store = store
 
-    def run_auth_001(self, correlation_id: str) -> dict[str, object]:
+    def run_auth_001(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
         """SCN-AUTH-001: credential abuse with suspicious success."""
         for _ in range(5):
             self.identity.authenticate("alice", "wrong")
@@ -59,9 +59,9 @@ class ScenarioEngine:
             )
         )
 
-        return self._summary("SCN-AUTH-001", correlation_id)
+        return self._summary("SCN-AUTH-001", correlation_id, operated_by=operated_by)
 
-    def run_session_002(self, correlation_id: str) -> dict[str, object]:
+    def run_session_002(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
         """SCN-SESSION-002: token reuse from conflicting origins."""
         login = self.identity.authenticate("bob", "hunter2")
         session_id = login.session_id
@@ -99,9 +99,9 @@ class ScenarioEngine:
                 )
             )
 
-        return self._summary("SCN-SESSION-002", correlation_id)
+        return self._summary("SCN-SESSION-002", correlation_id, operated_by=operated_by)
 
-    def run_doc_003(self, correlation_id: str) -> dict[str, object]:
+    def run_doc_003(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
         """SCN-DOC-003: abnormal bulk read access."""
         login = self.identity.authenticate("bob", "hunter2")
         session_id = login.session_id
@@ -130,9 +130,9 @@ class ScenarioEngine:
                 )
             )
 
-        return self._summary("SCN-DOC-003", correlation_id)
+        return self._summary("SCN-DOC-003", correlation_id, operated_by=operated_by)
 
-    def run_doc_004(self, correlation_id: str) -> dict[str, object]:
+    def run_doc_004(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
         """SCN-DOC-004: read-to-download exfiltration pattern."""
         login = self.identity.authenticate("bob", "hunter2")
         session_id = login.session_id
@@ -176,9 +176,9 @@ class ScenarioEngine:
                 )
             )
 
-        return self._summary("SCN-DOC-004", correlation_id)
+        return self._summary("SCN-DOC-004", correlation_id, operated_by=operated_by)
 
-    def run_svc_005(self, correlation_id: str) -> dict[str, object]:
+    def run_svc_005(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
         """SCN-SVC-005: unauthorized service access."""
         routes = ["/admin/config", "/admin/secrets", "/admin/users", "/admin/audit"]
         for route in routes:
@@ -198,9 +198,9 @@ class ScenarioEngine:
                 )
             )
 
-        return self._summary("SCN-SVC-005", correlation_id)
+        return self._summary("SCN-SVC-005", correlation_id, operated_by=operated_by)
 
-    def run_corr_006(self, correlation_id: str) -> dict[str, object]:
+    def run_corr_006(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
         """SCN-CORR-006: multi-signal compromise sequence."""
 
         # --- Phase 1: Credential abuse (triggers DET-AUTH-001 + DET-AUTH-002) ---
@@ -323,14 +323,14 @@ class ScenarioEngine:
                 )
             )
 
-        return self._summary("SCN-CORR-006", correlation_id)
+        return self._summary("SCN-CORR-006", correlation_id, operated_by=operated_by)
 
-    def _summary(self, scenario_id: str, correlation_id: str) -> dict[str, object]:
+    def _summary(self, scenario_id: str, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
         incident = self.store.incidents_by_correlation.get(correlation_id)
         events_count = len([e for e in self.store.events if e.correlation_id == correlation_id])
         alerts_count = len([a for a in self.store.alerts if a.correlation_id == correlation_id])
         responses_count = len([r for r in self.store.responses if r.correlation_id == correlation_id])
-        summary = {
+        summary: dict[str, object] = {
             "scenario_id": scenario_id,
             "correlation_id": correlation_id,
             "events_total": events_count,
@@ -347,6 +347,8 @@ class ScenarioEngine:
             "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
             "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
         }
+        if operated_by:
+            summary["operated_by"] = operated_by
         self.store.scenario_history.append({
             **summary,
             "executed_at": datetime.utcnow().isoformat(),

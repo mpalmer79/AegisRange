@@ -106,8 +106,11 @@ class AuthService:
 
     # -- public API ----------------------------------------------------------
 
-    def authenticate(self, username: str, password: str) -> tuple[bool, str | None]:
-        """Authenticate a user and return ``(success, token | None)``.
+    def authenticate(self, username: str, password: str) -> tuple[bool, str | None, datetime | None]:
+        """Authenticate a user and return ``(success, token | None, expires_at | None)``.
+
+        The returned ``expires_at`` is read back from the newly-created
+        token so there is a single source of truth for expiration.
 
         For the simulation platform the accepted password is
         ``{username}_pass`` (e.g. ``"admin_pass"`` for the admin user).
@@ -115,16 +118,20 @@ class AuthService:
         user = self._users.get(username)
         if user is None:
             logger.warning("Authentication failed: unknown user %s", username)
-            return False, None
+            return False, None, None
 
         expected_password = f"{username}_pass"
         if password != expected_password:
             logger.warning("Authentication failed: bad password for %s", username)
-            return False, None
+            return False, None, None
 
         token = self.create_token(username, user.role)
+        # Read expiry back from the token we just created so callers
+        # never have to compute it independently.
+        payload = self.verify_token(token)
+        expires_at = payload.exp if payload else None
         logger.info("User %s authenticated successfully", username)
-        return True, token
+        return True, token, expires_at
 
     def create_token(self, username: str, role: str) -> str:
         """Create a JWT-style token using stdlib only.
@@ -290,6 +297,10 @@ def require_role(minimum_role: str):
                 detail=f"Role '{payload.role}' (level {user_level}) does not meet "
                        f"minimum required role '{minimum_role}' (level {minimum_level})",
             )
+
+        # Stash the verified identity on request.state so handlers
+        # can attribute actions to the authenticated platform user.
+        request.state.platform_user = payload
 
         return payload
 

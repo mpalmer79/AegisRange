@@ -12,21 +12,24 @@ class TestAuthService(unittest.TestCase):
         self.service = AuthService()
 
     def test_authenticate_valid_user(self) -> None:
-        success, token = self.service.authenticate("admin", "admin_pass")
+        success, token, expires_at = self.service.authenticate("admin", "admin_pass")
         self.assertTrue(success)
         self.assertIsNotNone(token)
         self.assertIsInstance(token, str)
         self.assertGreater(len(token), 10)
+        self.assertIsNotNone(expires_at)
 
     def test_authenticate_invalid_password(self) -> None:
-        success, token = self.service.authenticate("admin", "wrong_pass")
+        success, token, expires_at = self.service.authenticate("admin", "wrong_pass")
         self.assertFalse(success)
         self.assertIsNone(token)
+        self.assertIsNone(expires_at)
 
     def test_authenticate_unknown_user(self) -> None:
-        success, token = self.service.authenticate("nonexistent", "anything")
+        success, token, expires_at = self.service.authenticate("nonexistent", "anything")
         self.assertFalse(success)
         self.assertIsNone(token)
+        self.assertIsNone(expires_at)
 
     def test_create_and_verify_token(self) -> None:
         token = self.service.create_token("admin", "admin")
