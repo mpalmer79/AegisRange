@@ -44,7 +44,7 @@ class TelemetryService:
 
     def emit(self, event: Event) -> Event:
         self._validate(event)
-        self.store.events.append(event)
+        self.store.append_event(event)
 
         if event.event_type == "authentication.login.failure":
             self.store.login_failures_by_actor[event.actor_id].append(event)

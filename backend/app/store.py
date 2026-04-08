@@ -31,6 +31,46 @@ class InMemoryStore:
         self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
         self._persistence = None
 
+    # --- Write methods (single owners of entity mutations) ---
+
+    def append_event(self, event: Event) -> None:
+        """Append a single event and persist incrementally."""
+        self.events.append(event)
+        if self._persistence:
+            self._persistence.persist_event(event)
+
+    def extend_alerts(self, alerts: list[Alert]) -> None:
+        """Extend alerts list and persist incrementally."""
+        self.alerts.extend(alerts)
+        if self._persistence:
+            self._persistence.persist_alerts(alerts)
+
+    def extend_responses(self, responses: list[ResponseAction]) -> None:
+        """Extend responses list and persist incrementally."""
+        self.responses.extend(responses)
+        if self._persistence:
+            self._persistence.persist_responses(responses)
+
+    def upsert_incident(self, incident: Incident) -> None:
+        """Insert or update an incident and persist incrementally."""
+        self.incidents_by_correlation[incident.correlation_id] = incident
+        if self._persistence:
+            self._persistence.persist_incident(incident)
+
+    def append_incident_note(self, correlation_id: str, note: dict) -> None:
+        """Append an incident note and persist incrementally."""
+        self.incident_notes[correlation_id].append(note)
+        if self._persistence:
+            self._persistence.persist_incident_note(correlation_id, note)
+
+    def append_scenario_history(self, entry: dict) -> None:
+        """Append a scenario history entry and persist incrementally."""
+        self.scenario_history.append(entry)
+        if self._persistence:
+            self._persistence.persist_scenario_history_entry(entry)
+
+    # --- Persistence lifecycle ---
+
     def enable_persistence(self, db_path: str = "aegisrange.db") -> None:
         """Enable SQLite persistence. Call once at startup."""
         from app.persistence import PersistenceLayer
@@ -38,9 +78,14 @@ class InMemoryStore:
         self._persistence.load()
 
     def save(self) -> None:
-        """Persist current state to SQLite (no-op if persistence not enabled)."""
+        """Persist operational state to SQLite (no-op if persistence not enabled).
+
+        Entity tables (events, alerts, responses, incidents, notes,
+        scenario_history) are persisted incrementally via write methods.
+        This only saves operational state (sets, dicts).
+        """
         if self._persistence:
-            self._persistence.save()
+            self._persistence.save_operational_state()
 
     def reset(self) -> None:
         if self._persistence:
