@@ -28,6 +28,9 @@ VALID_CATEGORIES = {
     "response",
     "incident",
     "scenario",
+    "authorization",
+    "artifact",
+    "policy",
 }
 
 VALID_STATUSES = {"success", "failure"}
@@ -47,6 +50,10 @@ class TelemetryService:
             self.store.login_failures_by_actor[event.actor_id].append(event)
         if event.event_type == "document.read.success":
             self.store.document_reads_by_actor[event.actor_id].append(event)
+        if event.event_type == "authorization.failure":
+            self.store.authorization_failures_by_actor[event.actor_id].append(event)
+        if event.event_type == "artifact.validation.failed":
+            self.store.artifact_failures_by_actor[event.actor_id].append(event)
 
         return event
 

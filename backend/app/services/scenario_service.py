@@ -177,6 +177,153 @@ class ScenarioEngine:
 
         return self._summary("SCN-DOC-004", correlation_id)
 
+    def run_svc_005(self, correlation_id: str) -> dict[str, object]:
+        """SCN-SVC-005: unauthorized service access."""
+        routes = ["/admin/config", "/admin/secrets", "/admin/users", "/admin/audit"]
+        for route in routes:
+            self.pipeline.process(
+                self._new_event(
+                    event_type="authorization.failure",
+                    category="system",
+                    actor_id="svc-data-processor",
+                    actor_type="service",
+                    actor_role="service",
+                    correlation_id=correlation_id,
+                    target_id=route,
+                    source_ip="10.0.1.50",
+                    status="failure",
+                    status_code="403",
+                    payload={"route": route, "service_id": "svc-data-processor"},
+                )
+            )
+
+        return self._summary("SCN-SVC-005", correlation_id)
+
+    def run_corr_006(self, correlation_id: str) -> dict[str, object]:
+        """SCN-CORR-006: multi-signal compromise sequence."""
+
+        # --- Phase 1: Credential abuse (triggers DET-AUTH-001 + DET-AUTH-002) ---
+        for _ in range(5):
+            self.identity.authenticate("alice", "wrong")
+            self.pipeline.process(
+                self._new_event(
+                    event_type="authentication.login.failure",
+                    category="authentication",
+                    actor_id="user-alice",
+                    actor_role="analyst",
+                    correlation_id=correlation_id,
+                    target_id="alice",
+                    status="failure",
+                    status_code="401",
+                    error_message="invalid_credentials",
+                    payload={"username": "alice", "authentication_method": "password"},
+                )
+            )
+
+        success_result = self.identity.authenticate("alice", "correct-horse")
+        self.pipeline.process(
+            self._new_event(
+                event_type="authentication.login.success",
+                category="authentication",
+                actor_id=success_result.actor_id,
+                actor_role=success_result.actor_role,
+                correlation_id=correlation_id,
+                target_id="alice",
+                status="success",
+                status_code="200",
+                session_id=success_result.session_id,
+                payload={"username": "alice", "authentication_method": "password"},
+            )
+        )
+
+        session_id = success_result.session_id
+
+        # --- Phase 2: Bulk document access (triggers DET-DOC-005) ---
+        doc_ids_bulk = ["doc-001", "doc-002"]
+        for index in range(20):
+            doc_id = doc_ids_bulk[index % 2]
+            allowed, doc = self.documents.can_read("analyst", doc_id)
+            if not allowed or not doc:
+                raise RuntimeError("Scenario setup failed: expected analyst read access")
+
+            self.pipeline.process(
+                self._new_event(
+                    event_type="document.read.success",
+                    category="document",
+                    actor_id="user-alice",
+                    actor_role="analyst",
+                    correlation_id=correlation_id,
+                    target_type="document",
+                    target_id=doc.document_id,
+                    session_id=session_id,
+                    source_ip="203.0.113.10",
+                    payload={
+                        "document_id": f"{doc.document_id}-{index}",
+                        "classification": doc.classification,
+                        "sensitivity_score": 80,
+                    },
+                )
+            )
+
+        # --- Phase 3: Read-to-download exfiltration (triggers DET-DOC-006) ---
+        exfil_doc_ids = ["doc-001", "doc-002", "doc-003"]
+
+        # Reads
+        for doc_id in exfil_doc_ids:
+            if doc_id in ("doc-001", "doc-002"):
+                allowed, doc = self.documents.can_read("analyst", doc_id)
+                if not allowed or not doc:
+                    raise RuntimeError("Scenario setup failed: expected analyst read access")
+            else:
+                # doc-003 is restricted; analyst cannot read it via access control,
+                # but the scenario generates the event directly to test detection.
+                doc = self.documents.documents[doc_id]
+
+            self.pipeline.process(
+                self._new_event(
+                    event_type="document.read.success",
+                    category="document",
+                    actor_id="user-alice",
+                    actor_role="analyst",
+                    correlation_id=correlation_id,
+                    target_type="document",
+                    target_id=doc.document_id,
+                    session_id=session_id,
+                    source_ip="203.0.113.10",
+                    payload={
+                        "document_id": doc.document_id,
+                        "classification": doc.classification,
+                        "sensitivity_score": 90,
+                    },
+                )
+            )
+
+        # Downloads — bypass access control since actor may already be restricted
+        # by earlier detection responses. Scenario tests detection patterns.
+        for doc_id in exfil_doc_ids:
+            doc = self.documents.documents[doc_id]
+
+            self.pipeline.process(
+                self._new_event(
+                    event_type="document.download.success",
+                    category="document",
+                    actor_id="user-alice",
+                    actor_role="analyst",
+                    correlation_id=correlation_id,
+                    target_type="document",
+                    target_id=doc.document_id,
+                    session_id=session_id,
+                    source_ip="203.0.113.10",
+                    payload={
+                        "document_id": doc.document_id,
+                        "classification": doc.classification,
+                        "sensitivity_score": 90,
+                    },
+                )
+            )
+
+        return self._summary("SCN-CORR-006", correlation_id)
+
     def _summary(self, scenario_id: str, correlation_id: str) -> dict[str, object]:
         incident = self.store.incidents_by_correlation.get(correlation_id)
         return {
@@ -189,6 +336,9 @@ class ScenarioEngine:
             "step_up_required": "user-alice" in self.store.step_up_required,
             "revoked_sessions": sorted(self.store.revoked_sessions),
             "download_restricted_actors": sorted(self.store.download_restricted_actors),
+            "disabled_services": sorted(self.store.disabled_services),
+            "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
+            "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
         }
 
     @staticmethod
@@ -200,6 +350,7 @@ class ScenarioEngine:
         actor_role: str,
         correlation_id: str,
         payload: dict[str, object],
+        actor_type: str = "user",
         target_id: str | None = None,
         target_type: str = "identity",
         session_id: str | None = None,
@@ -212,7 +363,7 @@ class ScenarioEngine:
             event_type=event_type,
             category=category,
             actor_id=actor_id,
-            actor_type="user",
+            actor_type=actor_type,
             actor_role=actor_role,
             target_type=target_type,
             target_id=target_id,

@@ -75,6 +75,9 @@ class IncidentService:
         if source_event.session_id:
             if source_event.session_id not in incident.affected_sessions:
                 incident.affected_sessions.append(source_event.session_id)
+        if source_event.actor_type == "service" and source_event.actor_id:
+            if source_event.actor_id not in incident.affected_services:
+                incident.affected_services.append(source_event.actor_id)
 
         return incident
 
@@ -98,6 +101,9 @@ class IncidentService:
             "DET-DOC-004": "policy_violation",
             "DET-DOC-005": "data_exfiltration",
             "DET-DOC-006": "data_exfiltration",
+            "DET-SVC-007": "service_misuse",
+            "DET-ART-008": "artifact_tampering",
+            "DET-POL-009": "privileged_change_abuse",
             "DET-CORR-010": "multi_signal_compromise",
         }
         return rule_to_type.get(alert.rule_id, "suspicious_account_activity")
