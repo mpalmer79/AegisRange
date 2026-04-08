@@ -16,6 +16,10 @@ class ResponseOrchestrator:
             "DET-DOC-004": self._restricted_access_enforcement,
             "DET-DOC-005": self._bulk_access_constraint,
             "DET-DOC-006": self._data_exfiltration_containment,
+            "DET-SVC-007": self._service_identity_containment,
+            "DET-ART-008": self._artifact_quarantine,
+            "DET-POL-009": self._privileged_change_control,
+            "DET-CORR-010": self._multi_signal_incident_containment,
         }
 
         handler = handlers.get(alert.rule_id)
@@ -114,6 +118,85 @@ class ResponseOrchestrator:
                     "read_count": alert.payload.get("read_count"),
                     "download_count": alert.payload.get("download_count"),
                     "overlapping_documents": alert.payload.get("overlapping_documents"),
+                },
+            )
+        ]
+
+    def _service_identity_containment(self, alert: Alert) -> list[ResponseAction]:
+        service_id = alert.payload.get("service_id")
+        route_list = alert.payload.get("route_list", [])
+        if service_id:
+            self.store.disabled_services.add(service_id)
+            if service_id not in self.store.blocked_routes:
+                self.store.blocked_routes[service_id] = set()
+            self.store.blocked_routes[service_id].update(route_list)
+        return [
+            ResponseAction(
+                playbook_id="PB-SVC-007",
+                action_type="service_disabled",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={
+                    "service_id": service_id,
+                    "route_list": route_list,
+                },
+            )
+        ]
+
+    def _artifact_quarantine(self, alert: Alert) -> list[ResponseAction]:
+        artifact_ids = alert.payload.get("artifact_ids", [])
+        for artifact_id in artifact_ids:
+            self.store.quarantined_artifacts.add(artifact_id)
+        return [
+            ResponseAction(
+                playbook_id="PB-ART-008",
+                action_type="artifact_quarantine",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={
+                    "artifact_ids": artifact_ids,
+                    "failure_count": alert.payload.get("failure_count"),
+                },
+            )
+        ]
+
+    def _privileged_change_control(self, alert: Alert) -> list[ResponseAction]:
+        self.store.policy_change_restricted_actors.add(alert.actor_id)
+        self.store.step_up_required.add(alert.actor_id)
+        return [
+            ResponseAction(
+                playbook_id="PB-POL-009",
+                action_type="policy_change_restricted",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={
+                    "policy_id": alert.payload.get("policy_id"),
+                    "actor_risk_context": alert.payload.get("actor_risk_context"),
+                },
+            )
+        ]
+
+    def _multi_signal_incident_containment(self, alert: Alert) -> list[ResponseAction]:
+        # Apply strongest reversible containment: step-up + download restriction
+        self.store.step_up_required.add(alert.actor_id)
+        self.store.download_restricted_actors.add(alert.actor_id)
+        return [
+            ResponseAction(
+                playbook_id="PB-CORR-010",
+                action_type="multi_signal_containment",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={
+                    "detection_ids": alert.payload.get("detection_ids"),
+                    "containment_actions": ["step_up_authentication", "download_restriction"],
                 },
             )
         ]

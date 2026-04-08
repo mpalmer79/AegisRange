@@ -20,6 +20,12 @@ class InMemoryStore:
         self.alert_signatures: set[tuple[str, str, str]] = set()
         self.login_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self.document_reads_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
+        self.disabled_services: set[str] = set()
+        self.blocked_routes: dict[str, set[str]] = {}
+        self.quarantined_artifacts: set[str] = set()
+        self.policy_change_restricted_actors: set[str] = set()
+        self.authorization_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
+        self.artifact_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
 
     def reset(self) -> None:
         self.__init__()

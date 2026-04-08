@@ -90,6 +90,24 @@ def health() -> dict[str, str]:
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
 
+# --- Metrics ---
+
+@app.get("/metrics")
+def get_metrics() -> dict:
+    return {
+        "events_total": len(STORE.events),
+        "alerts_total": len(STORE.alerts),
+        "responses_total": len(STORE.responses),
+        "incidents_total": len(STORE.incidents_by_correlation),
+        "active_step_up": len(STORE.step_up_required),
+        "revoked_sessions": len(STORE.revoked_sessions),
+        "download_restricted_actors": len(STORE.download_restricted_actors),
+        "disabled_services": len(STORE.disabled_services),
+        "quarantined_artifacts": len(STORE.quarantined_artifacts),
+        "policy_restricted_actors": len(STORE.policy_change_restricted_actors),
+    }
+
+
 # --- Identity ---
 
 @app.post("/identity/login")
@@ -266,6 +284,18 @@ def run_scenario_doc_003(request: Request) -> dict:
 def run_scenario_doc_004(request: Request) -> dict:
     """SCN-DOC-004: Read-To-Download Exfiltration Pattern."""
     return scenario_engine.run_doc_004(request.state.correlation_id)
+
+
+@app.post("/scenarios/scn-svc-005")
+def run_scenario_svc_005(request: Request) -> dict:
+    """SCN-SVC-005: Unauthorized Service Access."""
+    return scenario_engine.run_svc_005(request.state.correlation_id)
+
+
+@app.post("/scenarios/scn-corr-006")
+def run_scenario_corr_006(request: Request) -> dict:
+    """SCN-CORR-006: Multi-Signal Compromise Sequence."""
+    return scenario_engine.run_corr_006(request.state.correlation_id)
 
 
 # --- Events ---
