@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
@@ -339,43 +339,55 @@ def download_document(document_id: str, payload: DownloadRequest, request: Reque
 @app.post("/scenarios/scn-auth-001", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_auth_001(request: Request) -> dict:
     """SCN-AUTH-001: Credential Abuse with Suspicious Success."""
-    logger.info("Scenario execution started", extra={"scenario": "scn-auth-001", "correlation_id": request.state.correlation_id})
-    return scenario_engine.run_auth_001(request.state.correlation_id)
+    platform_user = getattr(request.state, "platform_user", None)
+    operated_by = platform_user.sub if platform_user else None
+    logger.info("Scenario execution started", extra={"scenario": "scn-auth-001", "correlation_id": request.state.correlation_id, "operated_by": operated_by})
+    return scenario_engine.run_auth_001(request.state.correlation_id, operated_by=operated_by)
 
 
 @app.post("/scenarios/scn-session-002", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_session_002(request: Request) -> dict:
     """SCN-SESSION-002: Session Token Reuse Attack."""
-    logger.info("Scenario execution started", extra={"scenario": "scn-session-002", "correlation_id": request.state.correlation_id})
-    return scenario_engine.run_session_002(request.state.correlation_id)
+    platform_user = getattr(request.state, "platform_user", None)
+    operated_by = platform_user.sub if platform_user else None
+    logger.info("Scenario execution started", extra={"scenario": "scn-session-002", "correlation_id": request.state.correlation_id, "operated_by": operated_by})
+    return scenario_engine.run_session_002(request.state.correlation_id, operated_by=operated_by)
 
 
 @app.post("/scenarios/scn-doc-003", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_doc_003(request: Request) -> dict:
     """SCN-DOC-003: Bulk Document Access."""
-    logger.info("Scenario execution started", extra={"scenario": "scn-doc-003", "correlation_id": request.state.correlation_id})
-    return scenario_engine.run_doc_003(request.state.correlation_id)
+    platform_user = getattr(request.state, "platform_user", None)
+    operated_by = platform_user.sub if platform_user else None
+    logger.info("Scenario execution started", extra={"scenario": "scn-doc-003", "correlation_id": request.state.correlation_id, "operated_by": operated_by})
+    return scenario_engine.run_doc_003(request.state.correlation_id, operated_by=operated_by)
 
 
 @app.post("/scenarios/scn-doc-004", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_doc_004(request: Request) -> dict:
     """SCN-DOC-004: Read-To-Download Exfiltration Pattern."""
-    logger.info("Scenario execution started", extra={"scenario": "scn-doc-004", "correlation_id": request.state.correlation_id})
-    return scenario_engine.run_doc_004(request.state.correlation_id)
+    platform_user = getattr(request.state, "platform_user", None)
+    operated_by = platform_user.sub if platform_user else None
+    logger.info("Scenario execution started", extra={"scenario": "scn-doc-004", "correlation_id": request.state.correlation_id, "operated_by": operated_by})
+    return scenario_engine.run_doc_004(request.state.correlation_id, operated_by=operated_by)
 
 
 @app.post("/scenarios/scn-svc-005", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_svc_005(request: Request) -> dict:
     """SCN-SVC-005: Unauthorized Service Access."""
-    logger.info("Scenario execution started", extra={"scenario": "scn-svc-005", "correlation_id": request.state.correlation_id})
-    return scenario_engine.run_svc_005(request.state.correlation_id)
+    platform_user = getattr(request.state, "platform_user", None)
+    operated_by = platform_user.sub if platform_user else None
+    logger.info("Scenario execution started", extra={"scenario": "scn-svc-005", "correlation_id": request.state.correlation_id, "operated_by": operated_by})
+    return scenario_engine.run_svc_005(request.state.correlation_id, operated_by=operated_by)
 
 
 @app.post("/scenarios/scn-corr-006", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_corr_006(request: Request) -> dict:
     """SCN-CORR-006: Multi-Signal Compromise Sequence."""
-    logger.info("Scenario execution started", extra={"scenario": "scn-corr-006", "correlation_id": request.state.correlation_id})
-    return scenario_engine.run_corr_006(request.state.correlation_id)
+    platform_user = getattr(request.state, "platform_user", None)
+    operated_by = platform_user.sub if platform_user else None
+    logger.info("Scenario execution started", extra={"scenario": "scn-corr-006", "correlation_id": request.state.correlation_id, "operated_by": operated_by})
+    return scenario_engine.run_corr_006(request.state.correlation_id, operated_by=operated_by)
 
 
 # --- Events ---
@@ -431,7 +443,7 @@ def get_incident(correlation_id: str) -> dict:
 
 
 @app.patch("/incidents/{correlation_id}/status", dependencies=[Depends(require_role("analyst"))])
-def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate) -> dict:
+def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, request: Request) -> dict:
     incident = STORE.incidents_by_correlation.get(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
@@ -449,8 +461,10 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate) -
             detail=f"Cannot transition from '{incident.status}' to '{payload.status}'. Allowed: {sorted(allowed)}",
         )
 
+    platform_user = getattr(request.state, "platform_user", None)
+    changed_by = platform_user.sub if platform_user else "unknown"
     old_status = incident.status
-    logger.info("Incident status update", extra={"correlation_id": correlation_id, "from": old_status, "to": payload.status})
+    logger.info("Incident status update", extra={"correlation_id": correlation_id, "from": old_status, "to": payload.status, "changed_by": changed_by})
     incident.status = payload.status
     if payload.status == "closed":
         incident.closed_at = datetime.utcnow()
@@ -460,7 +474,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate) -
     incident.add_timeline_entry(
         entry_type="state_transition",
         reference_id=incident.incident_id,
-        summary=f"Status changed from {old_status} to {payload.status}.",
+        summary=f"Status changed from {old_status} to {payload.status} by {changed_by}.",
     )
 
     return _incident_to_dict(incident)
@@ -528,13 +542,15 @@ def get_scenario_history() -> list[dict]:
 # --- Incident Notes ---
 
 @app.post("/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("analyst"))])
-def add_incident_note(correlation_id: str, note: IncidentNote) -> dict:
+def add_incident_note(correlation_id: str, note: IncidentNote, request: Request) -> dict:
     incident = STORE.incidents_by_correlation.get(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
+    platform_user = getattr(request.state, "platform_user", None)
+    attributed_author = platform_user.sub if platform_user else note.author
     entry = {
         "note_id": f"note-{uuid4()}",
-        "author": note.author,
+        "author": attributed_author,
         "content": note.content,
         "created_at": datetime.utcnow().isoformat(),
     }
@@ -542,7 +558,7 @@ def add_incident_note(correlation_id: str, note: IncidentNote) -> dict:
     incident.add_timeline_entry(
         entry_type="analyst_note",
         reference_id=entry["note_id"],
-        summary=f"Note by {note.author}: {note.content[:80]}",
+        summary=f"Note by {attributed_author}: {note.content[:80]}",
     )
     return entry
 
@@ -578,9 +594,12 @@ def export_events(
 # --- Admin ---
 
 @app.post("/admin/reset", dependencies=[Depends(require_role("admin"))])
-def admin_reset() -> dict[str, str]:
+def admin_reset(request: Request) -> dict[str, str]:
+    platform_user = getattr(request.state, "platform_user", None)
+    reset_by = platform_user.sub if platform_user else "unknown"
+    logger.warning("Store reset initiated", extra={"reset_by": reset_by})
     STORE.reset()
-    return {"status": "reset"}
+    return {"status": "reset", "reset_by": reset_by}
 
 
 # --- MITRE ATT&CK ---
@@ -697,7 +716,7 @@ def get_campaign(campaign_id: str) -> dict:
 
 @app.post("/auth/login")
 def platform_login(payload: LoginRequest) -> dict:
-    success, token = auth_service.authenticate(payload.username, payload.password)
+    success, token, expires_at = auth_service.authenticate(payload.username, payload.password)
     if not success or token is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     user = auth_service.get_user(payload.username)
@@ -705,7 +724,7 @@ def platform_login(payload: LoginRequest) -> dict:
         "token": token,
         "username": payload.username,
         "role": user.role if user else "unknown",
-        "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat(),
+        "expires_at": expires_at.isoformat() if expires_at else None,
     }
 
 
