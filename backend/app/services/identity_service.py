@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 from app.store import InMemoryStore
 
@@ -15,7 +16,7 @@ class AuthResult:
 
 
 class IdentityService:
-    """Simplified auth/session logic for Phase 1."""
+    """Authentication, session management, and step-up enforcement for Phase 1."""
 
     def __init__(self, store: InMemoryStore) -> None:
         self.store = store
@@ -28,9 +29,15 @@ class IdentityService:
         user = self._users.get(username)
         if not user or user["password"] != password:
             actor_id = user["actor_id"] if user else f"user-{username}"
-            return AuthResult(success=False, actor_id=actor_id, actor_role=user["role"] if user else "unknown", session_id=None, reason="invalid_credentials")
+            return AuthResult(
+                success=False,
+                actor_id=actor_id,
+                actor_role=user["role"] if user else "unknown",
+                session_id=None,
+                reason="invalid_credentials",
+            )
 
-        session_id = f"session-{user['actor_id']}"
+        session_id = f"session-{uuid4()}"
         self.store.actor_sessions[user["actor_id"]] = session_id
         return AuthResult(
             success=True,
@@ -38,3 +45,20 @@ class IdentityService:
             actor_role=user["role"],
             session_id=session_id,
         )
+
+    def validate_session(self, session_id: str) -> bool:
+        if session_id in self.store.revoked_sessions:
+            return False
+        return session_id in self.store.actor_sessions.values()
+
+    def revoke_session(self, session_id: str) -> bool:
+        if session_id not in self.store.actor_sessions.values():
+            return False
+        self.store.revoked_sessions.add(session_id)
+        return True
+
+    def is_step_up_required(self, actor_id: str) -> bool:
+        return actor_id in self.store.step_up_required
+
+    def clear_step_up(self, actor_id: str) -> None:
+        self.store.step_up_required.discard(actor_id)

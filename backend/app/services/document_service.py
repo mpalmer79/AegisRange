@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.store import InMemoryStore
 
 
 ROLE_CLEARANCE = {
@@ -19,7 +23,8 @@ class Document:
 
 
 class DocumentService:
-    def __init__(self) -> None:
+    def __init__(self, store: InMemoryStore | None = None) -> None:
+        self.store = store
         self.documents = {
             "doc-001": Document(document_id="doc-001", classification="public"),
             "doc-002": Document(document_id="doc-002", classification="internal"),
@@ -30,6 +35,18 @@ class DocumentService:
         document = self.documents.get(document_id)
         if not document:
             return False, None
+
+        role_level = CLASSIFICATION_ORDER.index(ROLE_CLEARANCE.get(actor_role, "public"))
+        doc_level = CLASSIFICATION_ORDER.index(document.classification)
+        return role_level >= doc_level, document
+
+    def can_download(self, actor_role: str, document_id: str, actor_id: str | None = None) -> tuple[bool, Document | None]:
+        document = self.documents.get(document_id)
+        if not document:
+            return False, None
+
+        if self.store and actor_id and actor_id in self.store.download_restricted_actors:
+            return False, document
 
         role_level = CLASSIFICATION_ORDER.index(ROLE_CLEARANCE.get(actor_role, "public"))
         doc_level = CLASSIFICATION_ORDER.index(document.classification)

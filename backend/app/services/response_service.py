@@ -12,7 +12,10 @@ class ResponseOrchestrator:
         handlers = {
             "DET-AUTH-001": self._auth_failure_containment,
             "DET-AUTH-002": self._suspicious_login_containment,
+            "DET-SESSION-003": self._session_hijack_containment,
+            "DET-DOC-004": self._restricted_access_enforcement,
             "DET-DOC-005": self._bulk_access_constraint,
+            "DET-DOC-006": self._data_exfiltration_containment,
         }
 
         handler = handlers.get(alert.rule_id)
@@ -50,6 +53,39 @@ class ResponseOrchestrator:
             )
         ]
 
+    def _session_hijack_containment(self, alert: Alert) -> list[ResponseAction]:
+        session_id = alert.payload.get("session_id")
+        if session_id:
+            self.store.revoked_sessions.add(session_id)
+        return [
+            ResponseAction(
+                playbook_id="PB-SESSION-003",
+                action_type="session_revocation",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={"session_id": session_id, "source_ip_list": alert.payload.get("source_ip_list")},
+            )
+        ]
+
+    def _restricted_access_enforcement(self, alert: Alert) -> list[ResponseAction]:
+        return [
+            ResponseAction(
+                playbook_id="PB-DOC-004",
+                action_type="access_denied",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={
+                    "document_id": alert.payload.get("document_id"),
+                    "classification": alert.payload.get("classification"),
+                    "actor_role": alert.payload.get("actor_role"),
+                },
+            )
+        ]
+
     def _bulk_access_constraint(self, alert: Alert) -> list[ResponseAction]:
         self.store.download_restricted_actors.add(alert.actor_id)
         return [
@@ -61,5 +97,23 @@ class ResponseOrchestrator:
                 reason=alert.summary,
                 related_alert_id=alert.alert_id,
                 payload={"document_count": alert.payload.get("document_count")},
+            )
+        ]
+
+    def _data_exfiltration_containment(self, alert: Alert) -> list[ResponseAction]:
+        self.store.download_restricted_actors.add(alert.actor_id)
+        return [
+            ResponseAction(
+                playbook_id="PB-DOC-006",
+                action_type="download_block",
+                actor_id=alert.actor_id,
+                correlation_id=alert.correlation_id,
+                reason=alert.summary,
+                related_alert_id=alert.alert_id,
+                payload={
+                    "read_count": alert.payload.get("read_count"),
+                    "download_count": alert.payload.get("download_count"),
+                    "overlapping_documents": alert.payload.get("overlapping_documents"),
+                },
             )
         ]
