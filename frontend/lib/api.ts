@@ -18,6 +18,15 @@ import {
   ScenarioHistoryEntry,
   IncidentNote,
   EventExport,
+  TTPMapping,
+  MitreCoverageEntry,
+  TacticCoverage,
+  MitreTechnique,
+  KillChainAnalysis,
+  Campaign,
+  ExerciseReport,
+  AuthToken,
+  PlatformUser,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -177,6 +186,66 @@ export async function exportEvents(params?: {
 
   const query = searchParams.toString();
   return request<EventExport>(`/events/export${query ? `?${query}` : ''}`);
+}
+
+// MITRE ATT&CK
+export async function getMitreMappings(): Promise<TTPMapping[]> {
+  return request<TTPMapping[]>('/mitre/mappings');
+}
+
+export async function getMitreMapping(ruleId: string): Promise<TTPMapping> {
+  return request<TTPMapping>(`/mitre/mappings/${ruleId}`);
+}
+
+export async function getMitreCoverageMatrix(): Promise<MitreCoverageEntry[]> {
+  return request<MitreCoverageEntry[]>('/mitre/coverage');
+}
+
+export async function getMitreTacticCoverage(): Promise<TacticCoverage[]> {
+  return request<TacticCoverage[]>('/mitre/tactics/coverage');
+}
+
+export async function getMitreScenarioTTPs(scenarioId: string): Promise<MitreTechnique[]> {
+  return request<MitreTechnique[]>(`/mitre/scenarios/${scenarioId}/ttps`);
+}
+
+// Kill Chain
+export async function getKillChainAnalysis(correlationId: string): Promise<KillChainAnalysis> {
+  return request<KillChainAnalysis>(`/killchain/${correlationId}`);
+}
+
+export async function getAllKillChainAnalyses(): Promise<KillChainAnalysis[]> {
+  return request<KillChainAnalysis[]>('/killchain');
+}
+
+// Campaigns
+export async function getCampaigns(): Promise<Campaign[]> {
+  return request<Campaign[]>('/campaigns');
+}
+
+export async function getCampaign(campaignId: string): Promise<Campaign> {
+  return request<Campaign>(`/campaigns/${campaignId}`);
+}
+
+// Exercise Reports
+export async function generateReport(title?: string): Promise<ExerciseReport> {
+  const body = title ? { title } : {};
+  return request<ExerciseReport>('/reports/generate', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// Platform Auth
+export async function platformLogin(username: string, password: string): Promise<AuthToken> {
+  return request<AuthToken>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function getPlatformUsers(): Promise<PlatformUser[]> {
+  return request<PlatformUser[]>('/auth/users');
 }
 
 // Admin
