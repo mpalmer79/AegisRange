@@ -798,7 +798,6 @@ def _event_to_dict(event: Event) -> dict:
 
 
 def _alert_to_dict(alert) -> dict:
-    ts = alert.created_at.isoformat()
     return {
         "alert_id": alert.alert_id,
         "rule_id": alert.rule_id,
@@ -808,12 +807,9 @@ def _alert_to_dict(alert) -> dict:
         "actor_id": alert.actor_id,
         "correlation_id": alert.correlation_id,
         "contributing_event_ids": alert.contributing_event_ids,
-        "event_ids": alert.contributing_event_ids,
         "summary": alert.summary,
         "payload": alert.payload,
-        "details": alert.payload,
-        "created_at": ts,
-        "timestamp": ts,
+        "created_at": alert.created_at.isoformat(),
     }
 
 
@@ -823,7 +819,6 @@ def _incident_to_dict(incident) -> dict:
         "incident_type": incident.incident_type,
         "status": incident.status,
         "primary_actor_id": incident.primary_actor_id,
-        "primary_actor": incident.primary_actor_id,
         "actor_type": incident.actor_type,
         "actor_role": incident.actor_role,
         "correlation_id": incident.correlation_id,
@@ -832,7 +827,6 @@ def _incident_to_dict(incident) -> dict:
         "risk_score": incident.risk_score,
         "detection_ids": incident.detection_ids,
         "detection_summary": incident.detection_summary,
-        "detection_summaries": incident.detection_summary,
         "response_ids": incident.response_ids,
         "containment_status": incident.containment_status,
         "event_ids": incident.event_ids,
@@ -849,7 +843,6 @@ def _incident_to_dict(incident) -> dict:
             {
                 "timestamp": entry.timestamp.isoformat(),
                 "entry_type": entry.entry_type,
-                "reference_id": entry.reference_id,
                 "entry_id": entry.reference_id,
                 "summary": entry.summary,
             }
@@ -857,6 +850,6 @@ def _incident_to_dict(incident) -> dict:
         ],
         "created_at": incident.created_at.isoformat(),
         "updated_at": incident.updated_at.isoformat(),
-        "notes": [n for n in STORE.incident_notes.get(incident.correlation_id, [])],
+        "notes": list(STORE.incident_notes.get(incident.correlation_id, [])),
         "closed_at": incident.closed_at.isoformat() if incident.closed_at else None,
     }

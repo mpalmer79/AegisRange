@@ -19,6 +19,7 @@ const SEVERITY_STYLES: Record<string, string> = {
   high: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   low: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  informational: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
 };
 
 const TIMELINE_ENTRY_STYLES: Record<string, { color: string; icon: string }> = {
@@ -125,12 +126,11 @@ export default function IncidentDetailPage() {
   }, [correlationId]);
 
   useEffect(() => {
-    const actor = incident?.primary_actor ?? incident?.primary_actor_id;
-    if (actor) {
-      fetchRiskProfile(actor);
+    if (incident?.primary_actor_id) {
+      fetchRiskProfile(incident.primary_actor_id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incident?.primary_actor, incident?.primary_actor_id]);
+  }, [incident?.primary_actor_id]);
 
   const handleStatusChange = async (newStatus: IncidentStatus) => {
     if (!incident) return;
@@ -208,12 +208,6 @@ export default function IncidentDetailPage() {
             <h1 className="text-xl font-bold text-gray-100 font-mono mb-2">
               {incident.incident_id || 'Incident'}
             </h1>
-            {incident.title && (
-              <p className="text-sm text-gray-300">{incident.title}</p>
-            )}
-            {incident.summary && (
-              <p className="text-sm text-gray-500 mt-1">{incident.summary}</p>
-            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -258,10 +252,10 @@ export default function IncidentDetailPage() {
 
         {/* Key metrics row */}
         <div className="flex flex-wrap gap-x-8 gap-y-3 mt-4 pt-4 border-t border-gray-800 text-sm">
-          {(incident.primary_actor ?? incident.primary_actor_id) && (
+          {incident.primary_actor_id && (
             <div>
               <span className="text-gray-600 text-xs font-mono block">PRIMARY ACTOR</span>
-              <span className="text-gray-200 font-mono">{incident.primary_actor ?? incident.primary_actor_id}</span>
+              <span className="text-gray-200 font-mono">{incident.primary_actor_id}</span>
             </div>
           )}
           <div>
@@ -299,8 +293,8 @@ export default function IncidentDetailPage() {
                   </span>
                   <div>
                     <p className="text-xs font-mono text-gray-300 break-all">{id}</p>
-                    {incident.detection_summaries?.[i] && (
-                      <p className="text-xs text-gray-500 mt-0.5">{incident.detection_summaries[i]}</p>
+                    {incident.detection_summary?.[i] && (
+                      <p className="text-xs text-gray-500 mt-0.5">{incident.detection_summary[i]}</p>
                     )}
                   </div>
                 </div>
