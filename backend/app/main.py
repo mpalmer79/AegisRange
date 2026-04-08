@@ -77,6 +77,9 @@ stream_service = StreamService(STORE)
 
 @app.on_event("startup")
 def on_startup():
+    if settings.APP_ENV != "test":
+        STORE.enable_persistence()
+        logger.info("SQLite persistence enabled", extra={"env": settings.APP_ENV})
     logger.info("AegisRange API started", extra={"env": settings.APP_ENV})
 
 
@@ -131,6 +134,9 @@ async def correlation_middleware(request: Request, call_next):
     request.state.correlation_id = correlation_id
     response = await call_next(request)
     response.headers["x-correlation-id"] = correlation_id
+    # Auto-save to SQLite after mutating requests
+    if request.method in ("POST", "PATCH", "DELETE") and response.status_code < 400:
+        STORE.save()
     return response
 
 

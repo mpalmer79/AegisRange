@@ -34,5 +34,8 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Database
+*.db
+
 # Docker
 *.log
