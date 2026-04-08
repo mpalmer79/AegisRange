@@ -26,6 +26,9 @@ class InMemoryStore:
         self.policy_change_restricted_actors: set[str] = set()
         self.authorization_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self.artifact_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
+        self.risk_profiles: dict[str, object] = {}
+        self.scenario_history: list[dict] = []
+        self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
 
     def reset(self) -> None:
         self.__init__()

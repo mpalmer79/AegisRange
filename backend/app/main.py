@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app.config import settings
+from app.logging_config import setup_logging
 from app.models import Confidence, Event, Severity
 from app.services.detection_service import DetectionService
 from app.services.document_service import DocumentService
@@ -14,10 +18,22 @@ from app.services.identity_service import IdentityService
 from app.services.incident_service import IncidentService
 from app.services.pipeline_service import EventPipelineService
 from app.services.response_service import ResponseOrchestrator
+from app.services.risk_service import RiskScoringService
 from app.services.scenario_service import ScenarioEngine
 from app.store import STORE
 
-app = FastAPI(title="AegisRange Phase 1 API", version="0.2.0")
+setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
+logger = logging.getLogger("aegisrange")
+
+app = FastAPI(title="AegisRange Phase 1 API", version="0.5.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://frontend:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Service wiring ---
 telemetry_service = TelemetryService(STORE)
@@ -26,12 +42,14 @@ identity_service = IdentityService(STORE)
 document_service = DocumentService(store=STORE)
 response_service = ResponseOrchestrator(STORE)
 incident_service = IncidentService(STORE)
+risk_service = RiskScoringService(STORE)
 
 pipeline = EventPipelineService(
     telemetry=telemetry_service,
     detection=detection_service,
     response=response_service,
     incidents=incident_service,
+    risk=risk_service,
     store=STORE,
 )
 
@@ -41,6 +59,11 @@ scenario_engine = ScenarioEngine(
     pipeline=pipeline,
     store=STORE,
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    logger.info("AegisRange API started", extra={"env": settings.APP_ENV})
 
 
 # --- Request / Response models ---
@@ -64,6 +87,11 @@ class DownloadRequest(BaseModel):
 
 class IncidentStatusUpdate(BaseModel):
     status: str
+
+
+class IncidentNote(BaseModel):
+    author: str
+    content: str
 
 
 # --- Helpers ---
@@ -265,36 +293,42 @@ def download_document(document_id: str, payload: DownloadRequest, request: Reque
 @app.post("/scenarios/scn-auth-001")
 def run_scenario_auth_001(request: Request) -> dict:
     """SCN-AUTH-001: Credential Abuse with Suspicious Success."""
+    logger.info("Scenario execution started", extra={"scenario": "scn-auth-001", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_auth_001(request.state.correlation_id)
 
 
 @app.post("/scenarios/scn-session-002")
 def run_scenario_session_002(request: Request) -> dict:
     """SCN-SESSION-002: Session Token Reuse Attack."""
+    logger.info("Scenario execution started", extra={"scenario": "scn-session-002", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_session_002(request.state.correlation_id)
 
 
 @app.post("/scenarios/scn-doc-003")
 def run_scenario_doc_003(request: Request) -> dict:
     """SCN-DOC-003: Bulk Document Access."""
+    logger.info("Scenario execution started", extra={"scenario": "scn-doc-003", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_doc_003(request.state.correlation_id)
 
 
 @app.post("/scenarios/scn-doc-004")
 def run_scenario_doc_004(request: Request) -> dict:
     """SCN-DOC-004: Read-To-Download Exfiltration Pattern."""
+    logger.info("Scenario execution started", extra={"scenario": "scn-doc-004", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_doc_004(request.state.correlation_id)
 
 
 @app.post("/scenarios/scn-svc-005")
 def run_scenario_svc_005(request: Request) -> dict:
     """SCN-SVC-005: Unauthorized Service Access."""
+    logger.info("Scenario execution started", extra={"scenario": "scn-svc-005", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_svc_005(request.state.correlation_id)
 
 
 @app.post("/scenarios/scn-corr-006")
 def run_scenario_corr_006(request: Request) -> dict:
     """SCN-CORR-006: Multi-Signal Compromise Sequence."""
+    logger.info("Scenario execution started", extra={"scenario": "scn-corr-006", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_corr_006(request.state.correlation_id)
 
 
@@ -370,6 +404,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate) -
         )
 
     old_status = incident.status
+    logger.info("Incident status update", extra={"correlation_id": correlation_id, "from": old_status, "to": payload.status})
     incident.status = payload.status
     if payload.status == "closed":
         incident.closed_at = datetime.utcnow()
@@ -383,6 +418,115 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate) -
     )
 
     return _incident_to_dict(incident)
+
+
+# --- Analytics ---
+
+@app.get("/analytics/risk-profiles")
+def get_risk_profiles() -> list[dict]:
+    profiles = risk_service.get_all_profiles()
+    return [
+        {
+            "actor_id": p.actor_id,
+            "current_score": p.current_score,
+            "peak_score": p.peak_score,
+            "contributing_rules": p.contributing_rules,
+            "score_history": p.score_history,
+            "last_updated": p.last_updated.isoformat(),
+        }
+        for p in profiles
+    ]
+
+
+@app.get("/analytics/risk-profiles/{actor_id}")
+def get_risk_profile(actor_id: str) -> dict:
+    profile = risk_service.get_profile(actor_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Risk profile not found")
+    return {
+        "actor_id": profile.actor_id,
+        "current_score": profile.current_score,
+        "peak_score": profile.peak_score,
+        "contributing_rules": profile.contributing_rules,
+        "score_history": profile.score_history,
+        "last_updated": profile.last_updated.isoformat(),
+    }
+
+
+@app.get("/analytics/rule-effectiveness")
+def get_rule_effectiveness() -> list[dict]:
+    rule_counts: dict[str, dict] = {}
+    for alert in STORE.alerts:
+        if alert.rule_id not in rule_counts:
+            rule_counts[alert.rule_id] = {
+                "rule_id": alert.rule_id,
+                "rule_name": alert.rule_name,
+                "trigger_count": 0,
+                "severity": alert.severity.value,
+                "actors_affected": set(),
+            }
+        rule_counts[alert.rule_id]["trigger_count"] += 1
+        rule_counts[alert.rule_id]["actors_affected"].add(alert.actor_id)
+
+    return [
+        {**v, "actors_affected": len(v["actors_affected"])}
+        for v in sorted(rule_counts.values(), key=lambda x: x["trigger_count"], reverse=True)
+    ]
+
+
+@app.get("/analytics/scenario-history")
+def get_scenario_history() -> list[dict]:
+    return STORE.scenario_history
+
+
+# --- Incident Notes ---
+
+@app.post("/incidents/{correlation_id}/notes")
+def add_incident_note(correlation_id: str, note: IncidentNote) -> dict:
+    incident = STORE.incidents_by_correlation.get(correlation_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    entry = {
+        "note_id": f"note-{uuid4()}",
+        "author": note.author,
+        "content": note.content,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    STORE.incident_notes[correlation_id].append(entry)
+    incident.add_timeline_entry(
+        entry_type="analyst_note",
+        reference_id=entry["note_id"],
+        summary=f"Note by {note.author}: {note.content[:80]}",
+    )
+    return entry
+
+
+@app.get("/incidents/{correlation_id}/notes")
+def get_incident_notes(correlation_id: str) -> list[dict]:
+    incident = STORE.incidents_by_correlation.get(correlation_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return STORE.incident_notes.get(correlation_id, [])
+
+
+# --- Events Export ---
+
+@app.get("/events/export")
+def export_events(
+    correlation_id: str | None = Query(default=None),
+    actor_id: str | None = Query(default=None),
+    since_minutes: int | None = Query(default=None),
+) -> dict:
+    events = telemetry_service.lookup_events(
+        actor_id=actor_id,
+        correlation_id=correlation_id,
+        since_minutes=since_minutes,
+    )
+    return {
+        "export_timestamp": datetime.utcnow().isoformat(),
+        "total_events": len(events),
+        "events": [_event_to_dict(e) for e in events],
+    }
 
 
 # --- Admin ---
@@ -469,5 +613,6 @@ def _incident_to_dict(incident) -> dict:
         ],
         "created_at": incident.created_at.isoformat(),
         "updated_at": incident.updated_at.isoformat(),
+        "notes": [n for n in STORE.incident_notes.get(incident.correlation_id, [])],
         "closed_at": incident.closed_at.isoformat() if incident.closed_at else None,
     }

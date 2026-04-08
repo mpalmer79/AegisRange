@@ -125,6 +125,53 @@ export const INCIDENT_STATUS_TRANSITIONS: Record<IncidentStatus, IncidentStatus[
   closed: [],
 };
 
+export interface RiskProfile {
+  actor_id: string;
+  current_score: number;
+  peak_score: number;
+  contributing_rules: string[];
+  score_history: ScoreHistoryEntry[];
+  last_updated: string;
+}
+
+export interface ScoreHistoryEntry {
+  timestamp: string;
+  rule_id: string;
+  delta: number;
+  new_score: number;
+}
+
+export interface RuleEffectiveness {
+  rule_id: string;
+  rule_name: string;
+  trigger_count: number;
+  severity: string;
+  actors_affected: number;
+}
+
+export interface IncidentNote {
+  note_id: string;
+  author: string;
+  content: string;
+  created_at: string;
+}
+
+export interface EventExport {
+  export_timestamp: string;
+  total_events: number;
+  events: Event[];
+}
+
+export interface ScenarioHistoryEntry {
+  scenario_id: string;
+  correlation_id: string;
+  events_total: number;
+  alerts_total: number;
+  responses_total: number;
+  incident_id: string | null;
+  executed_at: string;
+}
+
 export const SCENARIO_DEFINITIONS = [
   {
     id: 'scn-auth-001',

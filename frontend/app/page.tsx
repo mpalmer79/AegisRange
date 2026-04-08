@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getMetrics, getHealth, runScenario } from '@/lib/api';
-import { Metrics, HealthStatus, SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
+import { getMetrics, getHealth, runScenario, getRiskProfiles } from '@/lib/api';
+import { Metrics, HealthStatus, SCENARIO_DEFINITIONS, ScenarioResult, RiskProfile } from '@/lib/types';
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -12,14 +12,19 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [runningScenario, setRunningScenario] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ScenarioResult | null>(null);
+  const [topRiskActors, setTopRiskActors] = useState<RiskProfile[]>([]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [m, h] = await Promise.allSettled([getMetrics(), getHealth()]);
+      const [m, h, rp] = await Promise.allSettled([getMetrics(), getHealth(), getRiskProfiles()]);
       if (m.status === 'fulfilled') setMetrics(m.value);
       if (h.status === 'fulfilled') setHealth(h.value);
+      if (rp.status === 'fulfilled') {
+        const sorted = [...rp.value].sort((a, b) => b.current_score - a.current_score).slice(0, 5);
+        setTopRiskActors(sorted);
+      }
       if (m.status === 'rejected' && h.status === 'rejected') {
         setError('Failed to connect to API. Is the backend running?');
       }
@@ -196,6 +201,46 @@ export default function DashboardPage() {
               ) : (
                 <p className="font-mono text-gray-500">None</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Risk Actors */}
+      {topRiskActors.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-200">Top Risk Actors</h2>
+            <Link href="/analytics" className="text-xs font-mono text-cyan-400 hover:text-cyan-300 transition-colors">
+              View All &rarr;
+            </Link>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+            <div className="space-y-3">
+              {topRiskActors.map((actor) => {
+                const color =
+                  actor.current_score >= 81 ? 'bg-red-500' :
+                  actor.current_score >= 51 ? 'bg-orange-500' :
+                  actor.current_score >= 21 ? 'bg-amber-500' : 'bg-green-500';
+                const textColor =
+                  actor.current_score >= 81 ? 'text-red-400' :
+                  actor.current_score >= 51 ? 'text-orange-400' :
+                  actor.current_score >= 21 ? 'text-amber-400' : 'text-green-400';
+                return (
+                  <div key={actor.actor_id} className="flex items-center gap-4">
+                    <span className="text-sm font-mono text-cyan-400 w-32 truncate">{actor.actor_id}</span>
+                    <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${color} transition-all`}
+                        style={{ width: `${Math.min(actor.current_score, 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-mono font-bold w-8 text-right ${textColor}`}>
+                      {actor.current_score}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

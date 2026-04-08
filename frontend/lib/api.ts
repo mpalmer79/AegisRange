@@ -13,6 +13,11 @@ import {
   LoginResponse,
   DocumentRequest,
   IncidentStatus,
+  RiskProfile,
+  RuleEffectiveness,
+  ScenarioHistoryEntry,
+  IncidentNote,
+  EventExport,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -124,6 +129,54 @@ export async function updateIncidentStatus(
 // Metrics
 export async function getMetrics(): Promise<Metrics> {
   return request<Metrics>('/metrics');
+}
+
+// Analytics
+export async function getRiskProfiles(): Promise<RiskProfile[]> {
+  return request<RiskProfile[]>('/analytics/risk-profiles');
+}
+
+export async function getRiskProfile(actorId: string): Promise<RiskProfile> {
+  return request<RiskProfile>(`/analytics/risk-profiles/${actorId}`);
+}
+
+export async function getRuleEffectiveness(): Promise<RuleEffectiveness[]> {
+  return request<RuleEffectiveness[]>('/analytics/rule-effectiveness');
+}
+
+export async function getScenarioHistory(): Promise<ScenarioHistoryEntry[]> {
+  return request<ScenarioHistoryEntry[]>('/analytics/scenario-history');
+}
+
+// Incident Notes
+export async function addIncidentNote(
+  correlationId: string,
+  author: string,
+  content: string
+): Promise<IncidentNote> {
+  return request<IncidentNote>(`/incidents/${correlationId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ author, content }),
+  });
+}
+
+export async function getIncidentNotes(correlationId: string): Promise<IncidentNote[]> {
+  return request<IncidentNote[]>(`/incidents/${correlationId}/notes`);
+}
+
+// Events Export
+export async function exportEvents(params?: {
+  correlation_id?: string;
+  actor_id?: string;
+  since_minutes?: number;
+}): Promise<EventExport> {
+  const searchParams = new URLSearchParams();
+  if (params?.correlation_id) searchParams.set('correlation_id', params.correlation_id);
+  if (params?.actor_id) searchParams.set('actor_id', params.actor_id);
+  if (params?.since_minutes) searchParams.set('since_minutes', String(params.since_minutes));
+
+  const query = searchParams.toString();
+  return request<EventExport>(`/events/export${query ? `?${query}` : ''}`);
 }
 
 // Admin
