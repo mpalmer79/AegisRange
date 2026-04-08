@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.config import settings
@@ -20,12 +21,18 @@ from app.services.pipeline_service import EventPipelineService
 from app.services.response_service import ResponseOrchestrator
 from app.services.risk_service import RiskScoringService
 from app.services.scenario_service import ScenarioEngine
+from app.services.mitre_service import MitreAttackService
+from app.services.killchain_service import KillChainService
+from app.services.campaign_service import CampaignDetectionService
+from app.services.auth_service import AuthService
+from app.services.report_service import ReportService
+from app.services.stream_service import StreamService
 from app.store import STORE
 
 setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
 logger = logging.getLogger("aegisrange")
 
-app = FastAPI(title="AegisRange Phase 1 API", version="0.5.0")
+app = FastAPI(title="AegisRange API", version="0.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,6 +67,13 @@ scenario_engine = ScenarioEngine(
     store=STORE,
 )
 
+mitre_service = MitreAttackService()
+killchain_service = KillChainService(STORE)
+campaign_detection_service = CampaignDetectionService(STORE)
+auth_service = AuthService()
+report_service = ReportService(STORE)
+stream_service = StreamService(STORE)
+
 
 @app.on_event("startup")
 def on_startup():
@@ -92,6 +106,15 @@ class IncidentStatusUpdate(BaseModel):
 class IncidentNote(BaseModel):
     author: str
     content: str
+
+
+class PlatformLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class ReportRequest(BaseModel):
+    title: str = "AegisRange Exercise Report"
 
 
 # --- Helpers ---
@@ -535,6 +558,172 @@ def export_events(
 def admin_reset() -> dict[str, str]:
     STORE.reset()
     return {"status": "reset"}
+
+
+# --- MITRE ATT&CK ---
+
+@app.get("/mitre/mappings")
+def get_mitre_mappings() -> list[dict]:
+    mappings = mitre_service.get_all_mappings()
+    return [
+        {
+            "rule_id": m.rule_id,
+            "technique_ids": m.technique_ids,
+            "tactic_ids": m.tactic_ids,
+            "kill_chain_phases": m.kill_chain_phases,
+        }
+        for m in mappings
+    ]
+
+
+@app.get("/mitre/mappings/{rule_id}")
+def get_mitre_mapping(rule_id: str) -> dict:
+    mapping = mitre_service.get_mapping(rule_id)
+    if mapping is None:
+        raise HTTPException(status_code=404, detail="Mapping not found")
+    return {
+        "rule_id": mapping.rule_id,
+        "technique_ids": mapping.technique_ids,
+        "tactic_ids": mapping.tactic_ids,
+        "kill_chain_phases": mapping.kill_chain_phases,
+    }
+
+
+@app.get("/mitre/coverage")
+def get_mitre_coverage() -> list[dict]:
+    entries = mitre_service.get_coverage_matrix()
+    return [
+        {
+            "tactic_id": e.tactic_id,
+            "technique_id": e.technique_id,
+            "technique_name": next(
+                (t.name for t in mitre_service._techniques.values() if t.id == e.technique_id),
+                e.technique_id,
+            ),
+            "rule_ids": e.rule_ids,
+            "scenario_ids": e.scenario_ids,
+            "covered": e.covered,
+        }
+        for e in entries
+    ]
+
+
+@app.get("/mitre/tactics/coverage")
+def get_mitre_tactic_coverage() -> list[dict]:
+    coverage = mitre_service.get_tactic_coverage()
+    return [
+        {
+            "tactic_id": tactic_id,
+            "tactic_name": data["name"],
+            "covered_techniques": data["covered_techniques"],
+            "total_techniques": data["total_techniques"],
+            "percentage": data["percentage"],
+        }
+        for tactic_id, data in coverage.items()
+    ]
+
+
+@app.get("/mitre/scenarios/{scenario_id}/ttps")
+def get_mitre_scenario_ttps(scenario_id: str) -> list[dict]:
+    techniques = mitre_service.get_scenario_ttps(scenario_id)
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "tactic_ids": t.tactic_ids,
+            "url": t.url,
+        }
+        for t in techniques
+    ]
+
+
+# --- Kill Chain ---
+
+@app.get("/killchain")
+def get_all_killchain_analyses() -> list[dict]:
+    analyses = killchain_service.analyze_all_incidents()
+    return [killchain_service.to_dict(a) for a in analyses]
+
+
+@app.get("/killchain/{correlation_id}")
+def get_killchain_analysis(correlation_id: str) -> dict:
+    analysis = killchain_service.analyze_incident(correlation_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return killchain_service.to_dict(analysis)
+
+
+# --- Campaigns ---
+
+@app.get("/campaigns")
+def get_campaigns() -> list[dict]:
+    campaigns = campaign_detection_service.detect_campaigns()
+    return [campaign_detection_service.to_dict(c) for c in campaigns]
+
+
+@app.get("/campaigns/{campaign_id}")
+def get_campaign(campaign_id: str) -> dict:
+    campaign = campaign_detection_service.get_campaign(campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return campaign_detection_service.to_dict(campaign)
+
+
+# --- Platform Auth ---
+
+@app.post("/auth/login")
+def platform_login(payload: PlatformLoginRequest) -> dict:
+    success, token = auth_service.authenticate(payload.username, payload.password)
+    if not success or token is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    user = auth_service.get_user(payload.username)
+    return {
+        "token": token,
+        "username": payload.username,
+        "role": user.role if user else "unknown",
+        "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat(),
+    }
+
+
+@app.get("/auth/users")
+def list_platform_users() -> list[dict]:
+    users = auth_service.list_users()
+    return [
+        {
+            "user_id": u.user_id,
+            "username": u.username,
+            "role": u.role,
+            "display_name": u.display_name,
+            "created_at": u.created_at.isoformat(),
+        }
+        for u in users
+    ]
+
+
+# --- Exercise Reports ---
+
+@app.post("/reports/generate")
+def generate_exercise_report(payload: ReportRequest | None = None) -> dict:
+    title = payload.title if payload else "AegisRange Exercise Report"
+    report = report_service.generate_report(title)
+    return report_service.to_dict(report)
+
+
+# --- Real-Time Streaming ---
+
+@app.get("/stream/events")
+async def stream_events() -> StreamingResponse:
+    queue = stream_service.subscribe()
+    return StreamingResponse(
+        stream_service.event_generator(queue),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # --- Serialization helpers ---
