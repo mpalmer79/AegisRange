@@ -384,7 +384,14 @@ class PersistenceLayer:
     # --- Load ---
 
     def load(self) -> bool:
-        """Load store state from SQLite. Returns True if data was loaded."""
+        """Load store state from SQLite. Returns True if data was loaded.
+
+        Loading is **atomic with respect to the in-memory store**: all rows
+        are deserialized into staging variables first.  Only after every
+        table has been parsed successfully are the results swapped into the
+        live store.  A deserialization failure therefore leaves the
+        existing in-memory state completely untouched.
+        """
         if not self.db_path.exists():
             return False
 
@@ -392,88 +399,117 @@ class PersistenceLayer:
         try:
             # Check if any data exists across all tables
             total = 0
-            for table in ("events", "alerts", "responses", "incidents", "state_sets", "scenario_history", "incident_notes"):
+            for table in ("events", "alerts", "responses", "incidents",
+                          "state_sets", "state_dicts", "scenario_history",
+                          "incident_notes"):
                 total += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             if total == 0:
                 return False
 
-            # Load events
+            # ----------------------------------------------------------
+            # Stage 1: deserialize everything into local variables.
+            # If any row is corrupt the exception is raised here and
+            # the live store is never touched.
+            # ----------------------------------------------------------
+
+            staged_events: list[Event] = []
             for row in conn.execute("SELECT data FROM events"):
-                self.store.events.append(self._deserialize_event(row[0]))
+                staged_events.append(self._deserialize_event(row[0]))
 
-            # Load alerts
+            staged_alerts: list[Alert] = []
             for row in conn.execute("SELECT data FROM alerts"):
-                self.store.alerts.append(self._deserialize_alert(row[0]))
+                staged_alerts.append(self._deserialize_alert(row[0]))
 
-            # Load responses
+            staged_responses: list[ResponseAction] = []
             for row in conn.execute("SELECT data FROM responses"):
-                self.store.responses.append(self._deserialize_response(row[0]))
+                staged_responses.append(self._deserialize_response(row[0]))
 
-            # Load incidents
+            staged_incidents: dict[str, Incident] = {}
             for row in conn.execute("SELECT data FROM incidents"):
                 incident = self._deserialize_incident(row[0])
-                self.store.incidents_by_correlation[incident.correlation_id] = incident
+                staged_incidents[incident.correlation_id] = incident
 
-            # Load sets
+            # Sets
+            staged_sets: dict[str, Any] = {}
             for row in conn.execute("SELECT key, data FROM state_sets"):
-                key, data = row[0], json.loads(row[1])
-                if key == "revoked_sessions":
-                    self.store.revoked_sessions = set(data)
-                elif key == "step_up_required":
-                    self.store.step_up_required = set(data)
-                elif key == "download_restricted_actors":
-                    self.store.download_restricted_actors = set(data)
-                elif key == "disabled_services":
-                    self.store.disabled_services = set(data)
-                elif key == "quarantined_artifacts":
-                    self.store.quarantined_artifacts = set(data)
-                elif key == "policy_change_restricted_actors":
-                    self.store.policy_change_restricted_actors = set(data)
-                elif key == "alert_signatures":
-                    self.store.alert_signatures = {tuple(s) for s in data}
+                key, raw = row[0], json.loads(row[1])
+                if key == "alert_signatures":
+                    staged_sets[key] = {tuple(s) for s in raw}
+                else:
+                    staged_sets[key] = set(raw)
 
-            # Load dicts
+            # Dicts
+            staged_actor_sessions: dict[str, str] = {}
+            staged_risk_profiles: dict[str, object] = {}
+            staged_blocked_routes: dict[str, set[str]] = {}
             for row in conn.execute("SELECT key, data FROM state_dicts"):
-                key, data = row[0], json.loads(row[1])
+                key, raw = row[0], json.loads(row[1])
                 if key == "actor_sessions":
-                    self.store.actor_sessions = data
+                    staged_actor_sessions = raw
                 elif key == "risk_profiles":
                     from app.services.risk_service import RiskProfile
-                    for actor_id, profile_data in data.items():
-                        self.store.risk_profiles[actor_id] = RiskProfile(
-                            actor_id=profile_data["actor_id"],
-                            current_score=profile_data["current_score"],
-                            peak_score=profile_data["peak_score"],
-                            contributing_rules=profile_data["contributing_rules"],
-                            score_history=profile_data["score_history"],
-                            last_updated=datetime.fromisoformat(profile_data["last_updated"]),
+                    for actor_id, pd in raw.items():
+                        staged_risk_profiles[actor_id] = RiskProfile(
+                            actor_id=pd["actor_id"],
+                            current_score=pd["current_score"],
+                            peak_score=pd["peak_score"],
+                            contributing_rules=pd["contributing_rules"],
+                            score_history=pd["score_history"],
+                            last_updated=datetime.fromisoformat(pd["last_updated"]),
                         )
                 elif key == "blocked_routes":
-                    self.store.blocked_routes = {
-                        k: set(v) for k, v in data.items()
+                    staged_blocked_routes = {
+                        k: set(v) for k, v in raw.items()
                     }
 
-            # Load scenario history
-            self.store.scenario_history = []
+            staged_scenario_history: list[dict] = []
             for row in conn.execute("SELECT data FROM scenario_history ORDER BY id"):
-                self.store.scenario_history.append(json.loads(row[0]))
+                staged_scenario_history.append(json.loads(row[0]))
 
-            # Load incident notes
             from collections import defaultdict
-            self.store.incident_notes = defaultdict(list)
+            staged_incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
             for row in conn.execute("SELECT correlation_id, data FROM incident_notes"):
-                self.store.incident_notes[row[0]].append(json.loads(row[1]))
+                staged_incident_notes[row[0]].append(json.loads(row[1]))
+
+            # ----------------------------------------------------------
+            # Stage 2: all deserialization succeeded — swap into the
+            # live store.  This block contains only assignments, no
+            # parsing, so it cannot partially fail.
+            # ----------------------------------------------------------
+
+            self.store.events = staged_events
+            self.store.alerts = staged_alerts
+            self.store.responses = staged_responses
+            self.store.incidents_by_correlation = staged_incidents
+            self.store.actor_sessions = staged_actor_sessions
+            self.store.risk_profiles = staged_risk_profiles
+            self.store.blocked_routes = staged_blocked_routes
+            self.store.scenario_history = staged_scenario_history
+            self.store.incident_notes = staged_incident_notes
+
+            self.store.revoked_sessions = staged_sets.get("revoked_sessions", set())
+            self.store.step_up_required = staged_sets.get("step_up_required", set())
+            self.store.download_restricted_actors = staged_sets.get("download_restricted_actors", set())
+            self.store.disabled_services = staged_sets.get("disabled_services", set())
+            self.store.quarantined_artifacts = staged_sets.get("quarantined_artifacts", set())
+            self.store.policy_change_restricted_actors = staged_sets.get("policy_change_restricted_actors", set())
+            self.store.alert_signatures = staged_sets.get("alert_signatures", set())
+
+            # Clear derived indices before rebuilding so a second load()
+            # on the same store doesn't accumulate stale entries.
+            self.store.login_failures_by_actor.clear()
+            self.store.document_reads_by_actor.clear()
+            self.store.authorization_failures_by_actor.clear()
+            self.store.artifact_failures_by_actor.clear()
 
             # Rebuild derived event indices from loaded events.
-            # These are populated by TelemetryService.emit() during normal
-            # operation but must be reconstructed after a cold load.
             self._rebuild_event_indices()
 
             return True
         except Exception as exc:
-            # Log the error but do NOT destroy persisted data.
-            # The store remains in whatever partially-loaded state it had;
-            # callers should treat a False return as "start fresh in-memory."
+            # Log the error but leave the live store untouched (no
+            # staging data was swapped in).  SQLite data is also
+            # preserved — nothing is deleted.
             import logging
             logging.getLogger("aegisrange.persistence").error(
                 "Failed to load persisted state: %s. Starting with empty store.", exc
