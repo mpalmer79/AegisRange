@@ -349,7 +349,7 @@ class ScenarioEngine:
         }
         if operated_by:
             summary["operated_by"] = operated_by
-        self.store.scenario_history.append({
+        self.store.append_scenario_history({
             **summary,
             "executed_at": datetime.utcnow().isoformat(),
         })

@@ -490,6 +490,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, r
         reference_id=incident.incident_id,
         summary=f"Status changed from {old_status} to {payload.status} by {changed_by}.",
     )
+    STORE.upsert_incident(incident)
 
     return _serialize_incident(incident)
 
@@ -551,12 +552,13 @@ def add_incident_note(correlation_id: str, note: IncidentNote, request: Request)
         "content": note.content,
         "created_at": datetime.utcnow().isoformat(),
     }
-    STORE.incident_notes[correlation_id].append(entry)
+    STORE.append_incident_note(correlation_id, entry)
     incident.add_timeline_entry(
         entry_type="analyst_note",
         reference_id=entry["note_id"],
         summary=f"Note by {attributed_author}: {note.content[:80]}",
     )
+    STORE.upsert_incident(incident)
     return entry
 
 

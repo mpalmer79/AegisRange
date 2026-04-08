@@ -49,7 +49,7 @@ class EventPipelineService:
             self.store.alert_signatures.add(signature)
             novel_alerts.append(alert)
 
-        self.store.alerts.extend(novel_alerts)
+        self.store.extend_alerts(novel_alerts)
         total_responses = 0
         for alert in novel_alerts:
             self._emit_detection_event(alert, source_event=event)

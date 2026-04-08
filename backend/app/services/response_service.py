@@ -27,7 +27,7 @@ class ResponseOrchestrator:
             return []
 
         responses = handler(alert)
-        self.store.responses.extend(responses)
+        self.store.extend_responses(responses)
         return responses
 
     def _auth_failure_containment(self, alert: Alert) -> list[ResponseAction]:

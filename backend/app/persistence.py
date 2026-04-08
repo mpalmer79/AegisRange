@@ -280,7 +280,142 @@ class PersistenceLayer:
             )
         return incident
 
-    # --- Save ---
+    # --- Incremental persistence ---
+
+    def persist_event(self, event: Event) -> None:
+        """INSERT a single event (append-only)."""
+        conn = self._connect()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO events (event_id, data) VALUES (?, ?)",
+                (event.event_id, self._serialize_event(event)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def persist_alerts(self, alerts: list[Alert]) -> None:
+        """INSERT a batch of alerts (append-only)."""
+        if not alerts:
+            return
+        conn = self._connect()
+        try:
+            conn.executemany(
+                "INSERT OR IGNORE INTO alerts (alert_id, data) VALUES (?, ?)",
+                [(a.alert_id, self._serialize_alert(a)) for a in alerts],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def persist_responses(self, responses: list[ResponseAction]) -> None:
+        """INSERT a batch of responses (append-only)."""
+        if not responses:
+            return
+        conn = self._connect()
+        try:
+            conn.executemany(
+                "INSERT OR IGNORE INTO responses (response_id, data) VALUES (?, ?)",
+                [(r.response_id, self._serialize_response(r)) for r in responses],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def persist_incident(self, incident: Incident) -> None:
+        """INSERT OR REPLACE a single incident (upsert)."""
+        conn = self._connect()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO incidents (correlation_id, data) VALUES (?, ?)",
+                (incident.correlation_id, self._serialize_incident(incident)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def persist_incident_note(self, correlation_id: str, note: dict) -> None:
+        """INSERT a single incident note (append-only)."""
+        conn = self._connect()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO incident_notes (note_id, correlation_id, data) VALUES (?, ?, ?)",
+                (note["note_id"], correlation_id, json.dumps(note)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def persist_scenario_history_entry(self, entry: dict) -> None:
+        """INSERT a single scenario history entry (append-only)."""
+        conn = self._connect()
+        try:
+            conn.execute(
+                "INSERT INTO scenario_history (data) VALUES (?)",
+                (json.dumps(entry),),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    # --- Operational state snapshot ---
+
+    def save_operational_state(self) -> None:
+        """Persist only operational state (sets, dicts) — not entity tables.
+
+        Entity tables (events, alerts, responses, incidents, notes,
+        scenario_history) are persisted incrementally via persist_*()
+        methods. This method covers the remaining operational state
+        that changes during request processing.
+        """
+        conn = self._connect()
+        try:
+            conn.execute("DELETE FROM state_sets")
+            conn.execute("DELETE FROM state_dicts")
+
+            set_data = {
+                "revoked_sessions": sorted(self.store.revoked_sessions),
+                "step_up_required": sorted(self.store.step_up_required),
+                "download_restricted_actors": sorted(self.store.download_restricted_actors),
+                "disabled_services": sorted(self.store.disabled_services),
+                "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
+                "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
+                "alert_signatures": [list(s) for s in self.store.alert_signatures],
+            }
+            for key, value in set_data.items():
+                conn.execute(
+                    "INSERT INTO state_sets (key, data) VALUES (?, ?)",
+                    (key, json.dumps(value)),
+                )
+
+            dict_data = {
+                "actor_sessions": self.store.actor_sessions,
+                "risk_profiles": {
+                    k: {
+                        "actor_id": v.actor_id,
+                        "current_score": v.current_score,
+                        "peak_score": v.peak_score,
+                        "contributing_rules": v.contributing_rules,
+                        "score_history": v.score_history,
+                        "last_updated": v.last_updated.isoformat() if hasattr(v.last_updated, "isoformat") else v.last_updated,
+                    }
+                    for k, v in self.store.risk_profiles.items()
+                },
+                "blocked_routes": {
+                    k: sorted(v) for k, v in self.store.blocked_routes.items()
+                },
+            }
+            for key, value in dict_data.items():
+                conn.execute(
+                    "INSERT INTO state_dicts (key, data) VALUES (?, ?)",
+                    (key, json.dumps(value)),
+                )
+
+            conn.commit()
+        finally:
+            conn.close()
+
+    # --- Full snapshot save ---
 
     def save(self) -> None:
         """Persist the entire store state to SQLite."""

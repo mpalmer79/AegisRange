@@ -28,7 +28,7 @@ class IncidentService:
                 severity=alert.severity,
                 confidence=alert.confidence,
             )
-            self.store.incidents_by_correlation[alert.correlation_id] = incident
+            self.store.upsert_incident(incident)
             incident.add_timeline_entry(
                 entry_type="state_transition",
                 reference_id=incident.incident_id,
@@ -79,6 +79,7 @@ class IncidentService:
             if source_event.actor_id not in incident.affected_services:
                 incident.affected_services.append(source_event.actor_id)
 
+        self.store.upsert_incident(incident)
         return incident
 
     def register_response(self, incident: Incident, response: ResponseAction) -> None:
@@ -91,6 +92,7 @@ class IncidentService:
             reference_id=response.response_id,
             summary=f"{response.playbook_id}: {response.action_type}",
         )
+        self.store.upsert_incident(incident)
 
     @staticmethod
     def _classify_incident(alert: Alert) -> str:
