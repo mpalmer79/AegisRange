@@ -3,15 +3,14 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
-from app.main import app, STORE
+from app.main import STORE
+from tests.auth_helper import authenticated_client
 
 
 class APITestBase(unittest.TestCase):
     def setUp(self) -> None:
         STORE.reset()
-        self.client = TestClient(app)
+        self.client = authenticated_client()
 
 
 class TestMetricsEndpoint(APITestBase):
@@ -19,28 +18,28 @@ class TestMetricsEndpoint(APITestBase):
         resp = self.client.get("/metrics")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertEqual(data["events_total"], 0)
-        self.assertEqual(data["alerts_total"], 0)
-        self.assertEqual(data["incidents_total"], 0)
+        self.assertEqual(data["total_events"], 0)
+        self.assertEqual(data["total_alerts"], 0)
+        self.assertEqual(data["total_incidents"], 0)
 
     def test_metrics_after_scenario(self) -> None:
         self.client.post("/scenarios/scn-auth-001")
         resp = self.client.get("/metrics")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertGreater(data["events_total"], 0)
-        self.assertGreater(data["alerts_total"], 0)
-        self.assertGreater(data["incidents_total"], 0)
-        self.assertGreater(data["active_step_up"], 0)
+        self.assertGreater(data["total_events"], 0)
+        self.assertGreater(data["total_alerts"], 0)
+        self.assertGreater(data["total_incidents"], 0)
+        self.assertGreater(data["active_containments"], 0)
 
     def test_metrics_keys(self) -> None:
         resp = self.client.get("/metrics")
         data = resp.json()
         expected_keys = {
-            "events_total", "alerts_total", "responses_total",
-            "incidents_total", "active_step_up", "revoked_sessions",
-            "download_restricted_actors", "disabled_services",
-            "quarantined_artifacts", "policy_restricted_actors",
+            "total_events", "total_alerts", "total_responses",
+            "total_incidents", "active_containments",
+            "events_by_category", "alerts_by_severity",
+            "incidents_by_status",
         }
         self.assertEqual(set(data.keys()), expected_keys)
 
@@ -62,7 +61,7 @@ class TestSCNSVC005Endpoint(APITestBase):
         self.client.post("/scenarios/scn-svc-005")
         resp = self.client.get("/metrics")
         data = resp.json()
-        self.assertGreater(data["disabled_services"], 0)
+        self.assertGreater(data["active_containments"], 0)
 
 
 class TestSCNCORR006Endpoint(APITestBase):

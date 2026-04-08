@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 
 from app.models import Alert, Event, Incident, ResponseAction
 
 
 class InMemoryStore:
-    """Simple in-memory backing store for the Phase 1 modular monolith."""
+    """In-memory backing store. Optionally backed by SQLite persistence."""
 
     def __init__(self) -> None:
         self.events: list[Event] = []
@@ -29,9 +30,27 @@ class InMemoryStore:
         self.risk_profiles: dict[str, object] = {}
         self.scenario_history: list[dict] = []
         self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
+        self._persistence = None
+
+    def enable_persistence(self, db_path: str = "aegisrange.db") -> None:
+        """Enable SQLite persistence. Call once at startup."""
+        from app.persistence import PersistenceLayer
+        self._persistence = PersistenceLayer(self, db_path=db_path)
+        self._persistence.load()
+
+    def save(self) -> None:
+        """Persist current state to SQLite (no-op if persistence not enabled)."""
+        if self._persistence:
+            self._persistence.save()
 
     def reset(self) -> None:
+        if self._persistence:
+            self._persistence.clear()
+        p = self._persistence
         self.__init__()
+        self._persistence = p
 
 
+# Module-level singleton. Tests use this directly (in-memory only).
+# main.py calls STORE.enable_persistence() to add SQLite backing.
 STORE = InMemoryStore()

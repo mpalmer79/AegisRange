@@ -23,7 +23,7 @@ class Document:
 
 
 class DocumentService:
-    def __init__(self, store: InMemoryStore | None = None) -> None:
+    def __init__(self, store: InMemoryStore) -> None:
         self.store = store
         self.documents = {
             "doc-001": Document(document_id="doc-001", classification="public"),

@@ -194,13 +194,13 @@ class TestDocumentServiceEdgeCases(unittest.TestCase):
     """Document service edge cases."""
 
     def test_can_read_nonexistent(self) -> None:
-        service = DocumentService()
+        service = DocumentService(InMemoryStore())
         allowed, doc = service.can_read("admin", "doc-999")
         self.assertFalse(allowed)
         self.assertIsNone(doc)
 
     def test_can_download_nonexistent(self) -> None:
-        service = DocumentService()
+        service = DocumentService(InMemoryStore())
         allowed, doc = service.can_download("admin", "doc-999")
         self.assertFalse(allowed)
         self.assertIsNone(doc)
@@ -214,7 +214,7 @@ class TestDocumentServiceEdgeCases(unittest.TestCase):
         self.assertIsNotNone(doc)
 
     def test_unknown_role_gets_public_clearance(self) -> None:
-        service = DocumentService()
+        service = DocumentService(InMemoryStore())
         allowed, doc = service.can_read("unknown", "doc-001")
         self.assertTrue(allowed)  # public doc with public clearance
         allowed, doc = service.can_read("unknown", "doc-002")

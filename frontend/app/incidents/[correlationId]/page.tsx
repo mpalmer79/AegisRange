@@ -125,11 +125,12 @@ export default function IncidentDetailPage() {
   }, [correlationId]);
 
   useEffect(() => {
-    if (incident?.primary_actor) {
-      fetchRiskProfile(incident.primary_actor);
+    const actor = incident?.primary_actor ?? incident?.primary_actor_id;
+    if (actor) {
+      fetchRiskProfile(actor);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incident?.primary_actor]);
+  }, [incident?.primary_actor, incident?.primary_actor_id]);
 
   const handleStatusChange = async (newStatus: IncidentStatus) => {
     if (!incident) return;
@@ -257,18 +258,16 @@ export default function IncidentDetailPage() {
 
         {/* Key metrics row */}
         <div className="flex flex-wrap gap-x-8 gap-y-3 mt-4 pt-4 border-t border-gray-800 text-sm">
-          {incident.primary_actor && (
+          {(incident.primary_actor ?? incident.primary_actor_id) && (
             <div>
               <span className="text-gray-600 text-xs font-mono block">PRIMARY ACTOR</span>
-              <span className="text-gray-200 font-mono">{incident.primary_actor}</span>
+              <span className="text-gray-200 font-mono">{incident.primary_actor ?? incident.primary_actor_id}</span>
             </div>
           )}
           <div>
             <span className="text-gray-600 text-xs font-mono block">CONFIDENCE</span>
-            <span className="text-gray-200 font-mono">
-              {typeof incident.confidence === 'number'
-                ? `${(incident.confidence * 100).toFixed(0)}%`
-                : incident.confidence ?? '-'}
+            <span className="text-gray-200 font-mono uppercase">
+              {incident.confidence ?? '-'}
             </span>
           </div>
           {incident.risk_score != null && (

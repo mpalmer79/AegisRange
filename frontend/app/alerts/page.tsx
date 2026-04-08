@@ -160,10 +160,8 @@ export default function AlertsPage() {
                   </div>
                   <div>
                     <span className="text-gray-600 font-mono">CONFIDENCE </span>
-                    <span className="text-gray-300 font-mono">
-                      {typeof alert.confidence === 'number'
-                        ? `${(alert.confidence * 100).toFixed(0)}%`
-                        : alert.confidence}
+                    <span className="text-gray-300 font-mono uppercase">
+                      {alert.confidence}
                     </span>
                   </div>
                   <div>

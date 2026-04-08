@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
-from app.main import app
 from app.services.killchain_service import KillChainService, RULE_TO_STAGE, KILL_CHAIN_STAGES
 from app.store import STORE
+from tests.auth_helper import authenticated_client
 
 
 class TestKillChainService(unittest.TestCase):
@@ -29,7 +27,7 @@ class TestKillChainService(unittest.TestCase):
                 f"{rule_id} maps to invalid stage: {stage}")
 
     def test_analyze_incident_after_scenario(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         resp = client.post("/scenarios/scn-auth-001")
         self.assertEqual(resp.status_code, 200)
@@ -49,7 +47,7 @@ class TestKillChainService(unittest.TestCase):
         self.assertIsNone(self.service.analyze_incident("fake-corr-id"))
 
     def test_analyze_all_incidents(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
         client.post("/scenarios/scn-doc-003")
@@ -63,7 +61,7 @@ class TestKillChainService(unittest.TestCase):
         self.assertEqual(len(KILL_CHAIN_STAGES), 7)
 
     def test_to_dict_serialization(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
 
@@ -78,7 +76,7 @@ class TestKillChainService(unittest.TestCase):
 
 class TestKillChainAPI(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(app)
+        self.client = authenticated_client()
         self.client.post("/admin/reset")
 
     def test_get_all_killchain_empty(self) -> None:
