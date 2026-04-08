@@ -24,7 +24,7 @@ from app.services.scenario_service import ScenarioEngine
 from app.services.mitre_service import MitreAttackService
 from app.services.killchain_service import KillChainService
 from app.services.campaign_service import CampaignDetectionService
-from app.services.auth_service import AuthService, require_role
+from app.services.auth_service import AuthService, require_role, _auth_service
 from app.services.report_service import ReportService
 from app.services.stream_service import StreamService
 from app.store import STORE
@@ -70,7 +70,7 @@ scenario_engine = ScenarioEngine(
 mitre_service = MitreAttackService()
 killchain_service = KillChainService(STORE)
 campaign_detection_service = CampaignDetectionService(STORE)
-auth_service = AuthService()
+auth_service = _auth_service  # Use the same instance as require_role()
 report_service = ReportService(STORE)
 stream_service = StreamService(STORE)
 
@@ -109,11 +109,6 @@ class IncidentStatusUpdate(BaseModel):
 class IncidentNote(BaseModel):
     author: str
     content: str
-
-
-class PlatformLoginRequest(BaseModel):
-    username: str
-    password: str
 
 
 class ReportRequest(BaseModel):
@@ -701,7 +696,7 @@ def get_campaign(campaign_id: str) -> dict:
 # --- Platform Auth ---
 
 @app.post("/auth/login")
-def platform_login(payload: PlatformLoginRequest) -> dict:
+def platform_login(payload: LoginRequest) -> dict:
     success, token = auth_service.authenticate(payload.username, payload.password)
     if not success or token is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")

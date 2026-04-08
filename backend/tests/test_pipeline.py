@@ -30,7 +30,7 @@ class PipelinePhase2Tests(unittest.TestCase):
             store=self.store,
         )
         self.identity = IdentityService(self.store)
-        self.documents = DocumentService()
+        self.documents = DocumentService(self.store)
         self.scenarios = ScenarioEngine(
             identity=self.identity,
             documents=self.documents,
