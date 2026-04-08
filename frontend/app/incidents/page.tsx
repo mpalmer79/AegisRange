@@ -132,10 +132,10 @@ export default function IncidentsPage() {
                   )}
 
                   <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-xs">
-                    {incident.primary_actor && (
+                    {(incident.primary_actor ?? incident.primary_actor_id) && (
                       <div>
                         <span className="text-gray-600 font-mono">ACTOR </span>
-                        <span className="text-gray-400 font-mono">{incident.primary_actor}</span>
+                        <span className="text-gray-400 font-mono">{incident.primary_actor ?? incident.primary_actor_id}</span>
                       </div>
                     )}
                     {incident.risk_score != null && (

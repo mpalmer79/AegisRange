@@ -145,17 +145,39 @@ def health() -> dict[str, str]:
 
 @app.get("/metrics")
 def get_metrics() -> dict:
+    # Aggregate events by category
+    events_by_category: dict[str, int] = {}
+    for e in STORE.events:
+        events_by_category[e.category] = events_by_category.get(e.category, 0) + 1
+
+    # Aggregate alerts by severity
+    alerts_by_severity: dict[str, int] = {}
+    for a in STORE.alerts:
+        sev = a.severity.value if hasattr(a.severity, "value") else str(a.severity)
+        alerts_by_severity[sev] = alerts_by_severity.get(sev, 0) + 1
+
+    # Aggregate incidents by status
+    incidents_by_status: dict[str, int] = {}
+    for inc in STORE.incidents_by_correlation.values():
+        incidents_by_status[inc.status] = incidents_by_status.get(inc.status, 0) + 1
+
+    active_containments = (
+        len(STORE.step_up_required)
+        + len(STORE.revoked_sessions)
+        + len(STORE.download_restricted_actors)
+        + len(STORE.disabled_services)
+        + len(STORE.quarantined_artifacts)
+    )
+
     return {
-        "events_total": len(STORE.events),
-        "alerts_total": len(STORE.alerts),
-        "responses_total": len(STORE.responses),
-        "incidents_total": len(STORE.incidents_by_correlation),
-        "active_step_up": len(STORE.step_up_required),
-        "revoked_sessions": len(STORE.revoked_sessions),
-        "download_restricted_actors": len(STORE.download_restricted_actors),
-        "disabled_services": len(STORE.disabled_services),
-        "quarantined_artifacts": len(STORE.quarantined_artifacts),
-        "policy_restricted_actors": len(STORE.policy_change_restricted_actors),
+        "total_events": len(STORE.events),
+        "total_alerts": len(STORE.alerts),
+        "total_responses": len(STORE.responses),
+        "total_incidents": len(STORE.incidents_by_correlation),
+        "active_containments": active_containments,
+        "events_by_category": events_by_category,
+        "alerts_by_severity": alerts_by_severity,
+        "incidents_by_status": incidents_by_status,
     }
 
 
@@ -756,6 +778,7 @@ def _event_to_dict(event: Event) -> dict:
 
 
 def _alert_to_dict(alert) -> dict:
+    ts = alert.created_at.isoformat()
     return {
         "alert_id": alert.alert_id,
         "rule_id": alert.rule_id,
@@ -765,9 +788,12 @@ def _alert_to_dict(alert) -> dict:
         "actor_id": alert.actor_id,
         "correlation_id": alert.correlation_id,
         "contributing_event_ids": alert.contributing_event_ids,
+        "event_ids": alert.contributing_event_ids,
         "summary": alert.summary,
         "payload": alert.payload,
-        "created_at": alert.created_at.isoformat(),
+        "details": alert.payload,
+        "created_at": ts,
+        "timestamp": ts,
     }
 
 
@@ -777,6 +803,7 @@ def _incident_to_dict(incident) -> dict:
         "incident_type": incident.incident_type,
         "status": incident.status,
         "primary_actor_id": incident.primary_actor_id,
+        "primary_actor": incident.primary_actor_id,
         "actor_type": incident.actor_type,
         "actor_role": incident.actor_role,
         "correlation_id": incident.correlation_id,
@@ -785,17 +812,25 @@ def _incident_to_dict(incident) -> dict:
         "risk_score": incident.risk_score,
         "detection_ids": incident.detection_ids,
         "detection_summary": incident.detection_summary,
+        "detection_summaries": incident.detection_summary,
         "response_ids": incident.response_ids,
         "containment_status": incident.containment_status,
         "event_ids": incident.event_ids,
         "affected_documents": incident.affected_documents,
         "affected_sessions": incident.affected_sessions,
         "affected_services": incident.affected_services,
+        "affected_resources": {
+            "documents": incident.affected_documents,
+            "sessions": incident.affected_sessions,
+            "services": incident.affected_services,
+            "actors": [incident.primary_actor_id] if incident.primary_actor_id else [],
+        },
         "timeline": [
             {
                 "timestamp": entry.timestamp.isoformat(),
                 "entry_type": entry.entry_type,
                 "reference_id": entry.reference_id,
+                "entry_id": entry.reference_id,
                 "summary": entry.summary,
             }
             for entry in incident.timeline

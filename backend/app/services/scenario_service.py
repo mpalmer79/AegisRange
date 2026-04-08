@@ -327,12 +327,18 @@ class ScenarioEngine:
 
     def _summary(self, scenario_id: str, correlation_id: str) -> dict[str, object]:
         incident = self.store.incidents_by_correlation.get(correlation_id)
+        events_count = len([e for e in self.store.events if e.correlation_id == correlation_id])
+        alerts_count = len([a for a in self.store.alerts if a.correlation_id == correlation_id])
+        responses_count = len([r for r in self.store.responses if r.correlation_id == correlation_id])
         summary = {
             "scenario_id": scenario_id,
             "correlation_id": correlation_id,
-            "events_total": len([e for e in self.store.events if e.correlation_id == correlation_id]),
-            "alerts_total": len([a for a in self.store.alerts if a.correlation_id == correlation_id]),
-            "responses_total": len([r for r in self.store.responses if r.correlation_id == correlation_id]),
+            "events_total": events_count,
+            "events_generated": events_count,
+            "alerts_total": alerts_count,
+            "alerts_generated": alerts_count,
+            "responses_total": responses_count,
+            "responses_generated": responses_count,
             "incident_id": incident.incident_id if incident else None,
             "step_up_required": "user-alice" in self.store.step_up_required,
             "revoked_sessions": sorted(self.store.revoked_sessions),

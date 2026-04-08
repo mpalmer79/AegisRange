@@ -15,56 +15,79 @@ export interface Event {
   event_type: string;
   category: string;
   actor_id: string;
+  actor_type?: string;
   actor_role?: string;
   source_ip?: string;
-  resource_type?: string;
-  resource_id?: string;
-  action?: string;
+  target_type?: string;
+  target_id?: string;
+  request_id?: string;
   status: string;
+  status_code?: string;
   session_id?: string;
   correlation_id?: string;
-  metadata?: Record<string, unknown>;
+  user_agent?: string;
+  origin?: string;
+  error_message?: string;
+  severity?: string;
+  confidence?: string;
+  risk_score?: number;
+  payload?: Record<string, unknown>;
 }
 
 export interface Alert {
   alert_id: string;
   timestamp: string;
+  created_at: string;
   rule_id: string;
   rule_name: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
-  confidence: number;
+  confidence: string;
   actor_id: string;
   correlation_id?: string;
   summary: string;
+  payload?: Record<string, unknown>;
   details?: Record<string, unknown>;
+  contributing_event_ids?: string[];
   event_ids?: string[];
 }
 
 export interface TimelineEntry {
   timestamp: string;
   entry_type: string;
+  reference_id: string;
   entry_id: string;
   summary: string;
-  details?: Record<string, unknown>;
 }
 
 export interface Incident {
   incident_id: string;
+  incident_type?: string;
   correlation_id: string;
   status: 'open' | 'investigating' | 'contained' | 'resolved' | 'closed';
   severity: 'critical' | 'high' | 'medium' | 'low';
-  confidence: number;
+  confidence: string;
   risk_score?: number;
+  primary_actor_id?: string;
   primary_actor?: string;
+  actor_type?: string;
+  actor_role?: string;
   title?: string;
   summary?: string;
   detection_ids?: string[];
+  detection_summary?: string[];
   detection_summaries?: string[];
   response_ids?: string[];
+  containment_status?: string;
+  event_ids?: string[];
+  affected_documents?: string[];
+  affected_sessions?: string[];
+  affected_services?: string[];
   affected_resources?: AffectedResources;
   timeline?: TimelineEntry[];
   created_at?: string;
   updated_at?: string;
+  closed_at?: string | null;
+  notes?: IncidentNote[];
 }
 
 export interface AffectedResources {
@@ -78,22 +101,29 @@ export interface Metrics {
   total_events: number;
   total_alerts: number;
   total_incidents: number;
+  total_responses: number;
   active_containments: number;
-  events_by_category?: Record<string, number>;
-  alerts_by_severity?: Record<string, number>;
-  incidents_by_status?: Record<string, number>;
+  events_by_category: Record<string, number>;
+  alerts_by_severity: Record<string, number>;
+  incidents_by_status: Record<string, number>;
 }
 
 export interface ScenarioResult {
   scenario_id: string;
-  scenario_name?: string;
   correlation_id: string;
-  events_generated?: number;
-  alerts_generated?: number;
-  responses_generated?: number;
-  incident_id?: string;
-  summary?: string;
-  details?: Record<string, unknown>;
+  events_total: number;
+  events_generated: number;
+  alerts_total: number;
+  alerts_generated: number;
+  responses_total: number;
+  responses_generated: number;
+  incident_id?: string | null;
+  step_up_required?: boolean;
+  revoked_sessions?: string[];
+  download_restricted_actors?: string[];
+  disabled_services?: string[];
+  quarantined_artifacts?: string[];
+  policy_change_restricted_actors?: string[];
 }
 
 export interface LoginRequest {
@@ -118,7 +148,7 @@ export interface DocumentRequest {
 export type IncidentStatus = 'open' | 'investigating' | 'contained' | 'resolved' | 'closed';
 
 export const INCIDENT_STATUS_TRANSITIONS: Record<IncidentStatus, IncidentStatus[]> = {
-  open: ['investigating'],
+  open: ['investigating', 'contained', 'resolved'],
   investigating: ['contained', 'resolved'],
   contained: ['resolved'],
   resolved: ['closed'],

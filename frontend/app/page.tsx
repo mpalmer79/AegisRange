@@ -247,9 +247,9 @@ export default function DashboardPage() {
       )}
 
       {/* Additional metrics breakdown */}
-      {metrics && (metrics.events_by_category || metrics.alerts_by_severity || metrics.incidents_by_status) && (
+      {metrics && (Object.keys(metrics.events_by_category).length > 0 || Object.keys(metrics.alerts_by_severity).length > 0 || Object.keys(metrics.incidents_by_status).length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-          {metrics.events_by_category && Object.keys(metrics.events_by_category).length > 0 && (
+          {Object.keys(metrics.events_by_category).length > 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
               <h3 className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-3">Events by Category</h3>
               <div className="space-y-2">
@@ -262,7 +262,7 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-          {metrics.alerts_by_severity && Object.keys(metrics.alerts_by_severity).length > 0 && (
+          {Object.keys(metrics.alerts_by_severity).length > 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
               <h3 className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-3">Alerts by Severity</h3>
               <div className="space-y-2">
@@ -278,7 +278,7 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-          {metrics.incidents_by_status && Object.keys(metrics.incidents_by_status).length > 0 && (
+          {Object.keys(metrics.incidents_by_status).length > 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
               <h3 className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-3">Incidents by Status</h3>
               <div className="space-y-2">
