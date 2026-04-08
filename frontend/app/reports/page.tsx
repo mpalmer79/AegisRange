@@ -129,11 +129,11 @@ export default function ReportsPage() {
             <h3 className="text-lg font-semibold text-gray-200 mb-4">MITRE ATT&CK Coverage</h3>
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center p-3 bg-gray-800/50 rounded-lg">
-                <div className="text-2xl font-bold font-mono text-purple-400">{report.mitre_coverage.tactics_covered}</div>
+                <div className="text-2xl font-bold font-mono text-purple-400">{report.mitre_coverage.tactics_covered.length}</div>
                 <div className="text-xs text-gray-500 mt-1">Tactics Covered</div>
               </div>
               <div className="text-center p-3 bg-gray-800/50 rounded-lg">
-                <div className="text-2xl font-bold font-mono text-purple-400">{report.mitre_coverage.techniques_covered}</div>
+                <div className="text-2xl font-bold font-mono text-purple-400">{report.mitre_coverage.techniques_covered.length}</div>
                 <div className="text-xs text-gray-500 mt-1">Techniques Covered</div>
               </div>
               <div className="text-center p-3 bg-gray-800/50 rounded-lg">

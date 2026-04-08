@@ -24,6 +24,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   high: 'text-orange-400 bg-orange-500/20 border-orange-500/30',
   medium: 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30',
   low: 'text-blue-400 bg-blue-500/20 border-blue-500/30',
+  informational: 'text-gray-400 bg-gray-500/20 border-gray-500/30',
 };
 
 export default function CampaignsPage() {

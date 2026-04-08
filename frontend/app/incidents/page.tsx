@@ -18,6 +18,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   high: 'text-orange-400',
   medium: 'text-yellow-400',
   low: 'text-blue-400',
+  informational: 'text-gray-400',
 };
 
 export default function IncidentsPage() {
@@ -121,21 +122,13 @@ export default function IncidentsPage() {
                     </span>
                   </div>
 
-                  {incident.title && (
-                    <h3 className="text-sm text-gray-300 mb-1">{incident.title}</h3>
-                  )}
 
-                  {incident.summary && (
-                    <p className="text-xs text-gray-500 truncate max-w-2xl">
-                      {incident.summary}
-                    </p>
-                  )}
 
                   <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-xs">
-                    {(incident.primary_actor ?? incident.primary_actor_id) && (
+                    {incident.primary_actor_id && (
                       <div>
                         <span className="text-gray-600 font-mono">ACTOR </span>
-                        <span className="text-gray-400 font-mono">{incident.primary_actor ?? incident.primary_actor_id}</span>
+                        <span className="text-gray-400 font-mono">{incident.primary_actor_id}</span>
                       </div>
                     )}
                     {incident.risk_score != null && (

@@ -4,9 +4,7 @@
 
 export interface HealthStatus {
   status: string;
-  version?: string;
-  uptime?: number;
-  components?: Record<string, string>;
+  timestamp: string;
 }
 
 export interface Event {
@@ -34,60 +32,54 @@ export interface Event {
   payload?: Record<string, unknown>;
 }
 
+export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'informational';
+
 export interface Alert {
   alert_id: string;
-  timestamp: string;
   created_at: string;
   rule_id: string;
   rule_name: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
+  severity: Severity;
   confidence: string;
   actor_id: string;
-  correlation_id?: string;
+  correlation_id: string;
+  contributing_event_ids: string[];
   summary: string;
-  payload?: Record<string, unknown>;
-  details?: Record<string, unknown>;
-  contributing_event_ids?: string[];
-  event_ids?: string[];
+  payload: Record<string, unknown>;
 }
 
 export interface TimelineEntry {
   timestamp: string;
   entry_type: string;
-  reference_id: string;
   entry_id: string;
   summary: string;
 }
 
 export interface Incident {
   incident_id: string;
-  incident_type?: string;
+  incident_type: string;
   correlation_id: string;
   status: 'open' | 'investigating' | 'contained' | 'resolved' | 'closed';
-  severity: 'critical' | 'high' | 'medium' | 'low';
+  severity: Severity;
   confidence: string;
-  risk_score?: number;
-  primary_actor_id?: string;
-  primary_actor?: string;
-  actor_type?: string;
-  actor_role?: string;
-  title?: string;
-  summary?: string;
-  detection_ids?: string[];
-  detection_summary?: string[];
-  detection_summaries?: string[];
-  response_ids?: string[];
-  containment_status?: string;
-  event_ids?: string[];
-  affected_documents?: string[];
-  affected_sessions?: string[];
-  affected_services?: string[];
-  affected_resources?: AffectedResources;
-  timeline?: TimelineEntry[];
-  created_at?: string;
-  updated_at?: string;
-  closed_at?: string | null;
-  notes?: IncidentNote[];
+  risk_score: number | null;
+  primary_actor_id: string;
+  actor_type: string;
+  actor_role: string | null;
+  detection_ids: string[];
+  detection_summary: string[];
+  response_ids: string[];
+  containment_status: string;
+  event_ids: string[];
+  affected_documents: string[];
+  affected_sessions: string[];
+  affected_services: string[];
+  affected_resources: AffectedResources;
+  timeline: TimelineEntry[];
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  notes: IncidentNote[];
 }
 
 export interface AffectedResources {
@@ -117,13 +109,14 @@ export interface ScenarioResult {
   alerts_generated: number;
   responses_total: number;
   responses_generated: number;
-  incident_id?: string | null;
-  step_up_required?: boolean;
-  revoked_sessions?: string[];
-  download_restricted_actors?: string[];
-  disabled_services?: string[];
-  quarantined_artifacts?: string[];
-  policy_change_restricted_actors?: string[];
+  incident_id: string | null;
+  step_up_required: boolean;
+  revoked_sessions: string[];
+  download_restricted_actors: string[];
+  disabled_services: string[];
+  quarantined_artifacts: string[];
+  policy_change_restricted_actors: string[];
+  operated_by: string | null;
 }
 
 export interface LoginRequest {
@@ -132,11 +125,11 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  session_id?: string;
-  token?: string;
-  actor_id?: string;
-  status?: string;
-  events?: Event[];
+  success: boolean;
+  actor_id: string;
+  actor_role: string;
+  session_id: string;
+  step_up_required: boolean;
 }
 
 export interface DocumentRequest {
@@ -196,9 +189,19 @@ export interface ScenarioHistoryEntry {
   scenario_id: string;
   correlation_id: string;
   events_total: number;
+  events_generated: number;
   alerts_total: number;
+  alerts_generated: number;
   responses_total: number;
+  responses_generated: number;
   incident_id: string | null;
+  step_up_required: boolean;
+  revoked_sessions: string[];
+  download_restricted_actors: string[];
+  disabled_services: string[];
+  quarantined_artifacts: string[];
+  policy_change_restricted_actors: string[];
+  operated_by: string | null;
   executed_at: string;
 }
 
@@ -219,7 +222,6 @@ export interface MitreTechnique {
   description: string;
   tactic_ids: string[];
   url: string;
-  sub_techniques: string[];
 }
 
 export interface TTPMapping {
@@ -303,8 +305,8 @@ export interface ExerciseReport {
   risk_summary: Record<string, unknown>;
   recommendations: string[];
   mitre_coverage: {
-    tactics_covered: number;
-    techniques_covered: number;
+    tactics_covered: string[];
+    techniques_covered: string[];
     coverage_percentage: number;
   };
 }

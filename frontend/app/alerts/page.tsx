@@ -21,6 +21,10 @@ const SEVERITY_STYLES: Record<string, { badge: string; border: string }> = {
     badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     border: 'border-blue-500/30',
   },
+  informational: {
+    badge: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+    border: 'border-gray-500/30',
+  },
 };
 
 function getSeverityStyle(severity: string) {
@@ -167,7 +171,7 @@ export default function AlertsPage() {
                   <div>
                     <span className="text-gray-600 font-mono">TIME </span>
                     <span className="text-gray-400 font-mono">
-                      {formatTimestamp(alert.timestamp)}
+                      {formatTimestamp(alert.created_at)}
                     </span>
                   </div>
                 </div>
