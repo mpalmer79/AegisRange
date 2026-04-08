@@ -28,6 +28,15 @@ from app.services.auth_service import require_role, _auth_service
 from app.services.report_service import ReportService
 from app.services.stream_service import StreamService
 from app.store import STORE
+from app.serializers import (
+    alert_to_dict,
+    auth_user_to_dict,
+    event_to_dict,
+    incident_to_dict,
+    mitre_mapping_to_dict,
+    mitre_technique_to_dict,
+    risk_profile_to_dict,
+)
 
 setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
 logger = logging.getLogger("aegisrange")
@@ -119,6 +128,11 @@ class ReportRequest(BaseModel):
 
 def _request_id() -> str:
     return f"req-{uuid4()}"
+
+
+def _serialize_incident(incident) -> dict:
+    """Serialize an incident, injecting notes from the store."""
+    return incident_to_dict(incident, notes=STORE.incident_notes.get(incident.correlation_id, []))
 
 
 # --- Middleware ---
@@ -406,7 +420,7 @@ def list_events(
         event_types=event_types,
         since_minutes=since_minutes,
     )
-    return [_event_to_dict(e) for e in events]
+    return [event_to_dict(e) for e in events]
 
 
 # --- Alerts ---
@@ -424,14 +438,14 @@ def list_alerts(
         alerts = [a for a in alerts if a.correlation_id == correlation_id]
     if rule_id:
         alerts = [a for a in alerts if a.rule_id == rule_id]
-    return [_alert_to_dict(a) for a in alerts]
+    return [alert_to_dict(a) for a in alerts]
 
 
 # --- Incidents ---
 
 @app.get("/incidents", dependencies=[Depends(require_role("viewer"))])
 def list_incidents() -> list[dict]:
-    return [_incident_to_dict(inc) for inc in STORE.incidents_by_correlation.values()]
+    return [_serialize_incident(inc) for inc in STORE.incidents_by_correlation.values()]
 
 
 @app.get("/incidents/{correlation_id}", dependencies=[Depends(require_role("viewer"))])
@@ -439,7 +453,7 @@ def get_incident(correlation_id: str) -> dict:
     incident = STORE.incidents_by_correlation.get(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
-    return _incident_to_dict(incident)
+    return _serialize_incident(incident)
 
 
 @app.patch("/incidents/{correlation_id}/status", dependencies=[Depends(require_role("analyst"))])
@@ -477,7 +491,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, r
         summary=f"Status changed from {old_status} to {payload.status} by {changed_by}.",
     )
 
-    return _incident_to_dict(incident)
+    return _serialize_incident(incident)
 
 
 # --- Analytics ---
@@ -485,17 +499,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, r
 @app.get("/analytics/risk-profiles", dependencies=[Depends(require_role("analyst"))])
 def get_risk_profiles() -> list[dict]:
     profiles = risk_service.get_all_profiles()
-    return [
-        {
-            "actor_id": p.actor_id,
-            "current_score": p.current_score,
-            "peak_score": p.peak_score,
-            "contributing_rules": p.contributing_rules,
-            "score_history": p.score_history,
-            "last_updated": p.last_updated.isoformat(),
-        }
-        for p in profiles
-    ]
+    return [risk_profile_to_dict(p) for p in profiles]
 
 
 @app.get("/analytics/risk-profiles/{actor_id}", dependencies=[Depends(require_role("analyst"))])
@@ -503,14 +507,7 @@ def get_risk_profile(actor_id: str) -> dict:
     profile = risk_service.get_profile(actor_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Risk profile not found")
-    return {
-        "actor_id": profile.actor_id,
-        "current_score": profile.current_score,
-        "peak_score": profile.peak_score,
-        "contributing_rules": profile.contributing_rules,
-        "score_history": profile.score_history,
-        "last_updated": profile.last_updated.isoformat(),
-    }
+    return risk_profile_to_dict(profile)
 
 
 @app.get("/analytics/rule-effectiveness", dependencies=[Depends(require_role("analyst"))])
@@ -587,7 +584,7 @@ def export_events(
     return {
         "export_timestamp": datetime.utcnow().isoformat(),
         "total_events": len(events),
-        "events": [_event_to_dict(e) for e in events],
+        "events": [event_to_dict(e) for e in events],
     }
 
 
@@ -607,15 +604,7 @@ def admin_reset(request: Request) -> dict[str, str]:
 @app.get("/mitre/mappings", dependencies=[Depends(require_role("viewer"))])
 def get_mitre_mappings() -> list[dict]:
     mappings = mitre_service.get_all_mappings()
-    return [
-        {
-            "rule_id": m.rule_id,
-            "technique_ids": m.technique_ids,
-            "tactic_ids": m.tactic_ids,
-            "kill_chain_phases": m.kill_chain_phases,
-        }
-        for m in mappings
-    ]
+    return [mitre_mapping_to_dict(m) for m in mappings]
 
 
 @app.get("/mitre/mappings/{rule_id}", dependencies=[Depends(require_role("viewer"))])
@@ -623,12 +612,7 @@ def get_mitre_mapping(rule_id: str) -> dict:
     mapping = mitre_service.get_mapping(rule_id)
     if mapping is None:
         raise HTTPException(status_code=404, detail="Mapping not found")
-    return {
-        "rule_id": mapping.rule_id,
-        "technique_ids": mapping.technique_ids,
-        "tactic_ids": mapping.tactic_ids,
-        "kill_chain_phases": mapping.kill_chain_phases,
-    }
+    return mitre_mapping_to_dict(mapping)
 
 
 @app.get("/mitre/coverage", dependencies=[Depends(require_role("viewer"))])
@@ -668,16 +652,7 @@ def get_mitre_tactic_coverage() -> list[dict]:
 @app.get("/mitre/scenarios/{scenario_id}/ttps", dependencies=[Depends(require_role("viewer"))])
 def get_mitre_scenario_ttps(scenario_id: str) -> list[dict]:
     techniques = mitre_service.get_scenario_ttps(scenario_id)
-    return [
-        {
-            "id": t.id,
-            "name": t.name,
-            "description": t.description,
-            "tactic_ids": t.tactic_ids,
-            "url": t.url,
-        }
-        for t in techniques
-    ]
+    return [mitre_technique_to_dict(t) for t in techniques]
 
 
 # --- Kill Chain ---
@@ -731,16 +706,7 @@ def platform_login(payload: LoginRequest) -> dict:
 @app.get("/auth/users", dependencies=[Depends(require_role("admin"))])
 def list_platform_users() -> list[dict]:
     users = auth_service.list_users()
-    return [
-        {
-            "user_id": u.user_id,
-            "username": u.username,
-            "role": u.role,
-            "display_name": u.display_name,
-            "created_at": u.created_at.isoformat(),
-        }
-        for u in users
-    ]
+    return [auth_user_to_dict(u) for u in users]
 
 
 # --- Exercise Reports ---
@@ -766,90 +732,3 @@ async def stream_events() -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
-
-
-# --- Serialization helpers ---
-
-def _event_to_dict(event: Event) -> dict:
-    return {
-        "event_id": event.event_id,
-        "event_type": event.event_type,
-        "category": event.category,
-        "timestamp": event.timestamp.isoformat(),
-        "actor_id": event.actor_id,
-        "actor_type": event.actor_type,
-        "actor_role": event.actor_role,
-        "target_type": event.target_type,
-        "target_id": event.target_id,
-        "request_id": event.request_id,
-        "correlation_id": event.correlation_id,
-        "session_id": event.session_id,
-        "source_ip": event.source_ip,
-        "user_agent": event.user_agent,
-        "origin": event.origin,
-        "status": event.status,
-        "status_code": event.status_code,
-        "error_message": event.error_message,
-        "severity": event.severity.value,
-        "confidence": event.confidence.value,
-        "risk_score": event.risk_score,
-        "payload": event.payload,
-    }
-
-
-def _alert_to_dict(alert) -> dict:
-    return {
-        "alert_id": alert.alert_id,
-        "rule_id": alert.rule_id,
-        "rule_name": alert.rule_name,
-        "severity": alert.severity.value,
-        "confidence": alert.confidence.value,
-        "actor_id": alert.actor_id,
-        "correlation_id": alert.correlation_id,
-        "contributing_event_ids": alert.contributing_event_ids,
-        "summary": alert.summary,
-        "payload": alert.payload,
-        "created_at": alert.created_at.isoformat(),
-    }
-
-
-def _incident_to_dict(incident) -> dict:
-    return {
-        "incident_id": incident.incident_id,
-        "incident_type": incident.incident_type,
-        "status": incident.status,
-        "primary_actor_id": incident.primary_actor_id,
-        "actor_type": incident.actor_type,
-        "actor_role": incident.actor_role,
-        "correlation_id": incident.correlation_id,
-        "severity": incident.severity.value if hasattr(incident.severity, "value") else incident.severity,
-        "confidence": incident.confidence.value if hasattr(incident.confidence, "value") else incident.confidence,
-        "risk_score": incident.risk_score,
-        "detection_ids": incident.detection_ids,
-        "detection_summary": incident.detection_summary,
-        "response_ids": incident.response_ids,
-        "containment_status": incident.containment_status,
-        "event_ids": incident.event_ids,
-        "affected_documents": incident.affected_documents,
-        "affected_sessions": incident.affected_sessions,
-        "affected_services": incident.affected_services,
-        "affected_resources": {
-            "documents": incident.affected_documents,
-            "sessions": incident.affected_sessions,
-            "services": incident.affected_services,
-            "actors": [incident.primary_actor_id] if incident.primary_actor_id else [],
-        },
-        "timeline": [
-            {
-                "timestamp": entry.timestamp.isoformat(),
-                "entry_type": entry.entry_type,
-                "entry_id": entry.reference_id,
-                "summary": entry.summary,
-            }
-            for entry in incident.timeline
-        ],
-        "created_at": incident.created_at.isoformat(),
-        "updated_at": incident.updated_at.isoformat(),
-        "notes": list(STORE.incident_notes.get(incident.correlation_id, [])),
-        "closed_at": incident.closed_at.isoformat() if incident.closed_at else None,
-    }
