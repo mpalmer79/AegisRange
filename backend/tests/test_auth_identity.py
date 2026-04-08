@@ -7,9 +7,9 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.auth_service import AuthService, _auth_service
+from app.services.auth_service import _auth_service
 from app.store import STORE
-from tests.auth_helper import authenticated_client, get_redteam_token, get_admin_token, get_analyst_token
+from tests.auth_helper import authenticated_client
 
 
 class TestScenarioAttribution(unittest.TestCase):

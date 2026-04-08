@@ -24,7 +24,7 @@ from app.services.scenario_service import ScenarioEngine
 from app.services.mitre_service import MitreAttackService
 from app.services.killchain_service import KillChainService
 from app.services.campaign_service import CampaignDetectionService
-from app.services.auth_service import AuthService, require_role, _auth_service
+from app.services.auth_service import require_role, _auth_service
 from app.services.report_service import ReportService
 from app.services.stream_service import StreamService
 from app.store import STORE

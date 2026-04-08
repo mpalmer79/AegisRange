@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 
 from app.models import Alert, Event, Incident, ResponseAction

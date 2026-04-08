@@ -6,7 +6,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.auth_helper import authenticated_client, get_viewer_token
+from tests.auth_helper import get_viewer_token
 
 
 class TestUnauthenticatedAccess(unittest.TestCase):

@@ -129,7 +129,6 @@ class TestStreamService(unittest.TestCase):
         self.assertEqual(len(self.service.subscribers), 0)
 
     def test_publish_puts_message_on_queue(self) -> None:
-        import asyncio
         queue = self.service.subscribe()
         self.service.publish("alert", {"alert_id": "test-123"})
         # Queue should have a message
