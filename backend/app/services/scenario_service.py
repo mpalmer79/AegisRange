@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
 
 from app.models import Confidence, Event, Severity
@@ -326,7 +327,7 @@ class ScenarioEngine:
 
     def _summary(self, scenario_id: str, correlation_id: str) -> dict[str, object]:
         incident = self.store.incidents_by_correlation.get(correlation_id)
-        return {
+        summary = {
             "scenario_id": scenario_id,
             "correlation_id": correlation_id,
             "events_total": len([e for e in self.store.events if e.correlation_id == correlation_id]),
@@ -340,6 +341,11 @@ class ScenarioEngine:
             "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
             "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
         }
+        self.store.scenario_history.append({
+            **summary,
+            "executed_at": datetime.utcnow().isoformat(),
+        })
+        return summary
 
     @staticmethod
     def _new_event(

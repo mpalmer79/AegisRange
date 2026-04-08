@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.models import Alert, Confidence, Event, ResponseAction, Severity
 from app.services.detection_service import DetectionService
 from app.services.event_services import TelemetryService
 from app.services.incident_service import IncidentService
 from app.services.response_service import ResponseOrchestrator
 from app.store import InMemoryStore
+
+if TYPE_CHECKING:
+    from app.services.risk_service import RiskScoringService
 
 
 class EventPipelineService:
@@ -19,12 +24,14 @@ class EventPipelineService:
         response: ResponseOrchestrator,
         incidents: IncidentService,
         store: InMemoryStore,
+        risk: RiskScoringService | None = None,
     ) -> None:
         self.telemetry = telemetry
         self.detection = detection
         self.response = response
         self.incidents = incidents
         self.store = store
+        self.risk = risk
 
     def process(self, event: Event) -> dict[str, int]:
         self.telemetry.emit(event)
@@ -47,6 +54,8 @@ class EventPipelineService:
         for alert in novel_alerts:
             self._emit_detection_event(alert, source_event=event)
             incident = self.incidents.register_alert(alert, source_event=event)
+            if self.risk is not None:
+                self.risk.update_risk(alert)
             responses = self.response.execute(alert)
             total_responses += len(responses)
             for response_action in responses:
