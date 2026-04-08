@@ -102,6 +102,9 @@ class ScenarioEngine:
 
     def run_doc_003(self, correlation_id: str) -> dict[str, object]:
         """SCN-DOC-003: abnormal bulk read access."""
+        login = self.identity.authenticate("bob", "hunter2")
+        session_id = login.session_id
+
         for index in range(20):
             allowed, doc = self.documents.can_read("admin", "doc-002")
             if not allowed or not doc:
@@ -116,7 +119,7 @@ class ScenarioEngine:
                     correlation_id=correlation_id,
                     target_type="document",
                     target_id=doc.document_id,
-                    session_id="session-user-bob",
+                    session_id=session_id,
                     source_ip="198.51.100.10",
                     payload={
                         "document_id": f"{doc.document_id}-{index}",
@@ -130,6 +133,8 @@ class ScenarioEngine:
 
     def run_doc_004(self, correlation_id: str) -> dict[str, object]:
         """SCN-DOC-004: read-to-download exfiltration pattern."""
+        login = self.identity.authenticate("bob", "hunter2")
+        session_id = login.session_id
         document_ids = ["doc-001", "doc-002", "doc-003"]
 
         for doc_id in document_ids:
@@ -145,7 +150,7 @@ class ScenarioEngine:
                     correlation_id=correlation_id,
                     target_type="document",
                     target_id=doc.document_id,
-                    session_id="session-user-bob",
+                    session_id=session_id,
                     source_ip="198.51.100.10",
                     payload={"document_id": doc.document_id, "classification": doc.classification, "sensitivity_score": 90},
                 )
@@ -164,7 +169,7 @@ class ScenarioEngine:
                     correlation_id=correlation_id,
                     target_type="document",
                     target_id=doc.document_id,
-                    session_id="session-user-bob",
+                    session_id=session_id,
                     source_ip="198.51.100.10",
                     payload={"document_id": doc.document_id, "classification": doc.classification, "sensitivity_score": 90},
                 )

@@ -20,7 +20,7 @@ class IncidentService:
         should_create = alert.severity in {Severity.HIGH, Severity.CRITICAL} or alert.rule_id == "DET-AUTH-002"
         if incident is None and should_create:
             incident = Incident(
-                incident_type="suspicious_account_activity",
+                incident_type=self._classify_incident(alert),
                 primary_actor_id=alert.actor_id,
                 actor_type=source_event.actor_type,
                 actor_role=source_event.actor_role,
@@ -36,7 +36,6 @@ class IncidentService:
             )
 
         if incident is None:
-            # Medium/low confidence detections are kept as alerts without incident creation in Phase 1.
             return Incident(
                 incident_type="none",
                 primary_actor_id=alert.actor_id,
@@ -45,6 +44,17 @@ class IncidentService:
                 severity=alert.severity,
                 confidence=alert.confidence,
                 status="not_created",
+            )
+
+        # Escalate severity if new alert is more severe
+        severity_order = [Severity.INFORMATIONAL, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
+        if severity_order.index(alert.severity) > severity_order.index(incident.severity):
+            old_severity = incident.severity
+            incident.severity = alert.severity
+            incident.add_timeline_entry(
+                entry_type="state_transition",
+                reference_id=alert.alert_id,
+                summary=f"Severity escalated from {old_severity.value} to {alert.severity.value}.",
             )
 
         incident.detection_ids.append(alert.rule_id)
@@ -57,6 +67,15 @@ class IncidentService:
         for event_id in alert.contributing_event_ids:
             if event_id not in incident.event_ids:
                 incident.event_ids.append(event_id)
+
+        # Track affected resources
+        if source_event.category == "document" and source_event.target_id:
+            if source_event.target_id not in incident.affected_documents:
+                incident.affected_documents.append(source_event.target_id)
+        if source_event.session_id:
+            if source_event.session_id not in incident.affected_sessions:
+                incident.affected_sessions.append(source_event.session_id)
+
         return incident
 
     def register_response(self, incident: Incident, response: ResponseAction) -> None:
@@ -69,6 +88,19 @@ class IncidentService:
             reference_id=response.response_id,
             summary=f"{response.playbook_id}: {response.action_type}",
         )
+
+    @staticmethod
+    def _classify_incident(alert: Alert) -> str:
+        rule_to_type = {
+            "DET-AUTH-001": "credential_abuse",
+            "DET-AUTH-002": "credential_compromise",
+            "DET-SESSION-003": "session_hijack",
+            "DET-DOC-004": "policy_violation",
+            "DET-DOC-005": "data_exfiltration",
+            "DET-DOC-006": "data_exfiltration",
+            "DET-CORR-010": "multi_signal_compromise",
+        }
+        return rule_to_type.get(alert.rule_id, "suspicious_account_activity")
 
     @staticmethod
     def _append_event(incident: Incident, event: Event) -> None:

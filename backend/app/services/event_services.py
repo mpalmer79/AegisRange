@@ -19,6 +19,21 @@ REQUIRED_EVENT_FIELDS = {
     "payload",
 }
 
+VALID_CATEGORIES = {
+    "authentication",
+    "session",
+    "document",
+    "system",
+    "detection",
+    "response",
+    "incident",
+    "scenario",
+}
+
+VALID_STATUSES = {"success", "failure"}
+
+VALID_ACTOR_TYPES = {"user", "service", "system"}
+
 
 class TelemetryService:
     def __init__(self, store: InMemoryStore) -> None:
@@ -64,3 +79,18 @@ class TelemetryService:
         if missing:
             missing_fields = ", ".join(sorted(missing))
             raise ValueError(f"Event missing required fields: {missing_fields}")
+
+        if not event.event_type or "." not in event.event_type:
+            raise ValueError(f"Invalid event_type format: '{event.event_type}'. Expected dotted notation (e.g. 'authentication.login.success').")
+
+        if event.category not in VALID_CATEGORIES:
+            raise ValueError(f"Invalid category: '{event.category}'. Must be one of: {sorted(VALID_CATEGORIES)}")
+
+        if event.status not in VALID_STATUSES:
+            raise ValueError(f"Invalid status: '{event.status}'. Must be one of: {sorted(VALID_STATUSES)}")
+
+        if event.actor_type not in VALID_ACTOR_TYPES:
+            raise ValueError(f"Invalid actor_type: '{event.actor_type}'. Must be one of: {sorted(VALID_ACTOR_TYPES)}")
+
+        if not isinstance(event.payload, dict):
+            raise ValueError("Event payload must be a dict.")

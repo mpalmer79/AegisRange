@@ -17,6 +17,7 @@ class InMemoryStore:
         self.revoked_sessions: set[str] = set()
         self.step_up_required: set[str] = set()
         self.download_restricted_actors: set[str] = set()
+        self.alert_signatures: set[tuple[str, str, str]] = set()
         self.login_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self.document_reads_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
 
