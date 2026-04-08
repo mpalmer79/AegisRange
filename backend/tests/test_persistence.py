@@ -235,5 +235,174 @@ class TestPersistenceRoundTrip(unittest.TestCase):
         self.assertIn(corr_id, fresh.incidents_by_correlation)
 
 
+class TestPersistenceCorrectness(unittest.TestCase):
+    """Tests for persistence correctness bugs found during architecture audit."""
+
+    def setUp(self) -> None:
+        self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(self.db_fd)
+        os.unlink(self.db_path)
+
+    def tearDown(self) -> None:
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
+
+    def _make_event(self, actor_id: str = "user-alice", event_type: str = "authentication.login.failure") -> Event:
+        return Event(
+            event_type=event_type,
+            category="authentication",
+            actor_id=actor_id,
+            actor_type="user",
+            request_id="req-001",
+            correlation_id="corr-001",
+            status="failure",
+            source_ip="10.0.0.1",
+            origin="test",
+            payload={"key": "value"},
+            severity=Severity.MEDIUM,
+            confidence=Confidence.HIGH,
+        )
+
+    def test_load_failure_does_not_destroy_sqlite_data(self) -> None:
+        """A deserialization error during load must NOT delete SQLite data."""
+        # Save valid data
+        store1 = InMemoryStore()
+        store1.events.append(self._make_event())
+        store1.revoked_sessions.add("sess-001")
+        pl1 = PersistenceLayer(store1, db_path=self.db_path)
+        pl1.save()
+
+        # Corrupt the events table by inserting invalid JSON
+        import sqlite3
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("INSERT INTO events (event_id, data) VALUES ('bad-id', 'NOT-VALID-JSON{')")
+        conn.commit()
+        conn.close()
+
+        # Attempt to load into a fresh store — should fail gracefully
+        store2 = InMemoryStore()
+        pl2 = PersistenceLayer(store2, db_path=self.db_path)
+        result = pl2.load()
+        # load() returns False on error
+        self.assertFalse(result)
+
+        # The critical assertion: SQLite data must still be intact
+        # Load into yet another store after removing the corrupt row
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("DELETE FROM events WHERE event_id = 'bad-id'")
+        conn.commit()
+        # Verify original data still exists
+        count = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 1, "Original event must survive a failed load()")
+
+        # Verify the original data loads correctly now
+        store3 = InMemoryStore()
+        pl3 = PersistenceLayer(store3, db_path=self.db_path)
+        self.assertTrue(pl3.load())
+        self.assertEqual(len(store3.events), 1)
+        self.assertEqual(store3.revoked_sessions, {"sess-001"})
+
+    def test_risk_profiles_round_trip(self) -> None:
+        """Risk profiles must survive save/load cycle."""
+        from app.services.risk_service import RiskProfile
+        from datetime import datetime
+
+        store1 = InMemoryStore()
+        profile = RiskProfile(
+            actor_id="user-alice",
+            current_score=75,
+            peak_score=90,
+            contributing_rules=["DET-AUTH-001", "DET-DOC-005"],
+            score_history=[
+                {"timestamp": "2024-01-01T00:00:00", "rule_id": "DET-AUTH-001", "delta": 15, "new_score": 15},
+                {"timestamp": "2024-01-01T00:01:00", "rule_id": "DET-DOC-005", "delta": 60, "new_score": 75},
+            ],
+            last_updated=datetime(2024, 1, 1, 0, 1, 0),
+        )
+        store1.risk_profiles["user-alice"] = profile
+
+        PersistenceLayer(store1, db_path=self.db_path).save()
+
+        store2 = InMemoryStore()
+        loaded = PersistenceLayer(store2, db_path=self.db_path).load()
+        self.assertTrue(loaded)
+        self.assertIn("user-alice", store2.risk_profiles)
+        restored = store2.risk_profiles["user-alice"]
+        self.assertEqual(restored.actor_id, "user-alice")
+        self.assertEqual(restored.current_score, 75)
+        self.assertEqual(restored.peak_score, 90)
+        self.assertEqual(restored.contributing_rules, ["DET-AUTH-001", "DET-DOC-005"])
+        self.assertEqual(len(restored.score_history), 2)
+        self.assertEqual(restored.last_updated, datetime(2024, 1, 1, 0, 1, 0))
+
+    def test_blocked_routes_round_trip(self) -> None:
+        """Blocked routes must survive save/load cycle."""
+        store1 = InMemoryStore()
+        store1.blocked_routes["svc-data-processor"] = {"/admin/config", "/admin/secrets"}
+        store1.blocked_routes["svc-analytics"] = {"/admin/users"}
+
+        PersistenceLayer(store1, db_path=self.db_path).save()
+
+        store2 = InMemoryStore()
+        loaded = PersistenceLayer(store2, db_path=self.db_path).load()
+        self.assertTrue(loaded)
+        self.assertIn("svc-data-processor", store2.blocked_routes)
+        self.assertEqual(store2.blocked_routes["svc-data-processor"], {"/admin/config", "/admin/secrets"})
+        self.assertIn("svc-analytics", store2.blocked_routes)
+        self.assertEqual(store2.blocked_routes["svc-analytics"], {"/admin/users"})
+
+    def test_derived_event_indices_rebuilt_on_load(self) -> None:
+        """After load, login_failures_by_actor etc. must be rebuilt from events."""
+        store1 = InMemoryStore()
+        # Add events of different types
+        store1.events.append(self._make_event("user-alice", "authentication.login.failure"))
+        store1.events.append(self._make_event("user-alice", "authentication.login.failure"))
+        store1.events.append(self._make_event("user-bob", "document.read.success"))
+        store1.events.append(Event(
+            event_type="authorization.failure",
+            category="system",
+            actor_id="svc-data",
+            actor_type="service",
+            request_id="req-002",
+            correlation_id="corr-002",
+            status="failure",
+            source_ip="10.0.0.2",
+            origin="test",
+            payload={},
+            severity=Severity.MEDIUM,
+            confidence=Confidence.HIGH,
+        ))
+
+        PersistenceLayer(store1, db_path=self.db_path).save()
+
+        store2 = InMemoryStore()
+        PersistenceLayer(store2, db_path=self.db_path).load()
+
+        # Verify indices were rebuilt
+        self.assertEqual(len(store2.login_failures_by_actor["user-alice"]), 2)
+        self.assertEqual(len(store2.document_reads_by_actor["user-bob"]), 1)
+        self.assertEqual(len(store2.authorization_failures_by_actor["svc-data"]), 1)
+
+    def test_reset_is_explicit_and_intentional(self) -> None:
+        """store.reset() should clear both memory and SQLite."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        store.events.append(self._make_event())
+        store.revoked_sessions.add("sess-001")
+        store.save()
+
+        # Reset clears both
+        store.reset()
+        self.assertEqual(len(store.events), 0)
+        self.assertEqual(len(store.revoked_sessions), 0)
+
+        # Verify SQLite is also empty
+        fresh = InMemoryStore()
+        loaded = PersistenceLayer(fresh, db_path=self.db_path).load()
+        self.assertFalse(loaded)
+        self.assertEqual(len(fresh.events), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

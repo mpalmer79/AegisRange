@@ -352,6 +352,9 @@ class PersistenceLayer:
                     }
                     for k, v in self.store.risk_profiles.items()
                 },
+                "blocked_routes": {
+                    k: sorted(v) for k, v in self.store.blocked_routes.items()
+                },
             }
             for key, value in dict_data.items():
                 conn.execute(
@@ -434,6 +437,21 @@ class PersistenceLayer:
                 key, data = row[0], json.loads(row[1])
                 if key == "actor_sessions":
                     self.store.actor_sessions = data
+                elif key == "risk_profiles":
+                    from app.services.risk_service import RiskProfile
+                    for actor_id, profile_data in data.items():
+                        self.store.risk_profiles[actor_id] = RiskProfile(
+                            actor_id=profile_data["actor_id"],
+                            current_score=profile_data["current_score"],
+                            peak_score=profile_data["peak_score"],
+                            contributing_rules=profile_data["contributing_rules"],
+                            score_history=profile_data["score_history"],
+                            last_updated=datetime.fromisoformat(profile_data["last_updated"]),
+                        )
+                elif key == "blocked_routes":
+                    self.store.blocked_routes = {
+                        k: set(v) for k, v in data.items()
+                    }
 
             # Load scenario history
             self.store.scenario_history = []
@@ -446,10 +464,20 @@ class PersistenceLayer:
             for row in conn.execute("SELECT correlation_id, data FROM incident_notes"):
                 self.store.incident_notes[row[0]].append(json.loads(row[1]))
 
+            # Rebuild derived event indices from loaded events.
+            # These are populated by TelemetryService.emit() during normal
+            # operation but must be reconstructed after a cold load.
+            self._rebuild_event_indices()
+
             return True
-        except Exception:
-            # If loading fails, start fresh
-            self.store.reset()
+        except Exception as exc:
+            # Log the error but do NOT destroy persisted data.
+            # The store remains in whatever partially-loaded state it had;
+            # callers should treat a False return as "start fresh in-memory."
+            import logging
+            logging.getLogger("aegisrange.persistence").error(
+                "Failed to load persisted state: %s. Starting with empty store.", exc
+            )
             return False
         finally:
             conn.close()
@@ -471,3 +499,22 @@ class PersistenceLayer:
             conn.commit()
         finally:
             conn.close()
+
+    def _rebuild_event_indices(self) -> None:
+        """Rebuild derived per-actor event indices from loaded events.
+
+        These defaultdict indices are populated by TelemetryService.emit()
+        during normal runtime. After a cold load from SQLite, the events
+        exist in store.events but the indices are empty. This method
+        replays the indexing logic so the indices stay consistent.
+        """
+        event_type_to_index = {
+            "authentication.login.failure": self.store.login_failures_by_actor,
+            "document.read.success": self.store.document_reads_by_actor,
+            "authorization.failure": self.store.authorization_failures_by_actor,
+            "artifact.validation.failed": self.store.artifact_failures_by_actor,
+        }
+        for event in self.store.events:
+            index = event_type_to_index.get(event.event_type)
+            if index is not None:
+                index[event.actor_id].append(event)
