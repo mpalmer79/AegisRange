@@ -303,6 +303,79 @@ class TestPersistenceCorrectness(unittest.TestCase):
         self.assertEqual(len(store3.events), 1)
         self.assertEqual(store3.revoked_sessions, {"sess-001"})
 
+    def test_failed_load_leaves_prior_memory_state_unchanged(self) -> None:
+        """If load() fails, the live store must retain its prior contents."""
+        # Save valid data to SQLite
+        save_store = InMemoryStore()
+        save_store.events.append(self._make_event("user-saved"))
+        PersistenceLayer(save_store, db_path=self.db_path).save()
+
+        # Corrupt the incidents table so deserialization fails mid-load
+        import sqlite3
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            "INSERT INTO incidents (correlation_id, data) VALUES ('bad', 'CORRUPT')"
+        )
+        conn.commit()
+        conn.close()
+
+        # Prepare a live store that already has its own data
+        live_store = InMemoryStore()
+        pre_existing_event = self._make_event("user-pre-existing")
+        live_store.events.append(pre_existing_event)
+        live_store.revoked_sessions.add("existing-session")
+
+        # Attempt to load — should fail
+        pl = PersistenceLayer(live_store, db_path=self.db_path)
+        result = pl.load()
+        self.assertFalse(result)
+
+        # The pre-existing in-memory state must be UNTOUCHED
+        self.assertEqual(len(live_store.events), 1)
+        self.assertEqual(live_store.events[0].actor_id, "user-pre-existing")
+        self.assertEqual(live_store.revoked_sessions, {"existing-session"})
+        self.assertEqual(len(live_store.alerts), 0)
+        self.assertEqual(len(live_store.incidents_by_correlation), 0)
+
+    def test_successful_load_replaces_entire_prior_state(self) -> None:
+        """A successful load must fully replace whatever was in the store."""
+        from app.models import Alert
+
+        # Save a known state to SQLite
+        save_store = InMemoryStore()
+        save_store.events.append(self._make_event("user-from-db"))
+        save_store.alerts.append(Alert(
+            rule_id="DET-AUTH-001",
+            rule_name="Test",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            actor_id="user-from-db",
+            correlation_id="corr-db",
+            contributing_event_ids=["e1"],
+            summary="From DB",
+            payload={},
+        ))
+        save_store.revoked_sessions = {"db-sess"}
+        PersistenceLayer(save_store, db_path=self.db_path).save()
+
+        # Prepare a live store with different pre-existing data
+        live_store = InMemoryStore()
+        live_store.events.append(self._make_event("user-old-memory"))
+        live_store.events.append(self._make_event("user-old-memory-2"))
+        live_store.revoked_sessions = {"old-sess-1", "old-sess-2"}
+
+        # Load should succeed and REPLACE the old memory state
+        pl = PersistenceLayer(live_store, db_path=self.db_path)
+        result = pl.load()
+        self.assertTrue(result)
+
+        # Memory now matches what was in SQLite, not the old data
+        self.assertEqual(len(live_store.events), 1)
+        self.assertEqual(live_store.events[0].actor_id, "user-from-db")
+        self.assertEqual(len(live_store.alerts), 1)
+        self.assertEqual(live_store.alerts[0].rule_id, "DET-AUTH-001")
+        self.assertEqual(live_store.revoked_sessions, {"db-sess"})
+
     def test_risk_profiles_round_trip(self) -> None:
         """Risk profiles must survive save/load cycle."""
         from app.services.risk_service import RiskProfile
