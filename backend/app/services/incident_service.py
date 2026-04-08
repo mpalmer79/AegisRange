@@ -13,6 +13,7 @@ class IncidentService:
         if not incident:
             return
         self._append_event(incident, event)
+        self.store.upsert_incident(incident)
 
     def register_alert(self, alert: Alert, source_event: Event) -> Incident:
         incident = self.store.incidents_by_correlation.get(alert.correlation_id)
@@ -28,12 +29,12 @@ class IncidentService:
                 severity=alert.severity,
                 confidence=alert.confidence,
             )
-            self.store.upsert_incident(incident)
             incident.add_timeline_entry(
                 entry_type="state_transition",
                 reference_id=incident.incident_id,
                 summary="Incident created from high-confidence detection.",
             )
+            self.store.upsert_incident(incident)
 
         if incident is None:
             return Incident(

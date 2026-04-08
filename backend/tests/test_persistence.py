@@ -734,5 +734,320 @@ class TestIncrementalPersistence(unittest.TestCase):
         self.assertEqual(fresh.step_up_required, {"user-alice"})
 
 
+class TestPersistenceBoundaryIntegrity(unittest.TestCase):
+    """Tests that all entity mutations flow through the store write boundary
+    and that the persistence semantics (IGNORE vs REPLACE) are correct."""
+
+    def setUp(self) -> None:
+        self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(self.db_fd)
+        os.unlink(self.db_path)
+
+    def tearDown(self) -> None:
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
+
+    def _make_event(self, actor_id: str = "user-alice", correlation_id: str = "corr-001") -> Event:
+        return Event(
+            event_type="authentication.login.failure",
+            category="authentication",
+            actor_id=actor_id,
+            actor_type="user",
+            request_id="req-001",
+            correlation_id=correlation_id,
+            status="failure",
+            source_ip="10.0.0.1",
+            origin="test",
+            payload={"key": "value"},
+            severity=Severity.MEDIUM,
+            confidence=Confidence.HIGH,
+        )
+
+    def test_register_event_mutation_is_durable(self) -> None:
+        """register_event() mutates incident — that mutation must survive restart."""
+        from app.models import Incident
+        from app.services.incident_service import IncidentService
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        svc = IncidentService(store)
+
+        incident = Incident(
+            incident_type="credential_abuse",
+            primary_actor_id="user-alice",
+            actor_type="user",
+            correlation_id="corr-001",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+        )
+        store.upsert_incident(incident)
+
+        # register_event appends to event_ids and timeline
+        event = self._make_event()
+        svc.register_event(event)
+
+        # Verify the mutation is durable
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        loaded = fresh.incidents_by_correlation["corr-001"]
+        self.assertIn(event.event_id, loaded.event_ids)
+        self.assertTrue(
+            any(e.entry_type == "source_event" for e in loaded.timeline),
+            "Timeline should contain source_event entry from register_event()",
+        )
+
+    def test_risk_score_mutation_is_durable(self) -> None:
+        """RiskScoringService.update_risk() sets incident.risk_score — must persist."""
+        from app.models import Alert, Incident
+        from app.services.risk_service import RiskScoringService
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        risk = RiskScoringService(store)
+
+        incident = Incident(
+            incident_type="credential_abuse",
+            primary_actor_id="user-alice",
+            actor_type="user",
+            correlation_id="corr-001",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+        )
+        store.upsert_incident(incident)
+        self.assertIsNone(incident.risk_score)
+
+        alert = Alert(
+            rule_id="DET-AUTH-001",
+            rule_name="Test",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            actor_id="user-alice",
+            correlation_id="corr-001",
+            contributing_event_ids=["e1"],
+            summary="Test",
+            payload={},
+        )
+        risk.update_risk(alert)
+        self.assertIsNotNone(incident.risk_score)
+
+        # Verify risk_score survives restart
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        loaded = fresh.incidents_by_correlation["corr-001"]
+        self.assertEqual(loaded.risk_score, incident.risk_score)
+
+    def test_incident_status_transition_is_durable(self) -> None:
+        """Status transitions in main.py must persist via upsert_incident."""
+        from app.models import Incident
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        incident = Incident(
+            incident_type="credential_abuse",
+            primary_actor_id="user-alice",
+            actor_type="user",
+            correlation_id="corr-001",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            status="open",
+        )
+        store.upsert_incident(incident)
+
+        # Simulate status transition
+        incident.status = "investigating"
+        incident.add_timeline_entry(
+            entry_type="state_transition",
+            reference_id=incident.incident_id,
+            summary="Status changed to investigating.",
+        )
+        store.upsert_incident(incident)
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        loaded = fresh.incidents_by_correlation["corr-001"]
+        self.assertEqual(loaded.status, "investigating")
+        self.assertTrue(
+            any(e.summary == "Status changed to investigating." for e in loaded.timeline),
+        )
+
+    def test_insert_or_ignore_deduplicates_events(self) -> None:
+        """Appending the same event twice must not create duplicates in SQLite."""
+        import sqlite3
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        event = self._make_event()
+
+        store.append_event(event)
+        # Manually call persist again (simulating a hypothetical double-write)
+        store._persistence.persist_event(event)
+
+        conn = sqlite3.connect(self.db_path)
+        count = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 1, "INSERT OR IGNORE should prevent duplicate events")
+
+    def test_insert_or_ignore_deduplicates_alerts(self) -> None:
+        """Extending the same alerts twice must not create duplicates in SQLite."""
+        import sqlite3
+        from app.models import Alert
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        alert = Alert(
+            rule_id="DET-AUTH-001", rule_name="Test", severity=Severity.HIGH,
+            confidence=Confidence.HIGH, actor_id="a", correlation_id="c",
+            contributing_event_ids=[], summary="s", payload={},
+        )
+
+        store.extend_alerts([alert])
+        store._persistence.persist_alerts([alert])
+
+        conn = sqlite3.connect(self.db_path)
+        count = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 1, "INSERT OR IGNORE should prevent duplicate alerts")
+
+    def test_insert_or_ignore_deduplicates_responses(self) -> None:
+        """Extending the same responses twice must not create duplicates."""
+        import sqlite3
+        from app.models import ResponseAction
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        resp = ResponseAction(
+            playbook_id="PB-AUTH-001", action_type="rate_limit", actor_id="a",
+            correlation_id="c", reason="r", related_alert_id="al", payload={},
+        )
+
+        store.extend_responses([resp])
+        store._persistence.persist_responses([resp])
+
+        conn = sqlite3.connect(self.db_path)
+        count = conn.execute("SELECT COUNT(*) FROM responses").fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 1, "INSERT OR IGNORE should prevent duplicate responses")
+
+    def test_insert_or_ignore_deduplicates_notes(self) -> None:
+        """Appending the same note twice must not create duplicates."""
+        import sqlite3
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        note = {"note_id": "note-001", "author": "admin", "content": "test", "created_at": "2024-01-01"}
+
+        store.append_incident_note("corr-001", note)
+        store._persistence.persist_incident_note("corr-001", note)
+
+        conn = sqlite3.connect(self.db_path)
+        count = conn.execute("SELECT COUNT(*) FROM incident_notes").fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 1, "INSERT OR IGNORE should prevent duplicate notes")
+
+    def test_insert_or_replace_overwrites_incident(self) -> None:
+        """Multiple upserts for the same incident must keep exactly one row with latest state."""
+        import sqlite3
+        from app.models import Incident
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        incident = Incident(
+            incident_type="credential_abuse",
+            primary_actor_id="user-alice",
+            actor_type="user",
+            correlation_id="corr-001",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+        )
+        store.upsert_incident(incident)
+
+        # Mutate and upsert again
+        incident.status = "investigating"
+        incident.detection_ids.append("DET-AUTH-001")
+        incident.add_timeline_entry("detection", "alert-1", "Alert triggered")
+        store.upsert_incident(incident)
+
+        # Mutate and upsert a third time
+        incident.status = "contained"
+        incident.containment_status = "full"
+        store.upsert_incident(incident)
+
+        # Exactly one row in SQLite
+        conn = sqlite3.connect(self.db_path)
+        count = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 1, "INSERT OR REPLACE should maintain exactly one row per correlation_id")
+
+        # And it has the latest state
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        loaded = fresh.incidents_by_correlation["corr-001"]
+        self.assertEqual(loaded.status, "contained")
+        self.assertEqual(loaded.containment_status, "full")
+        self.assertEqual(loaded.detection_ids, ["DET-AUTH-001"])
+        self.assertEqual(len(loaded.timeline), 1)
+
+    def test_pipeline_end_to_end_persistence(self) -> None:
+        """Full pipeline processing must persist all entities incrementally."""
+        from app.services.event_services import TelemetryService
+        from app.services.detection_service import DetectionService
+        from app.services.response_service import ResponseOrchestrator
+        from app.services.incident_service import IncidentService
+        from app.services.risk_service import RiskScoringService
+        from app.services.pipeline_service import EventPipelineService
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        telemetry = TelemetryService(store)
+        detection = DetectionService(telemetry)
+        response = ResponseOrchestrator(store)
+        incidents = IncidentService(store)
+        risk = RiskScoringService(store)
+        pipeline = EventPipelineService(
+            telemetry=telemetry, detection=detection,
+            response=response, incidents=incidents,
+            store=store, risk=risk,
+        )
+
+        # Generate 5 login failures to trigger DET-AUTH-001
+        for _ in range(5):
+            pipeline.process(Event(
+                event_type="authentication.login.failure",
+                category="authentication",
+                actor_id="user-alice",
+                actor_type="user",
+                request_id=f"req-{_}",
+                correlation_id="corr-pipe",
+                status="failure",
+                source_ip="10.0.0.1",
+                origin="test",
+                payload={"username": "alice"},
+                severity=Severity.MEDIUM,
+                confidence=Confidence.HIGH,
+            ))
+
+        # Verify in-memory state
+        self.assertGreater(len(store.events), 0)
+        self.assertGreater(len(store.alerts), 0)
+
+        # Persist operational state
+        store.save()
+
+        # Load into fresh store — entities should already be there from incremental writes
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.events), len(store.events))
+        self.assertEqual(len(fresh.alerts), len(store.alerts))
+        self.assertEqual(len(fresh.responses), len(store.responses))
+        self.assertEqual(
+            set(fresh.incidents_by_correlation.keys()),
+            set(store.incidents_by_correlation.keys()),
+        )
+        # Operational state also round-trips
+        self.assertEqual(fresh.alert_signatures, store.alert_signatures)
+
+
 if __name__ == "__main__":
     unittest.main()

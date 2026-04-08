@@ -64,6 +64,7 @@ class RiskScoringService:
         for incident in self.store.incidents_by_correlation.values():
             if incident.primary_actor_id == alert.actor_id:
                 incident.risk_score = profile.current_score
+                self.store.upsert_incident(incident)
 
         return profile
 
