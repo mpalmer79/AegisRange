@@ -198,11 +198,10 @@ class TestPersistenceRoundTrip(unittest.TestCase):
 
     def test_full_scenario_roundtrip(self) -> None:
         """Run a scenario through the pipeline, persist, restore, and verify."""
-        from fastapi.testclient import TestClient
-        from app.main import app
+        from tests.auth_helper import authenticated_client
 
         # Use a separate test db
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         resp = client.post("/scenarios/scn-auth-001")
         data = resp.json()

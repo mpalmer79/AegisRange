@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
-from app.main import app
 from app.services.mitre_service import MitreAttackService
 from app.store import STORE
+from tests.auth_helper import authenticated_client
 
 
 class TestMitreAttackService(unittest.TestCase):
@@ -82,7 +80,7 @@ class TestMitreAttackService(unittest.TestCase):
 
 class TestMitreAPI(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(app)
+        self.client = authenticated_client()
         self.client.post("/admin/reset")
 
     def test_get_mappings(self) -> None:

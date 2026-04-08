@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
-from app.main import app
 from app.services.campaign_service import CampaignDetectionService
 from app.store import STORE
+from tests.auth_helper import authenticated_client
 
 
 class TestCampaignService(unittest.TestCase):
@@ -20,7 +18,7 @@ class TestCampaignService(unittest.TestCase):
         self.assertEqual(len(campaigns), 0)
 
     def test_no_campaigns_with_single_incident(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
         campaigns = self.service.detect_campaigns()
@@ -28,7 +26,7 @@ class TestCampaignService(unittest.TestCase):
 
     def test_campaigns_detected_with_shared_actor(self) -> None:
         """Two scenarios with the same actor should form a campaign."""
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         # SCN-AUTH-001 and SCN-DOC-003 both involve user-alice
         client.post("/scenarios/scn-auth-001")
@@ -48,7 +46,7 @@ class TestCampaignService(unittest.TestCase):
         })
 
     def test_campaign_to_dict(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
         client.post("/scenarios/scn-doc-003")
@@ -66,7 +64,7 @@ class TestCampaignService(unittest.TestCase):
 
 class TestCampaignAPI(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(app)
+        self.client = authenticated_client()
         self.client.post("/admin/reset")
 
     def test_get_campaigns_empty(self) -> None:

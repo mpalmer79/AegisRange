@@ -3,15 +3,14 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
-from app.main import app, STORE
+from app.main import STORE
+from tests.auth_helper import authenticated_client
 
 
 class APITestBase(unittest.TestCase):
     def setUp(self) -> None:
         STORE.reset()
-        self.client = TestClient(app)
+        self.client = authenticated_client()
 
 
 class TestMetricsEndpoint(APITestBase):

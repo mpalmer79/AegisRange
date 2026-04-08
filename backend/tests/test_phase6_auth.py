@@ -3,10 +3,8 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
-from app.main import app
 from app.services.auth_service import AuthService, ROLES, DEFAULT_USERS
+from tests.auth_helper import authenticated_client
 
 
 class TestAuthService(unittest.TestCase):
@@ -78,7 +76,7 @@ class TestAuthService(unittest.TestCase):
 
 class TestAuthAPI(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(app)
+        self.client = authenticated_client("admin")
         self.client.post("/admin/reset")
 
     def test_login_success(self) -> None:

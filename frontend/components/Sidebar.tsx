@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: DashboardIcon },
@@ -18,6 +19,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { username, role, logout } = useAuth();
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-gray-950 border-r border-gray-800 flex flex-col z-30">
@@ -58,9 +60,21 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
+      {/* User / Logout */}
       <div className="p-4 border-t border-gray-800">
-        <p className="text-[10px] text-gray-600 font-mono">v1.0.0</p>
+        {username && (
+          <div className="mb-3">
+            <p className="text-xs font-mono text-gray-400 truncate">{username}</p>
+            <p className="text-[10px] font-mono text-gray-600 uppercase">{role}</p>
+          </div>
+        )}
+        <button
+          onClick={logout}
+          className="w-full text-left px-3 py-2 text-xs font-mono text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded transition-colors"
+        >
+          Sign Out
+        </button>
+        <p className="text-[10px] text-gray-700 font-mono mt-2">v0.6.0</p>
       </div>
     </aside>
   );

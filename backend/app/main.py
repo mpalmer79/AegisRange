@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ from app.services.scenario_service import ScenarioEngine
 from app.services.mitre_service import MitreAttackService
 from app.services.killchain_service import KillChainService
 from app.services.campaign_service import CampaignDetectionService
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, require_role
 from app.services.report_service import ReportService
 from app.services.stream_service import StreamService
 from app.store import STORE
@@ -149,7 +149,7 @@ def health() -> dict[str, str]:
 
 # --- Metrics ---
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[Depends(require_role("viewer"))])
 def get_metrics() -> dict:
     # Aggregate events by category
     events_by_category: dict[str, int] = {}
@@ -189,7 +189,7 @@ def get_metrics() -> dict:
 
 # --- Identity ---
 
-@app.post("/identity/login")
+@app.post("/identity/login", dependencies=[Depends(require_role("viewer"))])
 def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict:
     result = identity_service.authenticate(payload.username, payload.password)
     event_type = "authentication.login.success" if result.success else "authentication.login.failure"
@@ -226,7 +226,7 @@ def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(def
     }
 
 
-@app.post("/identity/sessions/{session_id}/revoke")
+@app.post("/identity/sessions/{session_id}/revoke", dependencies=[Depends(require_role("analyst"))])
 def revoke_session(session_id: str, request: Request) -> dict:
     if session_id not in STORE.actor_sessions.values():
         raise HTTPException(status_code=404, detail="Session not found")
@@ -259,7 +259,7 @@ def revoke_session(session_id: str, request: Request) -> dict:
 
 # --- Documents ---
 
-@app.post("/documents/{document_id}/read")
+@app.post("/documents/{document_id}/read", dependencies=[Depends(require_role("viewer"))])
 def read_document(document_id: str, payload: ReadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict:
     if payload.session_id and payload.session_id in STORE.revoked_sessions:
         raise HTTPException(status_code=401, detail="Session revoked")
@@ -299,7 +299,7 @@ def read_document(document_id: str, payload: ReadRequest, request: Request, x_so
     return {"allowed": allowed, "document_id": document.document_id, "classification": document.classification}
 
 
-@app.post("/documents/{document_id}/download")
+@app.post("/documents/{document_id}/download", dependencies=[Depends(require_role("viewer"))])
 def download_document(document_id: str, payload: DownloadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict:
     if payload.session_id and payload.session_id in STORE.revoked_sessions:
         raise HTTPException(status_code=401, detail="Session revoked")
@@ -341,42 +341,42 @@ def download_document(document_id: str, payload: DownloadRequest, request: Reque
 
 # --- Scenarios ---
 
-@app.post("/scenarios/scn-auth-001")
+@app.post("/scenarios/scn-auth-001", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_auth_001(request: Request) -> dict:
     """SCN-AUTH-001: Credential Abuse with Suspicious Success."""
     logger.info("Scenario execution started", extra={"scenario": "scn-auth-001", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_auth_001(request.state.correlation_id)
 
 
-@app.post("/scenarios/scn-session-002")
+@app.post("/scenarios/scn-session-002", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_session_002(request: Request) -> dict:
     """SCN-SESSION-002: Session Token Reuse Attack."""
     logger.info("Scenario execution started", extra={"scenario": "scn-session-002", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_session_002(request.state.correlation_id)
 
 
-@app.post("/scenarios/scn-doc-003")
+@app.post("/scenarios/scn-doc-003", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_doc_003(request: Request) -> dict:
     """SCN-DOC-003: Bulk Document Access."""
     logger.info("Scenario execution started", extra={"scenario": "scn-doc-003", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_doc_003(request.state.correlation_id)
 
 
-@app.post("/scenarios/scn-doc-004")
+@app.post("/scenarios/scn-doc-004", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_doc_004(request: Request) -> dict:
     """SCN-DOC-004: Read-To-Download Exfiltration Pattern."""
     logger.info("Scenario execution started", extra={"scenario": "scn-doc-004", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_doc_004(request.state.correlation_id)
 
 
-@app.post("/scenarios/scn-svc-005")
+@app.post("/scenarios/scn-svc-005", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_svc_005(request: Request) -> dict:
     """SCN-SVC-005: Unauthorized Service Access."""
     logger.info("Scenario execution started", extra={"scenario": "scn-svc-005", "correlation_id": request.state.correlation_id})
     return scenario_engine.run_svc_005(request.state.correlation_id)
 
 
-@app.post("/scenarios/scn-corr-006")
+@app.post("/scenarios/scn-corr-006", dependencies=[Depends(require_role("red_team"))])
 def run_scenario_corr_006(request: Request) -> dict:
     """SCN-CORR-006: Multi-Signal Compromise Sequence."""
     logger.info("Scenario execution started", extra={"scenario": "scn-corr-006", "correlation_id": request.state.correlation_id})
@@ -385,7 +385,7 @@ def run_scenario_corr_006(request: Request) -> dict:
 
 # --- Events ---
 
-@app.get("/events")
+@app.get("/events", dependencies=[Depends(require_role("viewer"))])
 def list_events(
     actor_id: str | None = Query(default=None),
     correlation_id: str | None = Query(default=None),
@@ -404,7 +404,7 @@ def list_events(
 
 # --- Alerts ---
 
-@app.get("/alerts")
+@app.get("/alerts", dependencies=[Depends(require_role("viewer"))])
 def list_alerts(
     actor_id: str | None = Query(default=None),
     correlation_id: str | None = Query(default=None),
@@ -422,12 +422,12 @@ def list_alerts(
 
 # --- Incidents ---
 
-@app.get("/incidents")
+@app.get("/incidents", dependencies=[Depends(require_role("viewer"))])
 def list_incidents() -> list[dict]:
     return [_incident_to_dict(inc) for inc in STORE.incidents_by_correlation.values()]
 
 
-@app.get("/incidents/{correlation_id}")
+@app.get("/incidents/{correlation_id}", dependencies=[Depends(require_role("viewer"))])
 def get_incident(correlation_id: str) -> dict:
     incident = STORE.incidents_by_correlation.get(correlation_id)
     if incident is None:
@@ -435,7 +435,7 @@ def get_incident(correlation_id: str) -> dict:
     return _incident_to_dict(incident)
 
 
-@app.patch("/incidents/{correlation_id}/status")
+@app.patch("/incidents/{correlation_id}/status", dependencies=[Depends(require_role("analyst"))])
 def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate) -> dict:
     incident = STORE.incidents_by_correlation.get(correlation_id)
     if incident is None:
@@ -473,7 +473,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate) -
 
 # --- Analytics ---
 
-@app.get("/analytics/risk-profiles")
+@app.get("/analytics/risk-profiles", dependencies=[Depends(require_role("analyst"))])
 def get_risk_profiles() -> list[dict]:
     profiles = risk_service.get_all_profiles()
     return [
@@ -489,7 +489,7 @@ def get_risk_profiles() -> list[dict]:
     ]
 
 
-@app.get("/analytics/risk-profiles/{actor_id}")
+@app.get("/analytics/risk-profiles/{actor_id}", dependencies=[Depends(require_role("analyst"))])
 def get_risk_profile(actor_id: str) -> dict:
     profile = risk_service.get_profile(actor_id)
     if profile is None:
@@ -504,7 +504,7 @@ def get_risk_profile(actor_id: str) -> dict:
     }
 
 
-@app.get("/analytics/rule-effectiveness")
+@app.get("/analytics/rule-effectiveness", dependencies=[Depends(require_role("analyst"))])
 def get_rule_effectiveness() -> list[dict]:
     rule_counts: dict[str, dict] = {}
     for alert in STORE.alerts:
@@ -525,14 +525,14 @@ def get_rule_effectiveness() -> list[dict]:
     ]
 
 
-@app.get("/analytics/scenario-history")
+@app.get("/analytics/scenario-history", dependencies=[Depends(require_role("analyst"))])
 def get_scenario_history() -> list[dict]:
     return STORE.scenario_history
 
 
 # --- Incident Notes ---
 
-@app.post("/incidents/{correlation_id}/notes")
+@app.post("/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("analyst"))])
 def add_incident_note(correlation_id: str, note: IncidentNote) -> dict:
     incident = STORE.incidents_by_correlation.get(correlation_id)
     if incident is None:
@@ -552,7 +552,7 @@ def add_incident_note(correlation_id: str, note: IncidentNote) -> dict:
     return entry
 
 
-@app.get("/incidents/{correlation_id}/notes")
+@app.get("/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("viewer"))])
 def get_incident_notes(correlation_id: str) -> list[dict]:
     incident = STORE.incidents_by_correlation.get(correlation_id)
     if incident is None:
@@ -562,7 +562,7 @@ def get_incident_notes(correlation_id: str) -> list[dict]:
 
 # --- Events Export ---
 
-@app.get("/events/export")
+@app.get("/events/export", dependencies=[Depends(require_role("viewer"))])
 def export_events(
     correlation_id: str | None = Query(default=None),
     actor_id: str | None = Query(default=None),
@@ -582,7 +582,7 @@ def export_events(
 
 # --- Admin ---
 
-@app.post("/admin/reset")
+@app.post("/admin/reset", dependencies=[Depends(require_role("admin"))])
 def admin_reset() -> dict[str, str]:
     STORE.reset()
     return {"status": "reset"}
@@ -590,7 +590,7 @@ def admin_reset() -> dict[str, str]:
 
 # --- MITRE ATT&CK ---
 
-@app.get("/mitre/mappings")
+@app.get("/mitre/mappings", dependencies=[Depends(require_role("viewer"))])
 def get_mitre_mappings() -> list[dict]:
     mappings = mitre_service.get_all_mappings()
     return [
@@ -604,7 +604,7 @@ def get_mitre_mappings() -> list[dict]:
     ]
 
 
-@app.get("/mitre/mappings/{rule_id}")
+@app.get("/mitre/mappings/{rule_id}", dependencies=[Depends(require_role("viewer"))])
 def get_mitre_mapping(rule_id: str) -> dict:
     mapping = mitre_service.get_mapping(rule_id)
     if mapping is None:
@@ -617,7 +617,7 @@ def get_mitre_mapping(rule_id: str) -> dict:
     }
 
 
-@app.get("/mitre/coverage")
+@app.get("/mitre/coverage", dependencies=[Depends(require_role("viewer"))])
 def get_mitre_coverage() -> list[dict]:
     entries = mitre_service.get_coverage_matrix()
     return [
@@ -636,7 +636,7 @@ def get_mitre_coverage() -> list[dict]:
     ]
 
 
-@app.get("/mitre/tactics/coverage")
+@app.get("/mitre/tactics/coverage", dependencies=[Depends(require_role("viewer"))])
 def get_mitre_tactic_coverage() -> list[dict]:
     coverage = mitre_service.get_tactic_coverage()
     return [
@@ -651,7 +651,7 @@ def get_mitre_tactic_coverage() -> list[dict]:
     ]
 
 
-@app.get("/mitre/scenarios/{scenario_id}/ttps")
+@app.get("/mitre/scenarios/{scenario_id}/ttps", dependencies=[Depends(require_role("viewer"))])
 def get_mitre_scenario_ttps(scenario_id: str) -> list[dict]:
     techniques = mitre_service.get_scenario_ttps(scenario_id)
     return [
@@ -668,13 +668,13 @@ def get_mitre_scenario_ttps(scenario_id: str) -> list[dict]:
 
 # --- Kill Chain ---
 
-@app.get("/killchain")
+@app.get("/killchain", dependencies=[Depends(require_role("viewer"))])
 def get_all_killchain_analyses() -> list[dict]:
     analyses = killchain_service.analyze_all_incidents()
     return [killchain_service.to_dict(a) for a in analyses]
 
 
-@app.get("/killchain/{correlation_id}")
+@app.get("/killchain/{correlation_id}", dependencies=[Depends(require_role("viewer"))])
 def get_killchain_analysis(correlation_id: str) -> dict:
     analysis = killchain_service.analyze_incident(correlation_id)
     if analysis is None:
@@ -684,13 +684,13 @@ def get_killchain_analysis(correlation_id: str) -> dict:
 
 # --- Campaigns ---
 
-@app.get("/campaigns")
+@app.get("/campaigns", dependencies=[Depends(require_role("viewer"))])
 def get_campaigns() -> list[dict]:
     campaigns = campaign_detection_service.detect_campaigns()
     return [campaign_detection_service.to_dict(c) for c in campaigns]
 
 
-@app.get("/campaigns/{campaign_id}")
+@app.get("/campaigns/{campaign_id}", dependencies=[Depends(require_role("viewer"))])
 def get_campaign(campaign_id: str) -> dict:
     campaign = campaign_detection_service.get_campaign(campaign_id)
     if campaign is None:
@@ -714,7 +714,7 @@ def platform_login(payload: PlatformLoginRequest) -> dict:
     }
 
 
-@app.get("/auth/users")
+@app.get("/auth/users", dependencies=[Depends(require_role("admin"))])
 def list_platform_users() -> list[dict]:
     users = auth_service.list_users()
     return [
@@ -731,7 +731,7 @@ def list_platform_users() -> list[dict]:
 
 # --- Exercise Reports ---
 
-@app.post("/reports/generate")
+@app.post("/reports/generate", dependencies=[Depends(require_role("analyst"))])
 def generate_exercise_report(payload: ReportRequest | None = None) -> dict:
     title = payload.title if payload else "AegisRange Exercise Report"
     report = report_service.generate_report(title)
@@ -740,7 +740,7 @@ def generate_exercise_report(payload: ReportRequest | None = None) -> dict:
 
 # --- Real-Time Streaming ---
 
-@app.get("/stream/events")
+@app.get("/stream/events", dependencies=[Depends(require_role("viewer"))])
 async def stream_events() -> StreamingResponse:
     queue = stream_service.subscribe()
     return StreamingResponse(

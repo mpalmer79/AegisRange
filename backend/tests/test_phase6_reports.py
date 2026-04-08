@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services.report_service import ReportService
 from app.services.stream_service import StreamService
 from app.store import STORE
+from tests.auth_helper import authenticated_client
 
 
 class TestReportService(unittest.TestCase):
@@ -25,7 +24,7 @@ class TestReportService(unittest.TestCase):
         self.assertGreater(len(report.recommendations), 0)
 
     def test_generate_report_after_scenarios(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
         client.post("/scenarios/scn-doc-003")
@@ -37,7 +36,7 @@ class TestReportService(unittest.TestCase):
         self.assertGreater(report.summary["total_incidents"], 0)
 
     def test_report_detection_coverage(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
 
@@ -67,7 +66,7 @@ class TestReportService(unittest.TestCase):
         self.assertIn("generated_at", d)
 
     def test_report_response_effectiveness(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
 
@@ -75,7 +74,7 @@ class TestReportService(unittest.TestCase):
         self.assertIn("total_responses", report.response_effectiveness)
 
     def test_report_risk_summary(self) -> None:
-        client = TestClient(app)
+        client = authenticated_client()
         client.post("/admin/reset")
         client.post("/scenarios/scn-auth-001")
 
@@ -85,7 +84,7 @@ class TestReportService(unittest.TestCase):
 
 class TestReportAPI(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(app)
+        self.client = authenticated_client()
         self.client.post("/admin/reset")
 
     def test_generate_report_endpoint(self) -> None:
@@ -146,7 +145,7 @@ class TestStreamService(unittest.TestCase):
 
 class TestStreamAPI(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(app)
+        self.client = authenticated_client()
 
     def test_stream_endpoint_exists(self) -> None:
         # Verify the endpoint is registered in the app routes
