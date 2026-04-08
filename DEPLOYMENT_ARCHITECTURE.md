@@ -47,9 +47,9 @@ Where possible, services should be stateless so they can scale horizontally, res
 |-----------|---------------|-------|
 | Backend | FastAPI single process | Runs via `uvicorn app.main:app` |
 | Frontend | Next.js 14 dev server | Runs via `npm run dev` |
-| Persistence | In-memory Python data structures | All state lost on restart |
-| Database | **None** | No PostgreSQL, SQLite, or any database |
-| Authentication | JWT service built, not enforced | All endpoints are open |
+| Persistence | In-memory + SQLite write-through | State survives restart via `aegisrange.db` |
+| Database | SQLite (auto-created) | Write-through cache, disabled in test env |
+| Authentication | JWT enforced on all 35 protected routes | RBAC with 5 roles, `/health` and `/auth/login` public |
 | Containerization | Dockerfiles + docker-compose | Backend and frontend containers |
 | CI | GitHub Actions | Runs pytest on push/PR |
 | Secrets | `.env.example` template | CORS_ORIGINS, LOG_LEVEL, APP_ENV |
@@ -61,14 +61,14 @@ Developer Machine or Docker
     ├── Frontend (Next.js, port 3000)
     │     └── Calls backend API via HTTP
     └── Backend (FastAPI/Uvicorn, port 8000)
-          └── InMemoryStore (Python process memory)
+          ├── InMemoryStore (Python process memory)
+          └── SQLite (aegisrange.db, write-through cache)
 ```
 
 - No network segmentation
 - No TLS (local HTTP)
-- No database connections
 - No secret management beyond environment variables
-- State resets on process restart or `POST /admin/reset`
+- State persists across restarts via SQLite; resets via `POST /admin/reset`
 
 ### 3.3 Docker Compose
 
@@ -76,7 +76,7 @@ The provided `docker-compose.yml` runs two containers:
 - `backend`: FastAPI on port 8000
 - `frontend`: Next.js on port 3000
 
-No database container is included because no database exists.
+No database container is included — SQLite is embedded in the backend process and auto-creates `aegisrange.db` on startup.
 
 ---
 
@@ -86,11 +86,11 @@ The following sections describe the intended deployment architecture. These are 
 
 ### 4.1 Target Deployment Phases
 
-**Phase 1 (target)**:
+**Phase 1 (current)**:
 - Modular monolith backend
-- Single frontend
-- SQLite or PostgreSQL for persistence
-- JWT authentication enforced on routes
+- Single frontend with login flow
+- SQLite write-through persistence (done)
+- JWT authentication enforced on all routes (done)
 - Local or simple cloud deployment
 
 **Phase 2 (future)**:

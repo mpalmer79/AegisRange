@@ -9,11 +9,11 @@ Built as a portfolio-grade demonstration of detection engineering, incident resp
 ## Current Implemented Baseline
 
 **Version:** 0.6.0
-**Tests:** 251 automated tests across 17 test files
+**Tests:** 281 automated tests across 19 test files
 **Backend:** FastAPI modular monolith with 15 services and 38 API endpoints
-**Frontend:** Next.js 14 App Router with 11 pages
-**Persistence:** In-memory (all state resets on restart)
-**Authentication:** JWT auth service built but not yet integrated into route protection
+**Frontend:** Next.js 14 App Router with 12 pages (including login)
+**Persistence:** In-memory with SQLite write-through backing (survives restart)
+**Authentication:** JWT auth (HMAC-SHA256) enforced on all 35 protected routes with RBAC
 
 ### What Works End-to-End
 
@@ -30,10 +30,11 @@ Built as a portfolio-grade demonstration of detection engineering, incident resp
 11. Risk scoring profiles threat actors based on accumulated behavior
 12. SSE streaming provides real-time event delivery
 
-### What Is Built But Not Integrated
+### Infrastructure
 
-- **JWT Authentication**: `auth_service.py` implements HMAC-SHA256 token creation/verification with 5 roles and a `require_role()` FastAPI dependency. No routes currently enforce authentication.
-- **Frontend Login**: `api.ts` has a `platformLogin()` function. No frontend page calls it.
+- **JWT Authentication**: All 35 protected routes enforce `require_role()` with RBAC. 5 roles: admin, soc_manager, analyst, red_team, viewer. Public endpoints: `/health`, `/auth/login`.
+- **Frontend Auth**: Login page, AuthProvider context, AuthGuard redirect, automatic token attachment on all API calls, localStorage persistence with expiry.
+- **SQLite Persistence**: Write-through cache — in-memory store is primary for reads, SQLite saves after every mutating request via middleware, loads on startup.
 
 ---
 
@@ -55,14 +56,15 @@ Built as a portfolio-grade demonstration of detection engineering, incident resp
 | MITRE | ATT&CK TTP mapping across 8 tactics with coverage matrix |
 | Kill Chain | Lockheed Martin 7-stage tracking per incident |
 | Campaign | Cross-incident correlation and campaign detection |
-| Auth | JWT token management and role definitions (not wired to routes) |
+| Auth | JWT token management, RBAC enforcement on all protected routes |
 | Report | Exercise report generation with detection coverage analysis |
 | Stream | SSE real-time event delivery with subscriber management |
 
-### Frontend Pages (11)
+### Frontend Pages (12)
 
 | Page | Description |
 |------|-------------|
+| Login | JWT authentication with username/password |
 | Dashboard | System metrics overview |
 | Scenarios | Execute and review adversary simulations |
 | Events | Browse and filter telemetry events |
@@ -162,9 +164,9 @@ Built as a portfolio-grade demonstration of detection engineering, incident resp
 ### Reports
 - `POST /reports/generate` — generate exercise report
 
-### Auth (built, not enforced on any route)
-- `POST /auth/login` — JWT login
-- `GET /auth/users` — list platform users
+### Auth
+- `POST /auth/login` — JWT login (public)
+- `GET /auth/users` — list platform users (admin only)
 
 ### Admin
 - `POST /admin/reset` — reset all in-memory state
@@ -218,21 +220,55 @@ curl http://localhost:8000/incidents/<correlation_id>
 
 ## Known Limitations
 
-- **In-memory persistence**: All state is lost on restart. No database exists. Suitable for demonstration and testing only.
-- **No route authentication**: The JWT auth service is built and tested but not wired into any endpoint. All endpoints are currently open.
-- **Frontend/backend contract drift**: Some frontend TypeScript types reference field names that differ from what the backend actually returns (e.g., `target_type` vs `resource_type`, `created_at` vs `timestamp`). The frontend may not render all data correctly.
+- **SQLite persistence**: Write-through cache to SQLite. Suitable for single-instance deployment. Not designed for concurrent multi-process writes.
+- **No input validation on query parameters**: `since_minutes` and similar query params accept unbounded values without range constraints.
+- **No rate limiting**: No request throttling on any endpoint.
+- **No TLS**: Backend serves plain HTTP. TLS termination expected at reverse proxy layer.
 - **No multi-tenancy**: Single-instance, single-tenant only.
+- **Dead frontend code**: Several API functions (`readDocument`, `downloadDocument`, `exportEvents`, `getCampaign`, `resetSystem`) and types (`LoginRequest`, `LoginResponse`, `DocumentRequest`) are defined but never called from any page.
+- **Inconsistent frontend error handling**: Pages use 3 different data-fetching patterns (`Promise.allSettled`, `try/catch` in `useCallback`, simple `useEffect`). No retry-on-failure UI.
+- **Limited accessibility**: No ARIA labels, no semantic form associations, SVG icons lack `aria-hidden`.
 
 ---
 
-## Planned Next Steps
+## Completed Hardening Phases
 
-These items are designed, documented, or partially built but not yet complete:
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 0 | Architecture truth audit | Done |
+| 1 | Documentation realignment | Done |
+| 2 | Frontend/backend contract reconciliation | Done |
+| 3 | SQLite persistence layer | Done |
+| 4 | Auth boundary hardening (JWT on all routes + frontend login) | Done |
+| 5 | Architectural consistency pass | Done |
+| 6 | Validation, gap analysis, roadmap | Done |
 
-1. **Frontend/backend contract reconciliation** — Align TypeScript types to actual API response shapes
-2. **Persistence hardening** — Replace in-memory store with SQLite or PostgreSQL
-3. **Auth boundary hardening** — Wire `require_role` into routes, add login flow to frontend
-4. **Architectural consistency pass** — Clean up service boundaries, remove dead patterns
+---
+
+## Forward Roadmap
+
+Prioritized by impact. Items are designed but not yet built.
+
+### Next (High Impact)
+
+1. **Remove dead frontend code** — Delete unused API functions, types, and imports to reduce bundle size and cognitive overhead.
+2. **Input validation hardening** — Add `ge=0, le=1440` constraints to `since_minutes` and similar query parameters. Validate enum values for incident status transitions.
+3. **Standardize frontend data-fetching** — Pick one pattern (recommend `useCallback` + error state) and apply consistently across all 12 pages. Add retry buttons on error states.
+4. **Add type annotations** — Missing return types on `stream_service.event_generator`, `require_role` decorator, and `correlation_middleware`.
+
+### Later (Medium Impact)
+
+5. **Test coverage expansion** — Add tests for: SSE streaming endpoint, document read/download endpoints, incident detail GET, incident status transitions, incident notes CRUD.
+6. **Frontend accessibility** — Add `aria-label` to interactive elements and SVG icons, link form labels with `htmlFor`, add `aria-hidden` to decorative icons.
+7. **Rate limiting** — Add configurable rate limiting to `/metrics`, `/alerts`, `/events/export`, and auth endpoints.
+8. **PostgreSQL option** — Abstract persistence layer behind an interface to support PostgreSQL alongside SQLite.
+
+### Future (Architecture Evolution)
+
+9. **Streaming pipeline** — Replace synchronous event-to-incident flow with async message queue.
+10. **Advanced correlation engine** — Temporal pattern matching across longer time windows.
+11. **Policy engine** — Externalized detection and response policies.
+12. **Multi-tenant support** — Tenant isolation at data and API layers.
 
 ---
 

@@ -72,17 +72,17 @@ Every system decision must be:
     ├── MITRE ATT&CK Service
     ├── Kill Chain Service
     ├── Campaign Correlation Service
-    ├── Auth Service (built, not enforced)
+    ├── Auth Service (JWT + RBAC enforced on all routes)
     ├── Report Service
     └── Stream Service (SSE)
         |
         v
-[In-Memory Store (Python lists/dicts)]
+[In-Memory Store ←→ SQLite (write-through cache)]
 ```
 
-**Current persistence**: All state lives in `InMemoryStore` — Python lists, dicts, and sets in memory. There is no database. State resets on process restart or via `POST /admin/reset`.
+**Current persistence**: All state lives in `InMemoryStore` at runtime. A SQLite write-through cache (`persistence.py`) saves state after every mutating HTTP request and reloads on startup. State survives restarts but is not designed for concurrent multi-process writes.
 
-**Current authentication**: `auth_service.py` implements JWT creation, verification, role hierarchy, and a `require_role()` FastAPI dependency. However, no routes use this dependency. All endpoints are currently unauthenticated.
+**Current authentication**: `auth_service.py` implements JWT creation/verification (HMAC-SHA256), 5 roles (admin, soc_manager, analyst, red_team, viewer), and a `require_role()` FastAPI dependency. All 35 protected routes enforce `require_role()`. Public endpoints: `/health`, `/auth/login`. Frontend has login page, AuthProvider context, and AuthGuard redirect.
 
 ### 3.2 Service Inventory (15 services)
 
@@ -100,7 +100,7 @@ Every system decision must be:
 | MitreAttackService | `mitre_service.py` | Active — TTP mapping and coverage |
 | KillChainService | `killchain_service.py` | Active — kill chain stage tracking |
 | CampaignService | `campaign_service.py` | Active — cross-incident correlation |
-| AuthService | `auth_service.py` | Built, not integrated — JWT + RBAC |
+| AuthService | `auth_service.py` | Active — JWT + RBAC enforced on all routes |
 | ReportService | `report_service.py` | Active — exercise report generation |
 | StreamService | `stream_service.py` | Active — SSE subscriber management |
 
@@ -208,7 +208,7 @@ Maps all 10 detection rules to MITRE ATT&CK techniques and tactics. Provides:
 - scenario-to-TTP resolution
 - alert enrichment with MITRE context
 
-### 4.11 Auth Service (Built, Not Integrated)
+### 4.11 Auth Service
 
 Implements:
 - JWT token creation/verification (HMAC-SHA256)
@@ -217,7 +217,7 @@ Implements:
 - `require_role()` FastAPI dependency for route protection
 - Role hierarchy with numeric levels
 
-**Current state**: Fully built and tested (15 tests). No routes use `require_role()`. All endpoints are open.
+**Current state**: Enforced on all 35 protected routes. Public endpoints: `/health`, `/auth/login`. 19 auth enforcement tests verify 401/403 behavior.
 
 ### 4.12 Supporting Services
 
@@ -291,7 +291,7 @@ Incident Updated (timeline entry added)
 
 ### 7.2 Persistence Model
 
-All data is stored in `InMemoryStore` (singleton). Key collections:
+All data is stored in `InMemoryStore` (singleton) at runtime. Key collections:
 
 - `events: list[Event]`
 - `alerts: list[Alert]`
@@ -300,7 +300,13 @@ All data is stored in `InMemoryStore` (singleton). Key collections:
 - `risk_profiles: dict[str, RiskProfile]`
 - Various tracking dicts for login failures, document reads, session state
 
-No database, no ORM, no migrations. The `reset()` method reinitializes all collections.
+A `PersistenceLayer` (`persistence.py`) provides SQLite write-through caching:
+- **Save**: Serializes all store state to SQLite tables after every mutating HTTP request (POST/PATCH/DELETE with status < 400)
+- **Load**: Restores full state from SQLite on startup
+- **Clear**: Drops all SQLite data on `POST /admin/reset`
+- Disabled in test environment (`APP_ENV=test`)
+
+The `reset()` method clears SQLite, reinitializes all collections, and preserves the persistence reference.
 
 ---
 
@@ -362,9 +368,9 @@ Each incident contains:
 |-------|-----------|
 | Frontend | Next.js 14, TypeScript, Tailwind CSS |
 | Backend | FastAPI, Python 3.x |
-| Persistence | In-memory (Python data structures) |
-| Auth | PyJWT (HMAC-SHA256), built but not enforced |
-| Testing | pytest (251 tests), unittest |
+| Persistence | In-memory + SQLite write-through cache |
+| Auth | PyJWT (HMAC-SHA256), enforced on all protected routes |
+| Testing | pytest (281 tests across 19 files), unittest |
 | Containerization | Docker, docker-compose |
 | CI | GitHub Actions |
 
@@ -380,12 +386,15 @@ Each incident contains:
 - Risk scoring
 - Exercise reporting
 - SSE streaming
-- JWT auth service (not yet enforced)
+- JWT auth enforced on all 35 protected routes with RBAC
+- SQLite write-through persistence
+- Frontend login page, AuthProvider, AuthGuard
+- Frontend/backend API contract alignment (alias fields)
 
 ### Not Yet Implemented
-- Database persistence (in-memory only)
-- Route authentication (auth service exists but is unused)
-- Frontend login flow
+- PostgreSQL persistence option
+- Rate limiting
+- Input validation on query parameters
 - Microservices deployment
 - Machine learning detection
 - Multi-tenant support
@@ -403,25 +412,25 @@ The following represents the intended evolution of the platform. These items are
 [Frontend - Next.js]
         |
         v
-[API Gateway / Auth Layer]
+[Reverse Proxy (TLS termination)]
         |
         v
 [Backend Service (FastAPI)]
     ├── All current services
-    └── require_role() enforced on routes
+    ├── require_role() enforced on routes  ← DONE
+    └── Rate limiting middleware
         |
         v
-[PostgreSQL or SQLite]
+[PostgreSQL (production) / SQLite (dev)]  ← SQLite DONE
 ```
 
 ### 13.2 Planned Enhancements
-- Database persistence (SQLite for development, PostgreSQL for production)
-- JWT authentication enforced on all appropriate routes
-- Frontend login page and auth context
-- Frontend/backend API contract alignment
+- PostgreSQL persistence option for production deployments
+- Rate limiting middleware
+- Input validation hardening on query parameters
 - Streaming pipeline for asynchronous event processing
-- Advanced correlation engine
-- Policy engine
+- Advanced correlation engine with temporal pattern matching
+- Policy engine for externalized detection/response policies
 - AI-assisted detection explanations
 
 ---
@@ -434,7 +443,7 @@ The following represents the intended evolution of the platform. These items are
 - Auditability over early performance optimization
 - Scenario-first validation approach
 - Frozen dataclasses for immutable events and alerts
-- In-memory persistence to prioritize domain logic over infrastructure (database planned)
+- In-memory persistence with SQLite write-through for durability without ORM complexity
 
 ---
 
@@ -450,4 +459,4 @@ AegisRange is a system-level demonstration of how modern cybersecurity platforms
 - kill chain analysis
 - campaign correlation
 
-The platform currently implements 15 services, 38 API endpoints, 10 detection rules, 10 response playbooks, and 6 adversary simulations with 251 automated tests. Persistence is in-memory and authentication is built but not yet enforced.
+The platform currently implements 15 services, 38 API endpoints, 10 detection rules, 10 response playbooks, and 6 adversary simulations with 281 automated tests across 19 test files. Persistence uses an in-memory store with SQLite write-through caching. JWT authentication is enforced on all 35 protected routes with role-based access control.
