@@ -20,4 +20,6 @@ ENV DB_PATH=/data/aegisrange.db
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Railway sets $PORT dynamically; fall back to 8000 for local use.
+# Shell form is required so $PORT is expanded at runtime.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
