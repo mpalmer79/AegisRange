@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-from app.models import Event
+from app.models import Event, utc_now
 from app.store import InMemoryStore
 
 REQUIRED_EVENT_FIELDS = {
@@ -74,7 +74,7 @@ class TelemetryService:
         if event_types:
             events = (event for event in events if event.event_type in event_types)
         if since_minutes is not None:
-            cutoff = datetime.utcnow() - timedelta(minutes=since_minutes)
+            cutoff = utc_now() - timedelta(minutes=since_minutes)
             events = (event for event in events if event.timestamp >= cutoff)
 
         return sorted(events, key=lambda event: event.timestamp)

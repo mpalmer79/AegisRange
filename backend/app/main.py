@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
@@ -11,7 +10,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.logging_config import setup_logging
-from app.models import Confidence, Event, Severity
+from app.models import Confidence, Event, Severity, utc_now
 from app.services.detection_service import DetectionService
 from app.services.document_service import DocumentService
 from app.services.event_services import TelemetryService
@@ -45,7 +44,7 @@ app = FastAPI(title="AegisRange API", version="0.6.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://frontend:3000"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,8 +86,8 @@ stream_service = StreamService(STORE)
 @app.on_event("startup")
 def on_startup():
     if settings.APP_ENV != "test":
-        STORE.enable_persistence()
-        logger.info("SQLite persistence enabled", extra={"env": settings.APP_ENV})
+        STORE.enable_persistence(db_path=settings.DB_PATH)
+        logger.info("SQLite persistence enabled", extra={"env": settings.APP_ENV, "db_path": settings.DB_PATH})
     logger.info("AegisRange API started", extra={"env": settings.APP_ENV})
 
 
@@ -100,12 +99,19 @@ class LoginRequest(BaseModel):
 
 
 class ReadRequest(BaseModel):
+    """Simulation-context request: actor_id and actor_role identify the
+    *simulated threat actor* being emulated, not the authenticated platform
+    user.  The platform user is identified via the JWT bearer token.
+    This separation is by design — see ARCHITECTURE.md §8 (Identity Model)."""
+
     actor_id: str
     actor_role: str
     session_id: str | None = None
 
 
 class DownloadRequest(BaseModel):
+    """Simulation-context request: see ReadRequest docstring."""
+
     actor_id: str
     actor_role: str
     session_id: str | None = None
@@ -153,7 +159,7 @@ async def correlation_middleware(request: Request, call_next):
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "ok", "timestamp": utc_now().isoformat()}
 
 
 # --- Metrics ---
@@ -199,7 +205,11 @@ def get_metrics() -> dict:
 # --- Identity ---
 
 @app.post("/identity/login", dependencies=[Depends(require_role("viewer"))])
-def login(payload: LoginRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict:
+def login(
+    payload: LoginRequest,
+    request: Request,
+    x_source_ip: str = Header(default="127.0.0.1", description="Simulation metadata: source IP for the emulated actor"),
+) -> dict:
     result = identity_service.authenticate(payload.username, payload.password)
     event_type = "authentication.login.success" if result.success else "authentication.login.failure"
 
@@ -269,7 +279,12 @@ def revoke_session(session_id: str, request: Request) -> dict:
 # --- Documents ---
 
 @app.post("/documents/{document_id}/read", dependencies=[Depends(require_role("viewer"))])
-def read_document(document_id: str, payload: ReadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict:
+def read_document(
+    document_id: str,
+    payload: ReadRequest,
+    request: Request,
+    x_source_ip: str = Header(default="127.0.0.1", description="Simulation metadata: source IP for the emulated actor"),
+) -> dict:
     if payload.session_id and payload.session_id in STORE.revoked_sessions:
         raise HTTPException(status_code=401, detail="Session revoked")
     if payload.actor_id in STORE.step_up_required:
@@ -309,7 +324,12 @@ def read_document(document_id: str, payload: ReadRequest, request: Request, x_so
 
 
 @app.post("/documents/{document_id}/download", dependencies=[Depends(require_role("viewer"))])
-def download_document(document_id: str, payload: DownloadRequest, request: Request, x_source_ip: str = Header(default="127.0.0.1")) -> dict:
+def download_document(
+    document_id: str,
+    payload: DownloadRequest,
+    request: Request,
+    x_source_ip: str = Header(default="127.0.0.1", description="Simulation metadata: source IP for the emulated actor"),
+) -> dict:
     if payload.session_id and payload.session_id in STORE.revoked_sessions:
         raise HTTPException(status_code=401, detail="Session revoked")
     if payload.actor_id in STORE.step_up_required:
@@ -411,7 +431,7 @@ def list_events(
     actor_id: str | None = Query(default=None),
     correlation_id: str | None = Query(default=None),
     event_type: str | None = Query(default=None),
-    since_minutes: int | None = Query(default=None),
+    since_minutes: int | None = Query(default=None, ge=1, le=1440),
 ) -> list[dict]:
     event_types = {event_type} if event_type else None
     events = telemetry_service.lookup_events(
@@ -481,7 +501,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, r
     logger.info("Incident status update", extra={"correlation_id": correlation_id, "from": old_status, "to": payload.status, "changed_by": changed_by})
     incident.status = payload.status
     if payload.status == "closed":
-        incident.closed_at = datetime.utcnow()
+        incident.closed_at = utc_now()
     if payload.status == "contained":
         incident.containment_status = "full"
 
@@ -550,7 +570,7 @@ def add_incident_note(correlation_id: str, note: IncidentNote, request: Request)
         "note_id": f"note-{uuid4()}",
         "author": attributed_author,
         "content": note.content,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": utc_now().isoformat(),
     }
     STORE.append_incident_note(correlation_id, entry)
     incident.add_timeline_entry(
@@ -576,7 +596,7 @@ def get_incident_notes(correlation_id: str) -> list[dict]:
 def export_events(
     correlation_id: str | None = Query(default=None),
     actor_id: str | None = Query(default=None),
-    since_minutes: int | None = Query(default=None),
+    since_minutes: int | None = Query(default=None, ge=1, le=1440),
 ) -> dict:
     events = telemetry_service.lookup_events(
         actor_id=actor_id,
@@ -584,7 +604,7 @@ def export_events(
         since_minutes=since_minutes,
     )
     return {
-        "export_timestamp": datetime.utcnow().isoformat(),
+        "export_timestamp": utc_now().isoformat(),
         "total_events": len(events),
         "events": [event_to_dict(e) for e in events],
     }

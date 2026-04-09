@@ -375,7 +375,7 @@ class TestPersistenceCorrectness(unittest.TestCase):
     def test_risk_profiles_round_trip(self) -> None:
         """Risk profiles must survive save/load cycle."""
         from app.services.risk_service import RiskProfile
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         store1 = InMemoryStore()
         profile = RiskProfile(
@@ -387,7 +387,7 @@ class TestPersistenceCorrectness(unittest.TestCase):
                 {"timestamp": "2024-01-01T00:00:00", "rule_id": "DET-AUTH-001", "delta": 15, "new_score": 15},
                 {"timestamp": "2024-01-01T00:01:00", "rule_id": "DET-DOC-005", "delta": 60, "new_score": 75},
             ],
-            last_updated=datetime(2024, 1, 1, 0, 1, 0),
+            last_updated=datetime(2024, 1, 1, 0, 1, 0, tzinfo=timezone.utc),
         )
         store1.risk_profiles["user-alice"] = profile
 
@@ -403,7 +403,7 @@ class TestPersistenceCorrectness(unittest.TestCase):
         self.assertEqual(restored.peak_score, 90)
         self.assertEqual(restored.contributing_rules, ["DET-AUTH-001", "DET-DOC-005"])
         self.assertEqual(len(restored.score_history), 2)
-        self.assertEqual(restored.last_updated, datetime(2024, 1, 1, 0, 1, 0))
+        self.assertEqual(restored.last_updated, datetime(2024, 1, 1, 0, 1, 0, tzinfo=timezone.utc))
 
     def test_blocked_routes_round_trip(self) -> None:
         """Blocked routes must survive save/load cycle."""
@@ -1217,6 +1217,299 @@ class TestStateClassificationEnforcement(unittest.TestCase):
 
         # Ephemeral state reset
         self.assertEqual(fresh.actor_sessions, {})
+
+
+class TestTransactionContext(unittest.TestCase):
+    """Tests for the transaction context manager on store and persistence."""
+
+    def setUp(self) -> None:
+        self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(self.db_fd)
+        os.unlink(self.db_path)
+
+    def tearDown(self) -> None:
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
+
+    def _make_event(self, actor_id: str = "user-alice", event_type: str = "test.event") -> Event:
+        return Event(
+            event_type=event_type,
+            category="test",
+            actor_id=actor_id,
+            actor_type="user",
+            request_id="req-001",
+            correlation_id="corr-001",
+            status="success",
+            source_ip="10.0.0.1",
+            origin="test",
+            payload={"key": "value"},
+            severity=Severity.MEDIUM,
+            confidence=Confidence.HIGH,
+        )
+
+    def test_transaction_commits_all_writes(self) -> None:
+        """All writes within a transaction should be visible after commit."""
+        from app.models import Alert, Incident
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        event = self._make_event()
+        alert = Alert(
+            rule_id="DET-AUTH-001", rule_name="Test",
+            severity=Severity.HIGH, confidence=Confidence.HIGH,
+            actor_id="user-alice", correlation_id="corr-001",
+            contributing_event_ids=[event.event_id],
+            summary="Test alert", payload={},
+        )
+        incident = Incident(
+            incident_type="credential_abuse",
+            primary_actor_id="user-alice", actor_type="user",
+            correlation_id="corr-001",
+            severity=Severity.HIGH, confidence=Confidence.HIGH,
+        )
+
+        with store.transaction():
+            store.append_event(event)
+            store.extend_alerts([alert])
+            store.upsert_incident(incident)
+
+        # Verify all entities are persisted
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.events), 1)
+        self.assertEqual(len(fresh.alerts), 1)
+        self.assertIn("corr-001", fresh.incidents_by_correlation)
+
+    def test_transaction_noop_without_persistence(self) -> None:
+        """Transaction context is a no-op when persistence is not enabled."""
+        store = InMemoryStore()
+        event = self._make_event()
+
+        with store.transaction():
+            store.append_event(event)
+
+        self.assertEqual(len(store.events), 1)
+
+    def test_transaction_groups_into_single_commit(self) -> None:
+        """Multiple writes within a transaction should hit SQLite once."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        with store.transaction():
+            for i in range(10):
+                store.append_event(self._make_event(actor_id=f"user-{i}"))
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.events), 10)
+
+
+class TestEntityRoundTrip(unittest.TestCase):
+    """Comprehensive round-trip tests for every entity type through persistence."""
+
+    def setUp(self) -> None:
+        self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(self.db_fd)
+        os.unlink(self.db_path)
+
+    def tearDown(self) -> None:
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
+
+    def test_event_round_trip_all_fields(self) -> None:
+        """Event round-trip must preserve all fields including optionals."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        event = Event(
+            event_type="authentication.login.success",
+            category="authentication",
+            actor_id="user-alice",
+            actor_type="user",
+            actor_role="analyst",
+            target_type="identity",
+            target_id="alice",
+            request_id="req-rt-001",
+            correlation_id="corr-rt-001",
+            session_id="sess-rt-001",
+            source_ip="192.168.1.1",
+            user_agent="test-agent",
+            origin="api",
+            status="success",
+            status_code="200",
+            error_message=None,
+            severity=Severity.INFORMATIONAL,
+            confidence=Confidence.LOW,
+            risk_score=42,
+            payload={"method": "password", "nested": {"key": "val"}},
+        )
+        store.append_event(event)
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.events), 1)
+        restored = fresh.events[0]
+        self.assertEqual(restored.event_id, event.event_id)
+        self.assertEqual(restored.event_type, "authentication.login.success")
+        self.assertEqual(restored.actor_role, "analyst")
+        self.assertEqual(restored.target_type, "identity")
+        self.assertEqual(restored.session_id, "sess-rt-001")
+        self.assertEqual(restored.status_code, "200")
+        self.assertEqual(restored.risk_score, 42)
+        self.assertEqual(restored.payload["nested"]["key"], "val")
+        self.assertIsNotNone(restored.timestamp.tzinfo)
+
+    def test_alert_round_trip_all_fields(self) -> None:
+        """Alert round-trip must preserve all fields."""
+        from app.models import Alert
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        alert = Alert(
+            rule_id="DET-DOC-006",
+            rule_name="Read-To-Download Staging Pattern",
+            severity=Severity.CRITICAL,
+            confidence=Confidence.HIGH,
+            actor_id="user-bob",
+            correlation_id="corr-rt-002",
+            contributing_event_ids=["e1", "e2", "e3"],
+            summary="Bob staged documents for exfiltration",
+            payload={"documents": ["doc-1", "doc-2"], "window_minutes": 5},
+        )
+        store.extend_alerts([alert])
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.alerts), 1)
+        restored = fresh.alerts[0]
+        self.assertEqual(restored.alert_id, alert.alert_id)
+        self.assertEqual(restored.rule_id, "DET-DOC-006")
+        self.assertEqual(restored.severity, Severity.CRITICAL)
+        self.assertEqual(restored.contributing_event_ids, ["e1", "e2", "e3"])
+        self.assertIsNotNone(restored.created_at.tzinfo)
+
+    def test_response_round_trip_all_fields(self) -> None:
+        """ResponseAction round-trip must preserve all fields."""
+        from app.models import ResponseAction
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        resp = ResponseAction(
+            playbook_id="PB-DOC-006",
+            action_type="download_restriction",
+            actor_id="user-bob",
+            correlation_id="corr-rt-003",
+            reason="Bulk download detected",
+            related_alert_id="alert-001",
+            payload={"restricted_until": "2025-01-01"},
+        )
+        store.extend_responses([resp])
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.responses), 1)
+        restored = fresh.responses[0]
+        self.assertEqual(restored.response_id, resp.response_id)
+        self.assertEqual(restored.playbook_id, "PB-DOC-006")
+        self.assertEqual(restored.reason, "Bulk download detected")
+        self.assertIsNotNone(restored.created_at.tzinfo)
+
+    def test_incident_round_trip_with_timeline(self) -> None:
+        """Incident round-trip must preserve timeline entries and all fields."""
+        from app.models import Incident
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        incident = Incident(
+            incident_type="data_exfiltration",
+            primary_actor_id="user-bob",
+            actor_type="user",
+            actor_role="analyst",
+            correlation_id="corr-rt-004",
+            severity=Severity.CRITICAL,
+            confidence=Confidence.HIGH,
+            status="investigating",
+            risk_score=85,
+            detection_ids=["det-1", "det-2"],
+            detection_summary=["Auth failure burst", "Bulk doc access"],
+            response_ids=["resp-1"],
+            containment_status="partial",
+            event_ids=["e1", "e2", "e3"],
+            affected_documents=["doc-secret-1"],
+            affected_sessions=["sess-1"],
+            affected_services=["svc-data"],
+        )
+        incident.add_timeline_entry("detection", "det-1", "Auth failure burst detected")
+        incident.add_timeline_entry("response", "resp-1", "Session revoked")
+        store.upsert_incident(incident)
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertIn("corr-rt-004", fresh.incidents_by_correlation)
+        restored = fresh.incidents_by_correlation["corr-rt-004"]
+        self.assertEqual(restored.incident_id, incident.incident_id)
+        self.assertEqual(restored.status, "investigating")
+        self.assertEqual(restored.risk_score, 85)
+        self.assertEqual(restored.actor_role, "analyst")
+        self.assertEqual(restored.containment_status, "partial")
+        self.assertEqual(len(restored.timeline), 2)
+        self.assertEqual(restored.timeline[0].entry_type, "detection")
+        self.assertEqual(restored.timeline[1].summary, "Session revoked")
+        self.assertEqual(restored.affected_documents, ["doc-secret-1"])
+        self.assertIsNotNone(restored.created_at.tzinfo)
+
+    def test_incident_note_round_trip(self) -> None:
+        """Incident notes must survive round-trip."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        store.append_incident_note("corr-rt-005", {
+            "note_id": "note-rt-001",
+            "author": "analyst1",
+            "content": "Initial triage complete",
+            "created_at": "2025-01-01T00:00:00+00:00",
+        })
+        store.append_incident_note("corr-rt-005", {
+            "note_id": "note-rt-002",
+            "author": "soc_lead",
+            "content": "Escalated to IR team",
+            "created_at": "2025-01-01T01:00:00+00:00",
+        })
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        notes = fresh.incident_notes.get("corr-rt-005", [])
+        self.assertEqual(len(notes), 2)
+        self.assertEqual(notes[0]["author"], "analyst1")
+        self.assertEqual(notes[1]["content"], "Escalated to IR team")
+
+    def test_scenario_history_round_trip(self) -> None:
+        """Scenario history entries must survive round-trip in order."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        store.append_scenario_history({
+            "scenario_id": "scn-auth-001",
+            "correlation_id": "corr-001",
+            "operated_by": "red_team1",
+            "executed_at": "2025-01-01T00:00:00+00:00",
+        })
+        store.append_scenario_history({
+            "scenario_id": "scn-corr-006",
+            "correlation_id": "corr-002",
+            "operated_by": "admin",
+            "executed_at": "2025-01-01T01:00:00+00:00",
+        })
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.scenario_history), 2)
+        self.assertEqual(fresh.scenario_history[0]["scenario_id"], "scn-auth-001")
+        self.assertEqual(fresh.scenario_history[1]["operated_by"], "admin")
 
 
 if __name__ == "__main__":

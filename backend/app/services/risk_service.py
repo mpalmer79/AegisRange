@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from dataclasses import dataclass, field
 
-from app.models import Alert, Confidence, Severity
+from app.models import Alert, Confidence, Severity, utc_now
 from app.store import InMemoryStore
 
 
@@ -14,7 +14,7 @@ class RiskProfile:
     peak_score: int = 0
     contributing_rules: list[str] = field(default_factory=list)
     score_history: list[dict] = field(default_factory=list)
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    last_updated: datetime = field(default_factory=utc_now)
 
 
 SEVERITY_WEIGHTS = {
@@ -53,12 +53,12 @@ class RiskScoringService:
         if alert.rule_id not in profile.contributing_rules:
             profile.contributing_rules.append(alert.rule_id)
         profile.score_history.append({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "rule_id": alert.rule_id,
             "delta": delta,
             "new_score": profile.current_score,
         })
-        profile.last_updated = datetime.utcnow()
+        profile.last_updated = utc_now()
 
         # Update incident risk_score if one exists
         for incident in self.store.incidents_by_correlation.values():

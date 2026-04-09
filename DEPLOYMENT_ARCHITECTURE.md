@@ -47,12 +47,12 @@ Where possible, services should be stateless so they can scale horizontally, res
 |-----------|---------------|-------|
 | Backend | FastAPI single process | Runs via `uvicorn app.main:app` |
 | Frontend | Next.js 14 dev server | Runs via `npm run dev` |
-| Persistence | In-memory + SQLite write-through | State survives restart via `aegisrange.db` |
-| Database | SQLite (auto-created) | Write-through cache, disabled in test env |
-| Authentication | JWT enforced on all 35 protected routes | RBAC with 5 roles, `/health` and `/auth/login` public |
+| Persistence | In-memory primary + hybrid SQLite persistence | Incremental entity writes + operational state snapshots; state survives restart |
+| Database | SQLite (auto-created) | `aegisrange.db`, disabled in test env; path configurable via `DB_PATH` |
+| Authentication | JWT (HMAC-SHA256) enforced on all 35 protected routes | RBAC with 5 roles; PBKDF2-hashed passwords; secret externalized via `JWT_SECRET` |
 | Containerization | Dockerfiles + docker-compose | Backend and frontend containers |
-| CI | GitHub Actions | Runs pytest on push/PR |
-| Secrets | `.env.example` template | CORS_ORIGINS, LOG_LEVEL, APP_ENV |
+| CI | GitHub Actions | Runs ruff lint + pytest (backend), lint + build (frontend) |
+| Secrets | `.env.example` template | `JWT_SECRET`, `CORS_ORIGINS`, `TOKEN_EXPIRY_HOURS`, `DB_PATH`, `LOG_LEVEL`, `APP_ENV` |
 
 ### 3.2 Current Runtime Model
 
@@ -212,15 +212,16 @@ Denied: direct public or frontend access.
 | 4 | Application → Data | Least-privilege access, query integrity |
 | 5 | Internal domains | Service identity, access restrictions |
 
-**Current state**: Boundaries 1-3 exist logically but are not enforced (no TLS in local dev, no auth on routes). Boundaries 4-5 do not apply yet (no database, single monolith).
+**Current state**: Boundaries 1-3 exist logically. Auth is enforced on all protected routes (boundary 2-3). TLS is not present in local dev (expected at reverse proxy). Boundary 4 is partially implemented via SQLite persistence. Boundary 5 does not apply yet (single monolith).
 
 ---
 
 ## 10. Secret Management
 
 ### 10.1 Current State
-- 4 environment variables defined in `.env.example`: CORS_ORIGINS, LOG_LEVEL, LOG_FORMAT, APP_ENV
-- JWT signing uses a hardcoded secret in `auth_service.py` (acceptable for demo, must change for production)
+- 8 environment variables defined in `.env.example`: `APP_ENV`, `LOG_LEVEL`, `LOG_FORMAT`, `CORS_ORIGINS`, `JWT_SECRET`, `TOKEN_EXPIRY_HOURS`, `DB_PATH`, `NEXT_PUBLIC_API_URL`
+- JWT signing secret is externalized via `JWT_SECRET` env var. In development, a default dev secret is used. In production (`APP_ENV=production`), the application refuses to start without `JWT_SECRET` set
+- Passwords are hashed with PBKDF2-HMAC-SHA256 (260,000 iterations)
 - No secret manager integration
 
 ### 10.2 Target State
@@ -237,12 +238,13 @@ Denied: direct public or frontend access.
 ### 11.1 Current State
 Two conceptually separate identity systems exist:
 1. **IdentityService**: Simulates threat actor authentication for scenarios. Active and used.
-2. **AuthService**: Platform user authentication with JWT and RBAC. Built but not enforced on any route.
+2. **AuthService**: Platform user authentication with JWT (HMAC-SHA256) and RBAC. **Enforced on all 35 protected routes** via `require_role()` FastAPI dependency. PBKDF2-hashed passwords. JWT secret externalized via `JWT_SECRET` env var.
 
-### 11.2 Target State
-- AuthService enforced on all appropriate routes via `require_role()` dependency
-- Frontend login page with token management
-- Role-based endpoint access (admin, soc_manager, analyst, red_team, viewer)
+Frontend has login page, AuthProvider context, AuthGuard redirect, and automatic token attachment on all API calls.
+
+### 11.2 Target State (remaining)
+- Externalized JWT secret via managed secret store (currently env var)
+- Token refresh / rotation mechanism
 - IdentityService continues to handle in-scenario actor simulation
 
 ---
@@ -250,8 +252,8 @@ Two conceptually separate identity systems exist:
 ## 12. Availability and Failure Handling
 
 ### 12.1 Current State
-- Backend failure loses all in-memory state
-- No graceful degradation (single process, in-memory only)
+- Backend failure: in-memory state is lost but authoritative state survives in SQLite. On restart, entities (events, alerts, responses, incidents, notes, scenario history) and operational state (containment sets, risk profiles) are restored from SQLite. Derived state is rebuilt deterministically. Ephemeral state (simulated sessions) resets.
+- Pipeline writes are transactional: a crash mid-pipeline cannot leave partial entity state on disk.
 - Frontend failure: UI unavailable, backend unaffected
 
 ### 12.2 Target State
@@ -334,6 +336,6 @@ For a realistic but manageable deployment:
 
 This document describes both the current deployment reality and the target deployment architecture for AegisRange.
 
-**Current state**: Two containers (backend + frontend) with in-memory persistence, no database, no auth enforcement, no TLS, no secret management beyond environment variables. Functional for development and demonstration.
+**Current state**: Two containers (backend + frontend). In-memory primary store with hybrid SQLite persistence (incremental entity writes + operational state snapshots). JWT auth enforced on all 35 protected routes with RBAC and PBKDF2-hashed passwords. JWT secret externalized via environment variable. CORS origins configurable. No TLS (expected at reverse proxy). Functional for development and demonstration.
 
-**Target state**: A deployment model with database persistence, JWT auth enforcement, HTTPS, environment separation, network segmentation, and secret management. Designed to demonstrate production-grade operational thinking.
+**Target state**: HTTPS via reverse proxy, managed secret store, environment separation, network segmentation, Railway or cloud deployment. The core auth and persistence foundations are in place.

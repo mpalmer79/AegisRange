@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 from uuid import uuid4
 
-from app.models import Confidence, Event, Severity
+from app.models import Confidence, Event, Severity, utc_now
 from app.services.document_service import DocumentService
 from app.services.identity_service import IdentityService
 from app.services.pipeline_service import EventPipelineService
@@ -351,7 +350,7 @@ class ScenarioEngine:
             summary["operated_by"] = operated_by
         self.store.append_scenario_history({
             **summary,
-            "executed_at": datetime.utcnow().isoformat(),
+            "executed_at": utc_now().isoformat(),
         })
         return summary
 

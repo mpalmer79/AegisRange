@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from app.models import Incident
+from app.models import Incident, utc_now
 from app.store import InMemoryStore
 
 
@@ -33,8 +33,8 @@ class Campaign:
     shared_ttps: list[str] = field(default_factory=list)
     severity: str = "medium"
     confidence: str = "medium"
-    first_seen: datetime = field(default_factory=datetime.utcnow)
-    last_seen: datetime = field(default_factory=datetime.utcnow)
+    first_seen: datetime = field(default_factory=utc_now)
+    last_seen: datetime = field(default_factory=utc_now)
     summary: str = ""
 
 

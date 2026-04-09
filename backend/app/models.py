@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 from uuid import uuid4
+
+
+def utc_now() -> datetime:
+    """Return the current time as a timezone-aware UTC datetime.
+
+    Replaces the deprecated ``datetime.utcnow()`` throughout the codebase.
+    """
+    return datetime.now(timezone.utc)
 
 
 class Severity(str, Enum):
@@ -44,8 +52,8 @@ class Event:
     confidence: Confidence = Confidence.LOW
     risk_score: int | None = None
     event_id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: datetime = field(default_factory=datetime.utcnow)
-    ingestion_timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=utc_now)
+    ingestion_timestamp: datetime = field(default_factory=utc_now)
 
 
 @dataclass(frozen=True)
@@ -60,7 +68,7 @@ class Alert:
     summary: str
     payload: dict[str, Any]
     alert_id: str = field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
 
 
 @dataclass(frozen=True)
@@ -73,7 +81,7 @@ class ResponseAction:
     related_alert_id: str
     payload: dict[str, Any]
     response_id: str = field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
 
 
 @dataclass(frozen=True)
@@ -105,12 +113,12 @@ class Incident:
     affected_sessions: list[str] = field(default_factory=list)
     affected_services: list[str] = field(default_factory=list)
     incident_id: str = field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
     closed_at: datetime | None = None
 
     def add_timeline_entry(self, entry_type: str, reference_id: str, summary: str) -> None:
-        now = datetime.utcnow()
+        now = utc_now()
         self.timeline.append(
             TimelineEntry(timestamp=now, entry_type=entry_type, reference_id=reference_id, summary=summary)
         )

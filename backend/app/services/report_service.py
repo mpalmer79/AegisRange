@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
-from app.models import Severity
+from app.models import Severity, utc_now
 from app.services.killchain_service import RULE_TO_STAGE, STAGE_DISPLAY_NAMES
 from app.store import InMemoryStore
 
@@ -71,7 +71,7 @@ class ReportService:
 
     def generate_report(self, title: str = "AegisRange Exercise Report") -> ExerciseReport:
         """Generate a comprehensive report by analyzing all data in the store."""
-        now = datetime.utcnow()
+        now = utc_now()
 
         # Determine exercise window from event timestamps
         exercise_window = self._calculate_exercise_window()
@@ -136,7 +136,7 @@ class ReportService:
     def _calculate_exercise_window(self) -> dict:
         """Determine the exercise time window from event timestamps."""
         if not self.store.events:
-            now = datetime.utcnow()
+            now = utc_now()
             return {"start": now.isoformat(), "end": now.isoformat()}
 
         timestamps = [e.timestamp for e in self.store.events]
