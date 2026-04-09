@@ -12,6 +12,7 @@ and recorded on every emitted event via ``platform_user_id``.
 header) so it is clearly simulation metadata, not a trusted network
 property.
 """
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -45,7 +46,9 @@ def read_document(
     if identity_service.is_step_up_required(payload.actor_id):
         raise HTTPException(status_code=403, detail="Step-up authentication required")
     if not identity_service.is_known_simulation_actor(payload.actor_id):
-        raise HTTPException(status_code=422, detail=f"Unknown simulation actor: {payload.actor_id}")
+        raise HTTPException(
+            status_code=422, detail=f"Unknown simulation actor: {payload.actor_id}"
+        )
 
     allowed, document = document_service.can_read(payload.actor_role, document_id)
     if document is None:
@@ -82,7 +85,11 @@ def read_document(
     )
     pipeline.process(event)
 
-    return {"allowed": allowed, "document_id": document.document_id, "classification": document.classification}
+    return {
+        "allowed": allowed,
+        "document_id": document.document_id,
+        "classification": document.classification,
+    }
 
 
 @router.post("/{document_id}/download", dependencies=[Depends(require_role("viewer"))])
@@ -96,9 +103,13 @@ def download_document(
     if identity_service.is_step_up_required(payload.actor_id):
         raise HTTPException(status_code=403, detail="Step-up authentication required")
     if not identity_service.is_known_simulation_actor(payload.actor_id):
-        raise HTTPException(status_code=422, detail=f"Unknown simulation actor: {payload.actor_id}")
+        raise HTTPException(
+            status_code=422, detail=f"Unknown simulation actor: {payload.actor_id}"
+        )
 
-    allowed, document = document_service.can_download(payload.actor_role, document_id, actor_id=payload.actor_id)
+    allowed, document = document_service.can_download(
+        payload.actor_role, document_id, actor_id=payload.actor_id
+    )
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -106,7 +117,9 @@ def download_document(
     platform_user_id = platform_user.sub if platform_user else "unknown"
 
     event = Event(
-        event_type="document.download.success" if allowed else "document.download.failure",
+        event_type="document.download.success"
+        if allowed
+        else "document.download.failure",
         category="document",
         actor_id=payload.actor_id,
         actor_type="user",
@@ -133,4 +146,8 @@ def download_document(
     )
     pipeline.process(event)
 
-    return {"allowed": allowed, "document_id": document.document_id, "classification": document.classification}
+    return {
+        "allowed": allowed,
+        "document_id": document.document_id,
+        "classification": document.classification,
+    }

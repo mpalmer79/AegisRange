@@ -1,4 +1,5 @@
 """1E.4: API route tests via FastAPI TestClient."""
+
 from __future__ import annotations
 
 import unittest
@@ -24,7 +25,9 @@ class TestHealthEndpoint(APITestBase):
 
 class TestLoginEndpoint(APITestBase):
     def test_successful_login(self) -> None:
-        resp = self.client.post("/identity/login", json={"username": "alice", "password": "correct-horse"})
+        resp = self.client.post(
+            "/identity/login", json={"username": "alice", "password": "correct-horse"}
+        )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data["success"])
@@ -32,26 +35,34 @@ class TestLoginEndpoint(APITestBase):
         self.assertIsNotNone(data["session_id"])
 
     def test_failed_login(self) -> None:
-        resp = self.client.post("/identity/login", json={"username": "alice", "password": "wrong"})
+        resp = self.client.post(
+            "/identity/login", json={"username": "alice", "password": "wrong"}
+        )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertFalse(data["success"])
 
     def test_unknown_user(self) -> None:
-        resp = self.client.post("/identity/login", json={"username": "unknown", "password": "x"})
+        resp = self.client.post(
+            "/identity/login", json={"username": "unknown", "password": "x"}
+        )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertFalse(data["success"])
 
     def test_login_emits_event(self) -> None:
-        self.client.post("/identity/login", json={"username": "alice", "password": "correct-horse"})
+        self.client.post(
+            "/identity/login", json={"username": "alice", "password": "correct-horse"}
+        )
         self.assertGreater(len(STORE.events), 0)
         self.assertEqual(STORE.events[0].event_type, "authentication.login.success")
 
 
 class TestSessionRevocation(APITestBase):
     def test_revoke_existing_session(self) -> None:
-        login_resp = self.client.post("/identity/login", json={"username": "bob", "password": "hunter2"})
+        login_resp = self.client.post(
+            "/identity/login", json={"username": "bob", "password": "hunter2"}
+        )
         session_id = login_resp.json()["session_id"]
 
         resp = self.client.post(f"/identity/sessions/{session_id}/revoke")
@@ -102,7 +113,11 @@ class TestDocumentRead(APITestBase):
         STORE.revoked_sessions.add("session-abc")
         resp = self.client.post(
             "/documents/doc-001/read",
-            json={"actor_id": "user-alice", "actor_role": "analyst", "session_id": "session-abc"},
+            json={
+                "actor_id": "user-alice",
+                "actor_role": "analyst",
+                "session_id": "session-abc",
+            },
         )
         self.assertEqual(resp.status_code, 401)
 
@@ -171,7 +186,9 @@ class TestEventsEndpoint(APITestBase):
         self.assertEqual(resp.json(), [])
 
     def test_events_after_login(self) -> None:
-        self.client.post("/identity/login", json={"username": "alice", "password": "correct-horse"})
+        self.client.post(
+            "/identity/login", json={"username": "alice", "password": "correct-horse"}
+        )
         resp = self.client.get("/events")
         self.assertEqual(resp.status_code, 200)
         events = resp.json()
@@ -179,18 +196,30 @@ class TestEventsEndpoint(APITestBase):
         self.assertEqual(events[0]["actor_id"], "user-alice")
 
     def test_events_filter_by_actor(self) -> None:
-        self.client.post("/identity/login", json={"username": "alice", "password": "correct-horse"})
-        self.client.post("/identity/login", json={"username": "bob", "password": "hunter2"})
+        self.client.post(
+            "/identity/login", json={"username": "alice", "password": "correct-horse"}
+        )
+        self.client.post(
+            "/identity/login", json={"username": "bob", "password": "hunter2"}
+        )
         resp = self.client.get("/events", params={"actor_id": "user-alice"})
         events = resp.json()
         self.assertTrue(all(e["actor_id"] == "user-alice" for e in events))
 
     def test_events_filter_by_type(self) -> None:
-        self.client.post("/identity/login", json={"username": "alice", "password": "wrong"})
-        self.client.post("/identity/login", json={"username": "alice", "password": "correct-horse"})
-        resp = self.client.get("/events", params={"event_type": "authentication.login.failure"})
+        self.client.post(
+            "/identity/login", json={"username": "alice", "password": "wrong"}
+        )
+        self.client.post(
+            "/identity/login", json={"username": "alice", "password": "correct-horse"}
+        )
+        resp = self.client.get(
+            "/events", params={"event_type": "authentication.login.failure"}
+        )
         events = resp.json()
-        self.assertTrue(all(e["event_type"] == "authentication.login.failure" for e in events))
+        self.assertTrue(
+            all(e["event_type"] == "authentication.login.failure" for e in events)
+        )
 
 
 class TestAlertsEndpoint(APITestBase):
@@ -237,16 +266,22 @@ class TestIncidentsEndpoints(APITestBase):
         scenario_resp = self.client.post("/scenarios/scn-auth-001")
         corr = scenario_resp.json()["correlation_id"]
 
-        resp = self.client.patch(f"/incidents/{corr}/status", json={"status": "investigating"})
+        resp = self.client.patch(
+            f"/incidents/{corr}/status", json={"status": "investigating"}
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "investigating")
 
-        resp = self.client.patch(f"/incidents/{corr}/status", json={"status": "contained"})
+        resp = self.client.patch(
+            f"/incidents/{corr}/status", json={"status": "contained"}
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "contained")
         self.assertEqual(resp.json()["containment_status"], "full")
 
-        resp = self.client.patch(f"/incidents/{corr}/status", json={"status": "resolved"})
+        resp = self.client.patch(
+            f"/incidents/{corr}/status", json={"status": "resolved"}
+        )
         self.assertEqual(resp.status_code, 200)
 
         resp = self.client.patch(f"/incidents/{corr}/status", json={"status": "closed"})
@@ -285,7 +320,9 @@ class TestCorrelationMiddleware(APITestBase):
         self.assertTrue(resp.headers["x-correlation-id"].startswith("corr-"))
 
     def test_correlation_id_preserved(self) -> None:
-        resp = self.client.get("/health", headers={"x-correlation-id": "my-custom-corr"})
+        resp = self.client.get(
+            "/health", headers={"x-correlation-id": "my-custom-corr"}
+        )
         self.assertEqual(resp.headers["x-correlation-id"], "my-custom-corr")
 
 

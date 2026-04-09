@@ -92,7 +92,9 @@ class PipelinePhase2Tests(unittest.TestCase):
 
         self.assertEqual(summary["scenario_id"], "SCN-DOC-004")
         self.assertGreaterEqual(summary["alerts_total"], 1)
-        self.assertTrue(any(alert.rule_id == "DET-DOC-006" for alert in self.store.alerts))
+        self.assertTrue(
+            any(alert.rule_id == "DET-DOC-006" for alert in self.store.alerts)
+        )
         self.assertIn("user-bob", summary["download_restricted_actors"])
 
 

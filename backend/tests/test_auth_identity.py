@@ -1,4 +1,5 @@
 """Tests for auth hardening: identity attribution, expiry consistency, boundary separation."""
+
 from __future__ import annotations
 
 import unittest
@@ -46,7 +47,8 @@ class TestScenarioAttribution(unittest.TestCase):
             self.assertEqual(resp.status_code, 200, f"Failed for {scenario_id}")
             data = resp.json()
             self.assertEqual(
-                data["operated_by"], "red_team1",
+                data["operated_by"],
+                "red_team1",
                 f"operated_by missing for {scenario_id}",
             )
 
@@ -98,7 +100,9 @@ class TestIncidentStatusAttribution(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         timeline = resp.json()["timeline"]
-        transition_entries = [e for e in timeline if e["entry_type"] == "state_transition"]
+        transition_entries = [
+            e for e in timeline if e["entry_type"] == "state_transition"
+        ]
         self.assertTrue(len(transition_entries) > 0)
         last_transition = transition_entries[-1]
         self.assertIn("analyst1", last_transition["summary"])
@@ -120,10 +124,13 @@ class TestTokenExpirySingleSource(unittest.TestCase):
 
     def test_login_returns_expiry_from_jwt(self) -> None:
         client = TestClient(app)
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertIn("expires_at", data)
@@ -138,10 +145,13 @@ class TestTokenExpirySingleSource(unittest.TestCase):
 
     def test_expiry_matches_jwt_payload(self) -> None:
         client = TestClient(app)
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         data = resp.json()
         # Token is in the httpOnly cookie, not the JSON body
         token = resp.cookies.get("aegisrange_token")
@@ -171,26 +181,35 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
 
     def test_platform_login_endpoint_is_public(self) -> None:
         client = TestClient(app)
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
 
     def test_identity_login_requires_platform_auth(self) -> None:
         client = TestClient(app)
-        resp = client.post("/identity/login", json={
-            "username": "alice",
-            "password": "correct-horse",
-        })
+        resp = client.post(
+            "/identity/login",
+            json={
+                "username": "alice",
+                "password": "correct-horse",
+            },
+        )
         self.assertEqual(resp.status_code, 401)
 
     def test_identity_login_works_with_auth(self) -> None:
         client = authenticated_client("viewer")
-        resp = client.post("/identity/login", json={
-            "username": "alice",
-            "password": "correct-horse",
-        })
+        resp = client.post(
+            "/identity/login",
+            json={
+                "username": "alice",
+                "password": "correct-horse",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         # This returns simulated actor data, not platform user data
@@ -201,10 +220,13 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
 
     def test_platform_login_sets_httponly_cookie(self) -> None:
         client = TestClient(app)
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         data = resp.json()
         # Token is in the httpOnly cookie, NOT in the JSON body
         self.assertNotIn("token", data)

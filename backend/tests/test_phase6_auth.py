@@ -1,4 +1,5 @@
 """Tests for Phase 6: JWT authentication and RBAC."""
+
 from __future__ import annotations
 
 import unittest
@@ -26,7 +27,9 @@ class TestAuthService(unittest.TestCase):
         self.assertIsNone(expires_at)
 
     def test_authenticate_unknown_user(self) -> None:
-        success, token, expires_at = self.service.authenticate("nonexistent", "anything")
+        success, token, expires_at = self.service.authenticate(
+            "nonexistent", "anything"
+        )
         self.assertFalse(success)
         self.assertIsNone(token)
         self.assertIsNone(expires_at)
@@ -83,10 +86,13 @@ class TestAuthAPI(unittest.TestCase):
         self.client.post("/admin/reset")
 
     def test_login_success(self) -> None:
-        resp = self.client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = self.client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         # Token is in httpOnly cookie, NOT in JSON body
@@ -98,10 +104,13 @@ class TestAuthAPI(unittest.TestCase):
         self.assertIn("expires_at", data)
 
     def test_login_failure(self) -> None:
-        resp = self.client.post("/auth/login", json={
-            "username": "admin",
-            "password": "wrong",
-        })
+        resp = self.client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "wrong",
+            },
+        )
         self.assertEqual(resp.status_code, 401)
 
     def test_list_users(self) -> None:
@@ -115,11 +124,16 @@ class TestAuthAPI(unittest.TestCase):
 
     def test_all_default_users_can_login(self) -> None:
         for username in DEFAULT_USERS:
-            resp = self.client.post("/auth/login", json={
-                "username": username,
-                "password": f"{username}_pass",
-            })
-            self.assertEqual(resp.status_code, 200, f"{username} should be able to login")
+            resp = self.client.post(
+                "/auth/login",
+                json={
+                    "username": username,
+                    "password": f"{username}_pass",
+                },
+            )
+            self.assertEqual(
+                resp.status_code, 200, f"{username} should be able to login"
+            )
 
 
 if __name__ == "__main__":

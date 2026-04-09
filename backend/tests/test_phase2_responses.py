@@ -1,4 +1,5 @@
 """Phase 2: Unit tests for PB-SVC-007, PB-ART-008, PB-POL-009, PB-CORR-010 response playbooks."""
+
 from __future__ import annotations
 
 import unittest
@@ -127,7 +128,10 @@ class TestPBPOL009(unittest.TestCase):
             rule_id="DET-POL-009",
             severity=Severity.CRITICAL,
             actor_id="user-alice",
-            payload={"policy_id": "policy-001", "actor_risk_context": "step_up_required"},
+            payload={
+                "policy_id": "policy-001",
+                "actor_risk_context": "step_up_required",
+            },
         )
         responses = self.orchestrator.execute(alert)
         self.assertEqual(len(responses), 1)
@@ -139,7 +143,10 @@ class TestPBPOL009(unittest.TestCase):
         alert = _make_alert(
             rule_id="DET-POL-009",
             actor_id="user-alice",
-            payload={"policy_id": "policy-001", "actor_risk_context": "step_up_required"},
+            payload={
+                "policy_id": "policy-001",
+                "actor_risk_context": "step_up_required",
+            },
         )
         self.orchestrator.execute(alert)
         self.assertIn("user-alice", self.store.step_up_required)

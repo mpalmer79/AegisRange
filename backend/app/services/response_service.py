@@ -69,7 +69,10 @@ class ResponseOrchestrator:
                 correlation_id=alert.correlation_id,
                 reason=alert.summary,
                 related_alert_id=alert.alert_id,
-                payload={"session_id": session_id, "source_ip_list": alert.payload.get("source_ip_list")},
+                payload={
+                    "session_id": session_id,
+                    "source_ip_list": alert.payload.get("source_ip_list"),
+                },
             )
         ]
 
@@ -194,7 +197,10 @@ class ResponseOrchestrator:
                 related_alert_id=alert.alert_id,
                 payload={
                     "detection_ids": alert.payload.get("detection_ids"),
-                    "containment_actions": ["step_up_authentication", "download_restriction"],
+                    "containment_actions": [
+                        "step_up_authentication",
+                        "download_restriction",
+                    ],
                 },
             )
         ]

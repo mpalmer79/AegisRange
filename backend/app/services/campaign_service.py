@@ -54,7 +54,9 @@ class CampaignDetectionService:
         # 1. Shared actors: group incidents by primary_actor_id
         actor_to_correlations: defaultdict[str, list[str]] = defaultdict(list)
         for incident in incidents:
-            actor_to_correlations[incident.primary_actor_id].append(incident.correlation_id)
+            actor_to_correlations[incident.primary_actor_id].append(
+                incident.correlation_id
+            )
         for actor_id, correlation_ids in actor_to_correlations.items():
             if len(correlation_ids) >= 2:
                 campaign_groups.append(set(correlation_ids))
@@ -65,13 +67,20 @@ class CampaignDetectionService:
                 rules_i = set(incidents[i].detection_ids)
                 rules_j = set(incidents[j].detection_ids)
                 if rules_i & rules_j:
-                    campaign_groups.append({incidents[i].correlation_id, incidents[j].correlation_id})
+                    campaign_groups.append(
+                        {incidents[i].correlation_id, incidents[j].correlation_id}
+                    )
 
         # 3. Temporal proximity: incidents within the time window
         for i in range(len(incidents)):
             for j in range(i + 1, len(incidents)):
-                if abs(incidents[i].created_at - incidents[j].created_at) <= TEMPORAL_WINDOW:
-                    campaign_groups.append({incidents[i].correlation_id, incidents[j].correlation_id})
+                if (
+                    abs(incidents[i].created_at - incidents[j].created_at)
+                    <= TEMPORAL_WINDOW
+                ):
+                    campaign_groups.append(
+                        {incidents[i].correlation_id, incidents[j].correlation_id}
+                    )
 
         # Merge overlapping groups
         merged = self._merge_groups(campaign_groups)
@@ -87,7 +96,11 @@ class CampaignDetectionService:
             if len(group) < 2:
                 continue
 
-            group_incidents = [correlation_to_incident[cid] for cid in group if cid in correlation_to_incident]
+            group_incidents = [
+                correlation_to_incident[cid]
+                for cid in group
+                if cid in correlation_to_incident
+            ]
             if len(group_incidents) < 2:
                 continue
 
@@ -95,14 +108,18 @@ class CampaignDetectionService:
             actor_counts: defaultdict[str, int] = defaultdict(int)
             for inc in group_incidents:
                 actor_counts[inc.primary_actor_id] += 1
-            shared_actors = sorted(actor for actor, count in actor_counts.items() if count >= 2)
+            shared_actors = sorted(
+                actor for actor, count in actor_counts.items() if count >= 2
+            )
 
             # Determine shared TTPs (rule_ids that appear in multiple incidents)
             rule_counts: defaultdict[str, int] = defaultdict(int)
             for inc in group_incidents:
                 for rule_id in set(inc.detection_ids):
                     rule_counts[rule_id] += 1
-            shared_ttps = sorted(rule for rule, count in rule_counts.items() if count >= 2)
+            shared_ttps = sorted(
+                rule for rule, count in rule_counts.items() if count >= 2
+            )
 
             # Classify campaign type
             incident_types = {inc.incident_type for inc in group_incidents}
@@ -113,14 +130,18 @@ class CampaignDetectionService:
             severity_order = ["informational", "low", "medium", "high", "critical"]
             max_severity = "medium"
             for inc in group_incidents:
-                if severity_order.index(inc.severity.value) > severity_order.index(max_severity):
+                if severity_order.index(inc.severity.value) > severity_order.index(
+                    max_severity
+                ):
                     max_severity = inc.severity.value
 
             # Determine confidence
             confidence_order = ["low", "medium", "high"]
             max_confidence = "medium"
             for inc in group_incidents:
-                if confidence_order.index(inc.confidence.value) > confidence_order.index(max_confidence):
+                if confidence_order.index(
+                    inc.confidence.value
+                ) > confidence_order.index(max_confidence):
                     max_confidence = inc.confidence.value
 
             # Determine time bounds

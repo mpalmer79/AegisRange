@@ -21,7 +21,11 @@ class IdentityService:
     def __init__(self, store: InMemoryStore) -> None:
         self.store = store
         self._users = {
-            "alice": {"password": "correct-horse", "role": "analyst", "actor_id": "user-alice"},
+            "alice": {
+                "password": "correct-horse",
+                "role": "analyst",
+                "actor_id": "user-alice",
+            },
             "bob": {"password": "hunter2", "role": "admin", "actor_id": "user-bob"},
         }
 

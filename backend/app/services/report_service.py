@@ -24,14 +24,35 @@ ALL_DETECTION_RULES: dict[str, str] = {
 MITRE_RULE_MAPPING: dict[str, dict[str, str]] = {
     "DET-AUTH-001": {"tactic": "Credential Access", "technique": "T1110 - Brute Force"},
     "DET-AUTH-002": {"tactic": "Initial Access", "technique": "T1078 - Valid Accounts"},
-    "DET-SESSION-003": {"tactic": "Lateral Movement", "technique": "T1550 - Use Alternate Authentication Material"},
-    "DET-DOC-004": {"tactic": "Collection", "technique": "T1213 - Data from Information Repositories"},
-    "DET-DOC-005": {"tactic": "Collection", "technique": "T1119 - Automated Collection"},
-    "DET-DOC-006": {"tactic": "Exfiltration", "technique": "T1041 - Exfiltration Over C2 Channel"},
-    "DET-SVC-007": {"tactic": "Privilege Escalation", "technique": "T1068 - Exploitation for Privilege Escalation"},
+    "DET-SESSION-003": {
+        "tactic": "Lateral Movement",
+        "technique": "T1550 - Use Alternate Authentication Material",
+    },
+    "DET-DOC-004": {
+        "tactic": "Collection",
+        "technique": "T1213 - Data from Information Repositories",
+    },
+    "DET-DOC-005": {
+        "tactic": "Collection",
+        "technique": "T1119 - Automated Collection",
+    },
+    "DET-DOC-006": {
+        "tactic": "Exfiltration",
+        "technique": "T1041 - Exfiltration Over C2 Channel",
+    },
+    "DET-SVC-007": {
+        "tactic": "Privilege Escalation",
+        "technique": "T1068 - Exploitation for Privilege Escalation",
+    },
     "DET-ART-008": {"tactic": "Defense Evasion", "technique": "T1036 - Masquerading"},
-    "DET-POL-009": {"tactic": "Persistence", "technique": "T1098 - Account Manipulation"},
-    "DET-CORR-010": {"tactic": "Impact", "technique": "T1486 - Data Encrypted for Impact"},
+    "DET-POL-009": {
+        "tactic": "Persistence",
+        "technique": "T1098 - Account Manipulation",
+    },
+    "DET-CORR-010": {
+        "tactic": "Impact",
+        "technique": "T1486 - Data Encrypted for Impact",
+    },
 }
 
 CONTAINMENT_ACTION_TYPES: set[str] = {
@@ -69,7 +90,9 @@ class ReportService:
     def __init__(self, store: InMemoryStore) -> None:
         self.store = store
 
-    def generate_report(self, title: str = "AegisRange Exercise Report") -> ExerciseReport:
+    def generate_report(
+        self, title: str = "AegisRange Exercise Report"
+    ) -> ExerciseReport:
         """Generate a comprehensive report by analyzing all data in the store."""
         now = utc_now()
 
@@ -89,7 +112,9 @@ class ReportService:
         risk_summary = self._calculate_risk_summary()
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(detection_coverage, response_effectiveness)
+        recommendations = self._generate_recommendations(
+            detection_coverage, response_effectiveness
+        )
 
         # Calculate MITRE coverage
         mitre_coverage = self._calculate_mitre_coverage()
@@ -185,15 +210,17 @@ class ReportService:
                         STAGE_DISPLAY_NAMES.get(stage_key, stage_key)
                     )
 
-            results.append({
-                "scenario_id": scenario_id,
-                "correlation_id": correlation_id,
-                "events_generated": events_generated,
-                "alerts_triggered": alerts_triggered,
-                "responses_executed": responses_executed,
-                "detection_rules_fired": detection_rules_fired,
-                "kill_chain_stages_reached": kill_chain_stages_reached,
-            })
+            results.append(
+                {
+                    "scenario_id": scenario_id,
+                    "correlation_id": correlation_id,
+                    "events_generated": events_generated,
+                    "alerts_triggered": alerts_triggered,
+                    "responses_executed": responses_executed,
+                    "detection_rules_fired": detection_rules_fired,
+                    "kill_chain_stages_reached": kill_chain_stages_reached,
+                }
+            )
 
         return results
 
@@ -207,11 +234,13 @@ class ReportService:
 
         rules_list: list[dict] = []
         for rule_id, rule_name in ALL_DETECTION_RULES.items():
-            rules_list.append({
-                "rule_id": rule_id,
-                "rule_name": rule_name,
-                "trigger_count": rule_trigger_counts.get(rule_id, 0),
-            })
+            rules_list.append(
+                {
+                    "rule_id": rule_id,
+                    "rule_name": rule_name,
+                    "trigger_count": rule_trigger_counts.get(rule_id, 0),
+                }
+            )
 
         rules_triggered = sum(1 for r in rules_list if r["trigger_count"] > 0)
 
@@ -226,8 +255,7 @@ class ReportService:
         total_responses = len(self.store.responses)
 
         containment_actions = sum(
-            1 for r in self.store.responses
-            if r.action_type in CONTAINMENT_ACTION_TYPES
+            1 for r in self.store.responses if r.action_type in CONTAINMENT_ACTION_TYPES
         )
 
         unique_playbooks = len({r.playbook_id for r in self.store.responses})
@@ -252,9 +280,9 @@ class ReportService:
         actors_assessed = len(profiles)
         scores = [(actor_id, p.current_score) for actor_id, p in profiles.items()]
         highest_risk_actor = max(scores, key=lambda x: x[1])[0] if scores else None
-        average_risk_score = round(
-            sum(s for _, s in scores) / len(scores), 2
-        ) if scores else 0.0
+        average_risk_score = (
+            round(sum(s for _, s in scores) / len(scores), 2) if scores else 0.0
+        )
 
         return {
             "actors_assessed": actors_assessed,
@@ -306,10 +334,7 @@ class ReportService:
             )
 
         # Check risk scores
-        all_zero = all(
-            p.current_score == 0
-            for p in self.store.risk_profiles.values()
-        )
+        all_zero = all(p.current_score == 0 for p in self.store.risk_profiles.values())
         if not self.store.risk_profiles or all_zero:
             recommendations.append(
                 "Risk scoring shows no elevated actors. Verify risk scoring "
@@ -338,9 +363,11 @@ class ReportService:
 
         total_techniques = len({m["technique"] for m in MITRE_RULE_MAPPING.values()})
 
-        coverage_percentage = round(
-            (len(techniques_covered) / total_techniques) * 100, 1
-        ) if total_techniques > 0 else 0.0
+        coverage_percentage = (
+            round((len(techniques_covered) / total_techniques) * 100, 1)
+            if total_techniques > 0
+            else 0.0
+        )
 
         return {
             "tactics_covered": sorted(tactics_covered),

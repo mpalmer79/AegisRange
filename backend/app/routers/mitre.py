@@ -1,4 +1,5 @@
 """MITRE ATT&CK routes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -31,7 +32,11 @@ def get_mitre_coverage() -> list[dict]:
             "tactic_id": e.tactic_id,
             "technique_id": e.technique_id,
             "technique_name": next(
-                (t.name for t in mitre_service._techniques.values() if t.id == e.technique_id),
+                (
+                    t.name
+                    for t in mitre_service._techniques.values()
+                    if t.id == e.technique_id
+                ),
                 e.technique_id,
             ),
             "rule_ids": e.rule_ids,
@@ -57,7 +62,9 @@ def get_mitre_tactic_coverage() -> list[dict]:
     ]
 
 
-@router.get("/scenarios/{scenario_id}/ttps", dependencies=[Depends(require_role("viewer"))])
+@router.get(
+    "/scenarios/{scenario_id}/ttps", dependencies=[Depends(require_role("viewer"))]
+)
 def get_mitre_scenario_ttps(scenario_id: str) -> list[dict]:
     techniques = mitre_service.get_scenario_ttps(scenario_id)
     return [mitre_technique_to_dict(t) for t in techniques]

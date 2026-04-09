@@ -31,23 +31,35 @@ class DocumentService:
             "doc-003": Document(document_id="doc-003", classification="restricted"),
         }
 
-    def can_read(self, actor_role: str, document_id: str) -> tuple[bool, Document | None]:
+    def can_read(
+        self, actor_role: str, document_id: str
+    ) -> tuple[bool, Document | None]:
         document = self.documents.get(document_id)
         if not document:
             return False, None
 
-        role_level = CLASSIFICATION_ORDER.index(ROLE_CLEARANCE.get(actor_role, "public"))
+        role_level = CLASSIFICATION_ORDER.index(
+            ROLE_CLEARANCE.get(actor_role, "public")
+        )
         doc_level = CLASSIFICATION_ORDER.index(document.classification)
         return role_level >= doc_level, document
 
-    def can_download(self, actor_role: str, document_id: str, actor_id: str | None = None) -> tuple[bool, Document | None]:
+    def can_download(
+        self, actor_role: str, document_id: str, actor_id: str | None = None
+    ) -> tuple[bool, Document | None]:
         document = self.documents.get(document_id)
         if not document:
             return False, None
 
-        if self.store and actor_id and actor_id in self.store.download_restricted_actors:
+        if (
+            self.store
+            and actor_id
+            and actor_id in self.store.download_restricted_actors
+        ):
             return False, document
 
-        role_level = CLASSIFICATION_ORDER.index(ROLE_CLEARANCE.get(actor_role, "public"))
+        role_level = CLASSIFICATION_ORDER.index(
+            ROLE_CLEARANCE.get(actor_role, "public")
+        )
         doc_level = CLASSIFICATION_ORDER.index(document.classification)
         return role_level >= doc_level, document

@@ -117,9 +117,16 @@ class Incident:
     updated_at: datetime = field(default_factory=utc_now)
     closed_at: datetime | None = None
 
-    def add_timeline_entry(self, entry_type: str, reference_id: str, summary: str) -> None:
+    def add_timeline_entry(
+        self, entry_type: str, reference_id: str, summary: str
+    ) -> None:
         now = utc_now()
         self.timeline.append(
-            TimelineEntry(timestamp=now, entry_type=entry_type, reference_id=reference_id, summary=summary)
+            TimelineEntry(
+                timestamp=now,
+                entry_type=entry_type,
+                reference_id=reference_id,
+                summary=summary,
+            )
         )
         self.updated_at = now

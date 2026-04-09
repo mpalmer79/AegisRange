@@ -9,6 +9,7 @@ Covers:
 - datetime.utcnow deprecation elimination
 - Trust boundary documentation on schemas
 """
+
 from __future__ import annotations
 
 import inspect
@@ -18,7 +19,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models import utc_now
-from app.store import STORE, InMemoryStore
+from app.store import InMemoryStore
 from tests.auth_helper import authenticated_client
 
 
@@ -28,10 +29,13 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
     def test_login_sets_httponly_cookie(self) -> None:
         """POST /auth/login should set an httpOnly cookie with the JWT."""
         client = TestClient(app)
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         cookie = resp.cookies.get("aegisrange_token")
         self.assertIsNotNone(cookie, "Login must set aegisrange_token cookie")
@@ -39,10 +43,13 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
     def test_login_response_does_not_contain_token(self) -> None:
         """The JSON body must NOT contain the token — only non-secret metadata."""
         client = TestClient(app)
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         data = resp.json()
         self.assertNotIn("token", data)
         self.assertIn("username", data)
@@ -53,10 +60,13 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
         """A client with only the cookie (no Authorization header) should be authenticated."""
         client = TestClient(app)
         # Login to get the cookie
-        login_resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        login_resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(login_resp.status_code, 200)
         # The TestClient automatically stores cookies; use them for next request
         resp = client.get("/auth/me")
@@ -68,10 +78,13 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
     def test_logout_clears_cookie(self) -> None:
         """POST /auth/logout should clear the auth cookie."""
         client = TestClient(app)
-        client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         resp = client.post("/auth/logout")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "logged_out")
@@ -283,7 +296,9 @@ class TestStoreWriteMethodDiscipline(unittest.TestCase):
     def test_block_routes(self) -> None:
         self.store.block_routes("svc-1", ["/api/admin", "/api/config"])
         self.assertIn("svc-1", self.store.blocked_routes)
-        self.assertEqual(self.store.blocked_routes["svc-1"], {"/api/admin", "/api/config"})
+        self.assertEqual(
+            self.store.blocked_routes["svc-1"], {"/api/admin", "/api/config"}
+        )
 
     def test_quarantine_artifact(self) -> None:
         self.store.quarantine_artifact("art-1")
@@ -440,10 +455,12 @@ class TestStoreReadAccessorDiscipline(unittest.TestCase):
                 # Allow method calls (e.g. STORE.get_events()) but not raw access
                 # Raw access would be pattern without '(' after
                 import re
+
                 # Match pattern NOT followed by underscore/letter (method call prefix)
-                matches = re.findall(rf'{re.escape(pattern)}(?![_a-zA-Z(])', source)
+                matches = re.findall(rf"{re.escape(pattern)}(?![_a-zA-Z(])", source)
                 self.assertEqual(
-                    len(matches), 0,
+                    len(matches),
+                    0,
                     f"Direct collection read '{pattern}' found in {mod.__name__}. "
                     "Use STORE accessor methods (e.g. STORE.get_events()) instead.",
                 )
@@ -491,7 +508,8 @@ class TestDatetimeDeprecation(unittest.TestCase):
         for py_file in backend.rglob("*.py"):
             hits = self._find_utcnow_calls(py_file.read_text())
             self.assertEqual(
-                hits, [],
+                hits,
+                [],
                 f"datetime.utcnow usage on line(s) {hits} in {py_file.relative_to(backend.parent)}",
             )
 
@@ -503,13 +521,15 @@ class TestDatetimeDeprecation(unittest.TestCase):
         for py_file in tests.rglob("*.py"):
             hits = self._find_utcnow_calls(py_file.read_text())
             self.assertEqual(
-                hits, [],
+                hits,
+                [],
                 f"datetime.utcnow usage on line(s) {hits} in {py_file.relative_to(tests.parent)}",
             )
 
     def test_zero_deprecation_warnings(self) -> None:
         """utc_now() should produce zero DeprecationWarning."""
         import warnings
+
         with warnings.catch_warnings():
             warnings.simplefilter("error", DeprecationWarning)
             utc_now()
@@ -520,6 +540,7 @@ class TestTrustBoundaryDocs(unittest.TestCase):
 
     def test_read_request_documents_simulation_context(self) -> None:
         from app.schemas import ReadRequest
+
         doc = ReadRequest.__doc__ or ""
         self.assertIn("simulated threat actor", doc)
         self.assertIn("platform_user_id", doc)
@@ -528,11 +549,13 @@ class TestTrustBoundaryDocs(unittest.TestCase):
 
     def test_download_request_references_read_request(self) -> None:
         from app.schemas import DownloadRequest
+
         doc = DownloadRequest.__doc__ or ""
         self.assertIn("ReadRequest", doc)
 
     def test_simulation_login_documents_simulated_source_ip(self) -> None:
         from app.schemas import SimulationLoginRequest
+
         doc = SimulationLoginRequest.__doc__ or ""
         self.assertIn("simulated_source_ip", doc)
         self.assertIn("NOT", doc)

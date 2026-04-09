@@ -1,9 +1,14 @@
 """Tests for Phase 6: Kill chain service and API endpoints."""
+
 from __future__ import annotations
 
 import unittest
 
-from app.services.killchain_service import KillChainService, RULE_TO_STAGE, KILL_CHAIN_STAGES
+from app.services.killchain_service import (
+    KillChainService,
+    RULE_TO_STAGE,
+    KILL_CHAIN_STAGES,
+)
 from app.store import STORE
 from tests.auth_helper import authenticated_client
 
@@ -15,16 +20,24 @@ class TestKillChainService(unittest.TestCase):
 
     def test_all_rules_have_stage_mapping(self) -> None:
         expected_rules = {
-            "DET-AUTH-001", "DET-AUTH-002", "DET-SESSION-003",
-            "DET-DOC-004", "DET-DOC-005", "DET-DOC-006",
-            "DET-SVC-007", "DET-ART-008", "DET-POL-009", "DET-CORR-010",
+            "DET-AUTH-001",
+            "DET-AUTH-002",
+            "DET-SESSION-003",
+            "DET-DOC-004",
+            "DET-DOC-005",
+            "DET-DOC-006",
+            "DET-SVC-007",
+            "DET-ART-008",
+            "DET-POL-009",
+            "DET-CORR-010",
         }
         self.assertEqual(set(RULE_TO_STAGE.keys()), expected_rules)
 
     def test_stage_mapping_returns_valid_stages(self) -> None:
         for rule_id, stage in RULE_TO_STAGE.items():
-            self.assertIn(stage, KILL_CHAIN_STAGES,
-                f"{rule_id} maps to invalid stage: {stage}")
+            self.assertIn(
+                stage, KILL_CHAIN_STAGES, f"{rule_id} maps to invalid stage: {stage}"
+            )
 
     def test_analyze_incident_after_scenario(self) -> None:
         client = authenticated_client()

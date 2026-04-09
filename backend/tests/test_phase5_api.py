@@ -1,4 +1,5 @@
 """Phase 5: API tests for analytics, notes, and export endpoints."""
+
 from __future__ import annotations
 
 import unittest
@@ -81,7 +82,10 @@ class TestIncidentNotesEndpoint(APITestBase):
 
         resp = self.client.post(
             f"/incidents/{corr}/notes",
-            json={"author": "analyst-1", "content": "Investigated and confirmed credential abuse."},
+            json={
+                "author": "analyst-1",
+                "content": "Investigated and confirmed credential abuse.",
+            },
         )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()

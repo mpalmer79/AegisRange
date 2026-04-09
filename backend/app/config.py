@@ -4,7 +4,9 @@ import os
 
 
 class Settings:
-    CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(
+        ","
+    )
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_FORMAT: str = os.getenv("LOG_FORMAT", "json")
     APP_ENV: str = os.getenv("APP_ENV", "development")
@@ -27,7 +29,7 @@ class Settings:
         if self.APP_ENV == "production":
             raise RuntimeError(
                 "JWT_SECRET environment variable must be set in production. "
-                "Generate a strong random secret: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                'Generate a strong random secret: python -c "import secrets; print(secrets.token_urlsafe(64))"'
             )
         return "aegisrange-dev-secret-do-not-use-in-production"
 

@@ -52,12 +52,14 @@ class RiskScoringService:
             profile.peak_score = profile.current_score
         if alert.rule_id not in profile.contributing_rules:
             profile.contributing_rules.append(alert.rule_id)
-        profile.score_history.append({
-            "timestamp": utc_now().isoformat(),
-            "rule_id": alert.rule_id,
-            "delta": delta,
-            "new_score": profile.current_score,
-        })
+        profile.score_history.append(
+            {
+                "timestamp": utc_now().isoformat(),
+                "rule_id": alert.rule_id,
+                "delta": delta,
+                "new_score": profile.current_score,
+            }
+        )
         profile.last_updated = utc_now()
 
         # Update incident risk_score if one exists

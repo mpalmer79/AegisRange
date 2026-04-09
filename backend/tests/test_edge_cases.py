@@ -1,4 +1,5 @@
 """1E.5: Edge case tests — empty store, duplicate alerts, concurrent correlations, validation."""
+
 from __future__ import annotations
 
 import unittest
@@ -92,7 +93,11 @@ class TestAlertDeduplication(unittest.TestCase):
             event = _make_event(correlation_id=corr)
             self.pipeline.process(event)
 
-        auth_001_alerts = [a for a in self.store.alerts if a.rule_id == "DET-AUTH-001" and a.correlation_id == corr]
+        auth_001_alerts = [
+            a
+            for a in self.store.alerts
+            if a.rule_id == "DET-AUTH-001" and a.correlation_id == corr
+        ]
         self.assertEqual(len(auth_001_alerts), 1)
 
     def test_different_correlations_not_deduped(self) -> None:
@@ -129,25 +134,32 @@ class TestConcurrentCorrelations(unittest.TestCase):
         # Scenario A: auth failures + success
         for _ in range(5):
             self.pipeline.process(_make_event(correlation_id=corr_a))
-        self.pipeline.process(_make_event(
-            event_type="authentication.login.success",
-            status="success",
-            status_code="200",
-            correlation_id=corr_a,
-        ))
+        self.pipeline.process(
+            _make_event(
+                event_type="authentication.login.success",
+                status="success",
+                status_code="200",
+                correlation_id=corr_a,
+            )
+        )
 
         # Scenario B: doc reads only (no incident expected unless >=20)
         for i in range(5):
-            self.pipeline.process(_make_event(
-                event_type="document.read.success",
-                category="document",
-                target_type="document",
-                target_id=f"doc-{i:03d}",
-                status="success",
-                status_code="200",
-                correlation_id=corr_b,
-                payload={"document_id": f"doc-{i:03d}", "classification": "internal"},
-            ))
+            self.pipeline.process(
+                _make_event(
+                    event_type="document.read.success",
+                    category="document",
+                    target_type="document",
+                    target_id=f"doc-{i:03d}",
+                    status="success",
+                    status_code="200",
+                    correlation_id=corr_b,
+                    payload={
+                        "document_id": f"doc-{i:03d}",
+                        "classification": "internal",
+                    },
+                )
+            )
 
         self.assertIn(corr_a, self.store.incidents_by_correlation)
         self.assertNotIn(corr_b, self.store.incidents_by_correlation)
@@ -322,7 +334,9 @@ class TestIncidentLifecycleEdgeCases(unittest.TestCase):
         incident = self.incidents.register_alert(alert_crit, source_event=event)
         self.assertEqual(incident.severity, Severity.CRITICAL)
         # Verify escalation timeline entry exists
-        escalation_entries = [e for e in incident.timeline if "escalated" in e.summary.lower()]
+        escalation_entries = [
+            e for e in incident.timeline if "escalated" in e.summary.lower()
+        ]
         self.assertGreater(len(escalation_entries), 0)
 
 
@@ -348,7 +362,9 @@ class TestPipelineEmitsSystemEvents(unittest.TestCase):
         for _ in range(5):
             self.pipeline.process(_make_event(correlation_id=corr))
 
-        detection_events = [e for e in self.store.events if e.event_type == "detection.rule.triggered"]
+        detection_events = [
+            e for e in self.store.events if e.event_type == "detection.rule.triggered"
+        ]
         self.assertGreater(len(detection_events), 0)
 
     def test_response_events_emitted(self) -> None:
@@ -356,7 +372,9 @@ class TestPipelineEmitsSystemEvents(unittest.TestCase):
         for _ in range(5):
             self.pipeline.process(_make_event(correlation_id=corr))
 
-        response_events = [e for e in self.store.events if e.event_type.startswith("response.")]
+        response_events = [
+            e for e in self.store.events if e.event_type.startswith("response.")
+        ]
         self.assertGreater(len(response_events), 0)
 
 

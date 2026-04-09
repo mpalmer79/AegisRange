@@ -1,4 +1,5 @@
 """1E.2: Unit tests for each response playbook individually."""
+
 from __future__ import annotations
 
 import unittest
@@ -39,7 +40,11 @@ class TestPBAUTH001(unittest.TestCase):
         self.orchestrator = ResponseOrchestrator(self.store)
 
     def test_produces_rate_limit_action(self) -> None:
-        alert = _make_alert(rule_id="DET-AUTH-001", severity=Severity.MEDIUM, payload={"failure_count": 5})
+        alert = _make_alert(
+            rule_id="DET-AUTH-001",
+            severity=Severity.MEDIUM,
+            payload={"failure_count": 5},
+        )
         responses = self.orchestrator.execute(alert)
         self.assertEqual(len(responses), 1)
         self.assertEqual(responses[0].playbook_id, "PB-AUTH-001")
@@ -83,7 +88,10 @@ class TestPBSESSION003(unittest.TestCase):
         session_id = f"session-{uuid4()}"
         alert = _make_alert(
             rule_id="DET-SESSION-003",
-            payload={"session_id": session_id, "source_ip_list": ["198.51.100.10", "203.0.113.55"]},
+            payload={
+                "session_id": session_id,
+                "source_ip_list": ["198.51.100.10", "203.0.113.55"],
+            },
         )
         responses = self.orchestrator.execute(alert)
         self.assertEqual(len(responses), 1)
@@ -111,7 +119,11 @@ class TestPBDOC004(unittest.TestCase):
     def test_produces_access_denied(self) -> None:
         alert = _make_alert(
             rule_id="DET-DOC-004",
-            payload={"document_id": "doc-003", "classification": "restricted", "actor_role": "analyst"},
+            payload={
+                "document_id": "doc-003",
+                "classification": "restricted",
+                "actor_role": "analyst",
+            },
         )
         responses = self.orchestrator.execute(alert)
         self.assertEqual(len(responses), 1)
@@ -121,7 +133,11 @@ class TestPBDOC004(unittest.TestCase):
     def test_response_preserves_context(self) -> None:
         alert = _make_alert(
             rule_id="DET-DOC-004",
-            payload={"document_id": "doc-003", "classification": "restricted", "actor_role": "analyst"},
+            payload={
+                "document_id": "doc-003",
+                "classification": "restricted",
+                "actor_role": "analyst",
+            },
         )
         responses = self.orchestrator.execute(alert)
         self.assertEqual(responses[0].payload["document_id"], "doc-003")
@@ -153,7 +169,11 @@ class TestPBDOC006(unittest.TestCase):
     def test_blocks_downloads(self) -> None:
         alert = _make_alert(
             rule_id="DET-DOC-006",
-            payload={"read_count": 3, "download_count": 3, "overlapping_documents": ["doc-001", "doc-002"]},
+            payload={
+                "read_count": 3,
+                "download_count": 3,
+                "overlapping_documents": ["doc-001", "doc-002"],
+            },
         )
         responses = self.orchestrator.execute(alert)
         self.assertEqual(len(responses), 1)

@@ -1,4 +1,5 @@
 """Scenario execution routes."""
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +17,11 @@ def _run_scenario(request: Request, scenario_id: str, run_fn):
     operated_by = platform_user.sub if platform_user else None
     logger.info(
         "Scenario execution started",
-        extra={"scenario": scenario_id, "correlation_id": request.state.correlation_id, "operated_by": operated_by},
+        extra={
+            "scenario": scenario_id,
+            "correlation_id": request.state.correlation_id,
+            "operated_by": operated_by,
+        },
     )
     return run_fn(request.state.correlation_id, operated_by=operated_by)
 

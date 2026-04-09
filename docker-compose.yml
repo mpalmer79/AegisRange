@@ -9,6 +9,16 @@ services:
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
       - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+      - JWT_SECRET=${JWT_SECRET:-}
+      - DB_PATH=/data/aegisrange.db
+    volumes:
+      - backend-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   frontend:
     build:
@@ -16,6 +26,10 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+
+volumes:
+  backend-data:

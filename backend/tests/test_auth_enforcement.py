@@ -1,4 +1,5 @@
 """Tests verifying that auth is enforced on protected routes."""
+
 from __future__ import annotations
 
 import json
@@ -74,10 +75,13 @@ class TestPublicEndpoints(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_auth_login_is_public(self) -> None:
-        resp = self.client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = self.client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
 
 

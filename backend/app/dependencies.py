@@ -3,6 +3,7 @@
 All service instances are created here so that both ``main.py`` and
 individual router modules can import them without circular dependencies.
 """
+
 from __future__ import annotations
 
 from app.services.auth_service import _auth_service, require_role  # noqa: F401

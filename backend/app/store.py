@@ -26,8 +26,12 @@ class InMemoryStore:
         self.blocked_routes: dict[str, set[str]] = {}
         self.quarantined_artifacts: set[str] = set()
         self.policy_change_restricted_actors: set[str] = set()
-        self.authorization_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
-        self.artifact_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
+        self.authorization_failures_by_actor: defaultdict[str, list[Event]] = (
+            defaultdict(list)
+        )
+        self.artifact_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(
+            list
+        )
         self.risk_profiles: dict[str, object] = {}
         self.scenario_history: list[dict] = []
         self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
@@ -201,7 +205,9 @@ class InMemoryStore:
 
     def find_actor_for_session(self, session_id: str) -> str | None:
         """Find the actor ID associated with a session."""
-        return next((a for a, s in self.actor_sessions.items() if s == session_id), None)
+        return next(
+            (a for a, s in self.actor_sessions.items() if s == session_id), None
+        )
 
     def get_containment_counts(self) -> dict[str, int]:
         """Return counts of all active containment measures."""
@@ -245,6 +251,7 @@ class InMemoryStore:
     def enable_persistence(self, db_path: str = "aegisrange.db") -> None:
         """Enable SQLite persistence. Call once at startup."""
         from app.persistence import PersistenceLayer
+
         self._persistence = PersistenceLayer(self, db_path=db_path)
         self._persistence.load()
 

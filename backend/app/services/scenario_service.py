@@ -23,7 +23,9 @@ class ScenarioEngine:
         self.pipeline = pipeline
         self.store = store
 
-    def run_auth_001(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
+    def run_auth_001(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
         """SCN-AUTH-001: credential abuse with suspicious success."""
         for _ in range(5):
             self.identity.authenticate("alice", "wrong")
@@ -60,7 +62,9 @@ class ScenarioEngine:
 
         return self._summary("SCN-AUTH-001", correlation_id, operated_by=operated_by)
 
-    def run_session_002(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
+    def run_session_002(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
         """SCN-SESSION-002: token reuse from conflicting origins."""
         login = self.identity.authenticate("bob", "hunter2")
         session_id = login.session_id
@@ -78,7 +82,11 @@ class ScenarioEngine:
                 target_id=session_id,
                 session_id=session_id,
                 source_ip="198.51.100.10",
-                payload={"token_id": session_id, "session_state": "issued", "authentication_strength": "password"},
+                payload={
+                    "token_id": session_id,
+                    "session_state": "issued",
+                    "authentication_strength": "password",
+                },
             )
         )
 
@@ -94,13 +102,18 @@ class ScenarioEngine:
                     target_id=session_id,
                     session_id=session_id,
                     source_ip=ip,
-                    payload={"session_id": session_id, "route": "/documents/doc-002/read"},
+                    payload={
+                        "session_id": session_id,
+                        "route": "/documents/doc-002/read",
+                    },
                 )
             )
 
         return self._summary("SCN-SESSION-002", correlation_id, operated_by=operated_by)
 
-    def run_doc_003(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
+    def run_doc_003(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
         """SCN-DOC-003: abnormal bulk read access."""
         login = self.identity.authenticate("bob", "hunter2")
         session_id = login.session_id
@@ -108,7 +121,9 @@ class ScenarioEngine:
         for index in range(20):
             allowed, doc = self.documents.can_read("admin", "doc-002")
             if not allowed or not doc:
-                raise RuntimeError("Scenario setup failed: expected admin document access")
+                raise RuntimeError(
+                    "Scenario setup failed: expected admin document access"
+                )
 
             self.pipeline.process(
                 self._new_event(
@@ -131,7 +146,9 @@ class ScenarioEngine:
 
         return self._summary("SCN-DOC-003", correlation_id, operated_by=operated_by)
 
-    def run_doc_004(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
+    def run_doc_004(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
         """SCN-DOC-004: read-to-download exfiltration pattern."""
         login = self.identity.authenticate("bob", "hunter2")
         session_id = login.session_id
@@ -152,14 +169,20 @@ class ScenarioEngine:
                     target_id=doc.document_id,
                     session_id=session_id,
                     source_ip="198.51.100.10",
-                    payload={"document_id": doc.document_id, "classification": doc.classification, "sensitivity_score": 90},
+                    payload={
+                        "document_id": doc.document_id,
+                        "classification": doc.classification,
+                        "sensitivity_score": 90,
+                    },
                 )
             )
 
         for doc_id in document_ids:
             allowed, doc = self.documents.can_download("admin", doc_id)
             if not allowed or not doc:
-                raise RuntimeError("Scenario setup failed: expected admin download access")
+                raise RuntimeError(
+                    "Scenario setup failed: expected admin download access"
+                )
             self.pipeline.process(
                 self._new_event(
                     event_type="document.download.success",
@@ -171,13 +194,19 @@ class ScenarioEngine:
                     target_id=doc.document_id,
                     session_id=session_id,
                     source_ip="198.51.100.10",
-                    payload={"document_id": doc.document_id, "classification": doc.classification, "sensitivity_score": 90},
+                    payload={
+                        "document_id": doc.document_id,
+                        "classification": doc.classification,
+                        "sensitivity_score": 90,
+                    },
                 )
             )
 
         return self._summary("SCN-DOC-004", correlation_id, operated_by=operated_by)
 
-    def run_svc_005(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
+    def run_svc_005(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
         """SCN-SVC-005: unauthorized service access."""
         routes = ["/admin/config", "/admin/secrets", "/admin/users", "/admin/audit"]
         for route in routes:
@@ -199,7 +228,9 @@ class ScenarioEngine:
 
         return self._summary("SCN-SVC-005", correlation_id, operated_by=operated_by)
 
-    def run_corr_006(self, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
+    def run_corr_006(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
         """SCN-CORR-006: multi-signal compromise sequence."""
 
         # --- Phase 1: Credential abuse (triggers DET-AUTH-001 + DET-AUTH-002) ---
@@ -244,7 +275,9 @@ class ScenarioEngine:
             doc_id = doc_ids_bulk[index % 2]
             allowed, doc = self.documents.can_read("analyst", doc_id)
             if not allowed or not doc:
-                raise RuntimeError("Scenario setup failed: expected analyst read access")
+                raise RuntimeError(
+                    "Scenario setup failed: expected analyst read access"
+                )
 
             self.pipeline.process(
                 self._new_event(
@@ -273,7 +306,9 @@ class ScenarioEngine:
             if doc_id in ("doc-001", "doc-002"):
                 allowed, doc = self.documents.can_read("analyst", doc_id)
                 if not allowed or not doc:
-                    raise RuntimeError("Scenario setup failed: expected analyst read access")
+                    raise RuntimeError(
+                        "Scenario setup failed: expected analyst read access"
+                    )
             else:
                 # doc-003 is restricted; analyst cannot read it via access control,
                 # but the scenario generates the event directly to test detection.
@@ -324,11 +359,19 @@ class ScenarioEngine:
 
         return self._summary("SCN-CORR-006", correlation_id, operated_by=operated_by)
 
-    def _summary(self, scenario_id: str, correlation_id: str, *, operated_by: str | None = None) -> dict[str, object]:
+    def _summary(
+        self, scenario_id: str, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
         incident = self.store.incidents_by_correlation.get(correlation_id)
-        events_count = len([e for e in self.store.events if e.correlation_id == correlation_id])
-        alerts_count = len([a for a in self.store.alerts if a.correlation_id == correlation_id])
-        responses_count = len([r for r in self.store.responses if r.correlation_id == correlation_id])
+        events_count = len(
+            [e for e in self.store.events if e.correlation_id == correlation_id]
+        )
+        alerts_count = len(
+            [a for a in self.store.alerts if a.correlation_id == correlation_id]
+        )
+        responses_count = len(
+            [r for r in self.store.responses if r.correlation_id == correlation_id]
+        )
         summary: dict[str, object] = {
             "scenario_id": scenario_id,
             "correlation_id": correlation_id,
@@ -344,14 +387,18 @@ class ScenarioEngine:
             "download_restricted_actors": sorted(self.store.download_restricted_actors),
             "disabled_services": sorted(self.store.disabled_services),
             "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
-            "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
+            "policy_change_restricted_actors": sorted(
+                self.store.policy_change_restricted_actors
+            ),
         }
         if operated_by:
             summary["operated_by"] = operated_by
-        self.store.append_scenario_history({
-            **summary,
-            "executed_at": utc_now().isoformat(),
-        })
+        self.store.append_scenario_history(
+            {
+                **summary,
+                "executed_at": utc_now().isoformat(),
+            }
+        )
         return summary
 
     @staticmethod
