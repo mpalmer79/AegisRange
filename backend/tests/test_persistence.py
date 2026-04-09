@@ -649,18 +649,26 @@ class TestIncrementalPersistence(unittest.TestCase):
         self.assertEqual(fresh.scenario_history[0]["scenario_id"], "SCN-AUTH-001")
 
     def test_save_persists_operational_state(self) -> None:
-        """store.save() should persist operational state (sets/dicts)."""
+        """store.save() should persist authoritative operational state."""
+        from app.models import Alert
+
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
         store.revoked_sessions.add("sess-001")
         store.step_up_required.add("user-alice")
-        store.alert_signatures.add(("DET-AUTH-001", "user-alice", "corr-001"))
+        # alert_signatures is derived — add an alert so it rebuilds on load
+        store.extend_alerts([Alert(
+            rule_id="DET-AUTH-001", rule_name="Test", severity=Severity.HIGH,
+            confidence=Confidence.HIGH, actor_id="user-alice", correlation_id="corr-001",
+            contributing_event_ids=[], summary="s", payload={},
+        )])
         store.save()
 
         fresh = InMemoryStore()
         fresh.enable_persistence(db_path=self.db_path)
         self.assertEqual(fresh.revoked_sessions, {"sess-001"})
         self.assertEqual(fresh.step_up_required, {"user-alice"})
+        # alert_signatures rebuilt from alerts
         self.assertIn(("DET-AUTH-001", "user-alice", "corr-001"), fresh.alert_signatures)
 
     def test_append_event_is_idempotent(self) -> None:
@@ -1047,6 +1055,168 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         )
         # Operational state also round-trips
         self.assertEqual(fresh.alert_signatures, store.alert_signatures)
+
+
+class TestStateClassificationEnforcement(unittest.TestCase):
+    """Tests enforcing the authoritative / derived / ephemeral classification.
+
+    These tests verify that:
+    - Derived state is NOT persisted; it is rebuilt from authoritative data on load.
+    - Ephemeral state is NOT persisted; it resets to empty on restart.
+    - Authoritative operational state round-trips correctly.
+    """
+
+    def setUp(self) -> None:
+        self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(self.db_fd)
+        os.unlink(self.db_path)
+
+    def tearDown(self) -> None:
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
+
+    def test_actor_sessions_is_ephemeral(self) -> None:
+        """actor_sessions must NOT survive restart — simulated sessions reset."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        store.actor_sessions["user-alice"] = "session-123"
+        store.actor_sessions["user-bob"] = "session-456"
+        store.save()
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(fresh.actor_sessions, {})
+
+    def test_alert_signatures_is_derived(self) -> None:
+        """alert_signatures must be rebuilt from alerts, not persisted directly."""
+        from app.models import Alert
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        store.extend_alerts([
+            Alert(
+                rule_id="DET-AUTH-001", rule_name="R1", severity=Severity.HIGH,
+                confidence=Confidence.HIGH, actor_id="user-alice",
+                correlation_id="corr-001", contributing_event_ids=[],
+                summary="s1", payload={},
+            ),
+            Alert(
+                rule_id="DET-DOC-005", rule_name="R2", severity=Severity.MEDIUM,
+                confidence=Confidence.MEDIUM, actor_id="user-bob",
+                correlation_id="corr-002", contributing_event_ids=[],
+                summary="s2", payload={},
+            ),
+        ])
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(fresh.alert_signatures, {
+            ("DET-AUTH-001", "user-alice", "corr-001"),
+            ("DET-DOC-005", "user-bob", "corr-002"),
+        })
+
+    def test_derived_event_indices_not_persisted_but_rebuilt(self) -> None:
+        """Derived event indices must be rebuilt from events, not stored."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        store.append_event(Event(
+            event_type="authentication.login.failure",
+            category="authentication", actor_id="user-alice",
+            actor_type="user", request_id="r1", correlation_id="c1",
+            status="failure", source_ip="10.0.0.1", origin="test",
+            payload={}, severity=Severity.MEDIUM, confidence=Confidence.HIGH,
+        ))
+        store.append_event(Event(
+            event_type="document.read.success",
+            category="document", actor_id="user-bob",
+            actor_type="user", request_id="r2", correlation_id="c2",
+            status="success", source_ip="10.0.0.1", origin="test",
+            payload={}, severity=Severity.LOW, confidence=Confidence.LOW,
+        ))
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(len(fresh.login_failures_by_actor["user-alice"]), 1)
+        self.assertEqual(len(fresh.document_reads_by_actor["user-bob"]), 1)
+        self.assertEqual(len(fresh.authorization_failures_by_actor), 0)
+        self.assertEqual(len(fresh.artifact_failures_by_actor), 0)
+
+    def test_containment_sets_are_authoritative(self) -> None:
+        """All containment sets must round-trip through persistence."""
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+        store.revoked_sessions.add("sess-1")
+        store.step_up_required.add("user-alice")
+        store.download_restricted_actors.add("user-bob")
+        store.disabled_services.add("svc-data")
+        store.quarantined_artifacts.add("art-1")
+        store.policy_change_restricted_actors.add("user-charlie")
+        store.blocked_routes["svc-data"] = {"/admin/config"}
+        store.save()
+
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+        self.assertEqual(fresh.revoked_sessions, {"sess-1"})
+        self.assertEqual(fresh.step_up_required, {"user-alice"})
+        self.assertEqual(fresh.download_restricted_actors, {"user-bob"})
+        self.assertEqual(fresh.disabled_services, {"svc-data"})
+        self.assertEqual(fresh.quarantined_artifacts, {"art-1"})
+        self.assertEqual(fresh.policy_change_restricted_actors, {"user-charlie"})
+        self.assertEqual(fresh.blocked_routes, {"svc-data": {"/admin/config"}})
+
+    def test_restart_produces_consistent_state(self) -> None:
+        """After restart: authoritative loads, derived rebuilds, ephemeral resets."""
+        from app.models import Alert, Incident
+
+        store = InMemoryStore()
+        store.enable_persistence(db_path=self.db_path)
+
+        # Authoritative entities
+        store.append_event(Event(
+            event_type="authentication.login.failure",
+            category="authentication", actor_id="user-alice",
+            actor_type="user", request_id="r1", correlation_id="c1",
+            status="failure", source_ip="10.0.0.1", origin="test",
+            payload={}, severity=Severity.MEDIUM, confidence=Confidence.HIGH,
+        ))
+        store.extend_alerts([Alert(
+            rule_id="DET-AUTH-001", rule_name="Test", severity=Severity.HIGH,
+            confidence=Confidence.HIGH, actor_id="user-alice",
+            correlation_id="c1", contributing_event_ids=[],
+            summary="s", payload={},
+        )])
+        incident = Incident(
+            incident_type="credential_abuse", primary_actor_id="user-alice",
+            actor_type="user", correlation_id="c1",
+            severity=Severity.HIGH, confidence=Confidence.HIGH,
+        )
+        store.upsert_incident(incident)
+
+        # Authoritative operational state
+        store.revoked_sessions.add("sess-1")
+        store.save()
+
+        # Ephemeral state (should NOT survive)
+        store.actor_sessions["user-alice"] = "sess-ephemeral"
+
+        # Simulate restart
+        fresh = InMemoryStore()
+        fresh.enable_persistence(db_path=self.db_path)
+
+        # Authoritative entities loaded
+        self.assertEqual(len(fresh.events), 1)
+        self.assertEqual(len(fresh.alerts), 1)
+        self.assertIn("c1", fresh.incidents_by_correlation)
+
+        # Authoritative operational state loaded
+        self.assertEqual(fresh.revoked_sessions, {"sess-1"})
+
+        # Derived state rebuilt
+        self.assertEqual(len(fresh.login_failures_by_actor["user-alice"]), 1)
+        self.assertIn(("DET-AUTH-001", "user-alice", "c1"), fresh.alert_signatures)
+
+        # Ephemeral state reset
+        self.assertEqual(fresh.actor_sessions, {})
 
 
 if __name__ == "__main__":

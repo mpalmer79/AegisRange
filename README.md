@@ -9,10 +9,10 @@ Built as a portfolio-grade demonstration of detection engineering, incident resp
 ## Current Implemented Baseline
 
 **Version:** 0.6.0
-**Tests:** 281 automated tests across 19 test files
+**Tests:** 352 automated tests across 19 test files
 **Backend:** FastAPI modular monolith with 15 services and 38 API endpoints
 **Frontend:** Next.js 14 App Router with 12 pages (including login)
-**Persistence:** In-memory with SQLite write-through backing (survives restart)
+**Persistence:** In-memory primary store with hybrid SQLite persistence (incremental entity writes + operational state snapshots)
 **Authentication:** JWT auth (HMAC-SHA256) enforced on all 35 protected routes with RBAC
 
 ### What Works End-to-End
@@ -34,7 +34,7 @@ Built as a portfolio-grade demonstration of detection engineering, incident resp
 
 - **JWT Authentication**: All 35 protected routes enforce `require_role()` with RBAC. 5 roles: admin, soc_manager, analyst, red_team, viewer. Public endpoints: `/health`, `/auth/login`.
 - **Frontend Auth**: Login page, AuthProvider context, AuthGuard redirect, automatic token attachment on all API calls, localStorage persistence with expiry.
-- **SQLite Persistence**: Write-through cache — in-memory store is primary for reads, SQLite saves after every mutating request via middleware, loads on startup.
+- **Hybrid Persistence**: In-memory store is primary at runtime. Entities (events, alerts, responses, incidents, notes, scenario history) are persisted incrementally to SQLite as they are created. Operational state (containment sets, risk profiles) is snapshot-persisted after each mutating request. On startup, all authoritative state loads from SQLite; derived state (event indices, alert deduplication) is rebuilt deterministically; ephemeral state (simulated sessions) resets.
 
 ---
 
@@ -126,7 +126,7 @@ Built as a portfolio-grade demonstration of detection engineering, incident resp
 - `POST /scenarios/scn-corr-006` — multi-signal compromise simulation
 
 ### Telemetry and Observability
-- `GET /health` — health check
+- `GET /health` — health check (public)
 - `GET /events` — list/filter events
 - `GET /events/export` — export events
 - `GET /alerts` — list/filter alerts
@@ -206,76 +206,63 @@ python -m pytest tests/ -v
 
 ### Execute a Scenario
 
+All protected endpoints require a JWT token. First authenticate:
+
 ```bash
-curl -X POST http://localhost:8000/scenarios/scn-corr-006
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+```
+
+Then execute a scenario:
+
+```bash
+curl -X POST http://localhost:8000/scenarios/scn-corr-006 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Use the returned `correlation_id` to inspect incident state:
 
 ```bash
-curl http://localhost:8000/incidents/<correlation_id>
+curl http://localhost:8000/incidents/<correlation_id> \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
 ## Known Limitations
 
-- **SQLite persistence**: Write-through cache to SQLite. Suitable for single-instance deployment. Not designed for concurrent multi-process writes.
-- **No input validation on query parameters**: `since_minutes` and similar query params accept unbounded values without range constraints.
-- **No rate limiting**: No request throttling on any endpoint.
+### Architecture
+- **Single-worker only**: The backend runs as a single Uvicorn process. The in-memory store is a Python-process-level singleton. Running multiple workers would create independent, unsynchronized store instances.
+- **Not horizontally scalable**: The in-memory primary store cannot be shared across processes or hosts.
+- **No concurrency guarantees**: No locking on the in-memory store. Concurrent requests that mutate the same data can race. Acceptable for single-worker operation.
+
+### Persistence
+- **SQLite limitations**: Write-through to a single SQLite file. Not suitable for concurrent multi-process writes.
+- **Hybrid persistence model**: Entities persist incrementally; operational state persists via snapshot. A crash between an entity write and the next operational state snapshot can cause operational state to lag behind entity state. The system recovers correctly by rebuilding derived state on load, but authoritative operational state (containment sets) may revert to the last snapshot.
+- **No WAL checkpointing control**: SQLite WAL mode is enabled but checkpoint timing is not managed.
+
+### Security
+- **Hardcoded JWT secret**: The signing key in `auth_service.py` is a static string. Acceptable for demo; must be externalized for any real deployment.
 - **No TLS**: Backend serves plain HTTP. TLS termination expected at reverse proxy layer.
-- **No multi-tenancy**: Single-instance, single-tenant only.
+- **No rate limiting**: No request throttling on any endpoint.
+- **No input validation on query parameters**: `since_minutes` and similar query params accept unbounded values.
+
+### Frontend
 - **Dead frontend code**: Several API functions (`readDocument`, `downloadDocument`, `exportEvents`, `getCampaign`, `resetSystem`) and types (`LoginRequest`, `LoginResponse`, `DocumentRequest`) are defined but never called from any page.
-- **Inconsistent frontend error handling**: Pages use 3 different data-fetching patterns (`Promise.allSettled`, `try/catch` in `useCallback`, simple `useEffect`). No retry-on-failure UI.
+- **Inconsistent error handling**: Pages use 3 different data-fetching patterns. No retry-on-failure UI.
 - **Limited accessibility**: No ARIA labels, no semantic form associations, SVG icons lack `aria-hidden`.
 
----
-
-## Completed Hardening Phases
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 0 | Architecture truth audit | Done |
-| 1 | Documentation realignment | Done |
-| 2 | Frontend/backend contract reconciliation | Done |
-| 3 | SQLite persistence layer | Done |
-| 4 | Auth boundary hardening (JWT on all routes + frontend login) | Done |
-| 5 | Architectural consistency pass | Done |
-| 6 | Validation, gap analysis, roadmap | Done |
-
----
-
-## Forward Roadmap
-
-Prioritized by impact. Items are designed but not yet built.
-
-### Next (High Impact)
-
-1. **Remove dead frontend code** — Delete unused API functions, types, and imports to reduce bundle size and cognitive overhead.
-2. **Input validation hardening** — Add `ge=0, le=1440` constraints to `since_minutes` and similar query parameters. Validate enum values for incident status transitions.
-3. **Standardize frontend data-fetching** — Pick one pattern (recommend `useCallback` + error state) and apply consistently across all 12 pages. Add retry buttons on error states.
-4. **Add type annotations** — Missing return types on `stream_service.event_generator`, `require_role` decorator, and `correlation_middleware`.
-
-### Later (Medium Impact)
-
-5. **Test coverage expansion** — Add tests for: SSE streaming endpoint, document read/download endpoints, incident detail GET, incident status transitions, incident notes CRUD.
-6. **Frontend accessibility** — Add `aria-label` to interactive elements and SVG icons, link form labels with `htmlFor`, add `aria-hidden` to decorative icons.
-7. **Rate limiting** — Add configurable rate limiting to `/metrics`, `/alerts`, `/events/export`, and auth endpoints.
-8. **PostgreSQL option** — Abstract persistence layer behind an interface to support PostgreSQL alongside SQLite.
-
-### Future (Architecture Evolution)
-
-9. **Streaming pipeline** — Replace synchronous event-to-incident flow with async message queue.
-10. **Advanced correlation engine** — Temporal pattern matching across longer time windows.
-11. **Policy engine** — Externalized detection and response policies.
-12. **Multi-tenant support** — Tenant isolation at data and API layers.
+### Identity Model
+- **No multi-tenancy**: Single-instance, single-tenant only.
+- **Two separate identity systems**: Platform users (JWT auth) and simulated actors (scenario identity service) are independent. Platform user tokens do not map to simulated actor identities.
 
 ---
 
 ## Architecture and Supporting Docs
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — System design, module boundaries, data flow
-- [DEPLOYMENT_ARCHITECTURE.md](DEPLOYMENT_ARCHITECTURE.md) — Target deployment topology and infrastructure
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System design, module boundaries, data flow, persistence model
+- [DEPLOYMENT_ARCHITECTURE.md](DEPLOYMENT_ARCHITECTURE.md) — Deployment topology and infrastructure
 - [docs/events/EVENT_SCHEMA.md](docs/events/EVENT_SCHEMA.md) — Event schema specification
 - [docs/detection/DETECTION_RULES.md](docs/detection/DETECTION_RULES.md) — Detection rule definitions
 - [docs/response/RESPONSE_PLAYBOOK.md](docs/response/RESPONSE_PLAYBOOK.md) — Response playbook definitions

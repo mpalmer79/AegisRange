@@ -361,12 +361,19 @@ class PersistenceLayer:
     # --- Operational state snapshot ---
 
     def save_operational_state(self) -> None:
-        """Persist only operational state (sets, dicts) — not entity tables.
+        """Persist authoritative operational state — not entity tables.
 
         Entity tables (events, alerts, responses, incidents, notes,
         scenario_history) are persisted incrementally via persist_*()
-        methods. This method covers the remaining operational state
-        that changes during request processing.
+        methods.
+
+        This method persists authoritative operational state:
+        containment sets and risk/routing dicts.
+
+        NOT persisted (by design):
+        - alert_signatures: derived — rebuilt from alerts on load
+        - actor_sessions: ephemeral — reset on restart
+        - login/document/auth/artifact failure indices: derived — rebuilt from events on load
         """
         conn = self._connect()
         try:
@@ -380,7 +387,6 @@ class PersistenceLayer:
                 "disabled_services": sorted(self.store.disabled_services),
                 "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
                 "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
-                "alert_signatures": [list(s) for s in self.store.alert_signatures],
             }
             for key, value in set_data.items():
                 conn.execute(
@@ -389,7 +395,6 @@ class PersistenceLayer:
                 )
 
             dict_data = {
-                "actor_sessions": self.store.actor_sessions,
                 "risk_profiles": {
                     k: {
                         "actor_id": v.actor_id,
@@ -465,7 +470,6 @@ class PersistenceLayer:
                 "disabled_services": sorted(self.store.disabled_services),
                 "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
                 "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
-                "alert_signatures": [list(s) for s in self.store.alert_signatures],
             }
             for key, value in set_data.items():
                 conn.execute(
@@ -475,7 +479,6 @@ class PersistenceLayer:
 
             # Dicts
             dict_data = {
-                "actor_sessions": self.store.actor_sessions,
                 "risk_profiles": {
                     k: {
                         "actor_id": v.actor_id,
@@ -568,20 +571,20 @@ class PersistenceLayer:
             staged_sets: dict[str, Any] = {}
             for row in conn.execute("SELECT key, data FROM state_sets"):
                 key, raw = row[0], json.loads(row[1])
+                # alert_signatures is derived — skip legacy persisted rows
                 if key == "alert_signatures":
-                    staged_sets[key] = {tuple(s) for s in raw}
-                else:
-                    staged_sets[key] = set(raw)
+                    continue
+                staged_sets[key] = set(raw)
 
             # Dicts
-            staged_actor_sessions: dict[str, str] = {}
             staged_risk_profiles: dict[str, object] = {}
             staged_blocked_routes: dict[str, set[str]] = {}
             for row in conn.execute("SELECT key, data FROM state_dicts"):
                 key, raw = row[0], json.loads(row[1])
+                # actor_sessions is ephemeral — skip legacy persisted rows
                 if key == "actor_sessions":
-                    staged_actor_sessions = raw
-                elif key == "risk_profiles":
+                    continue
+                if key == "risk_profiles":
                     from app.services.risk_service import RiskProfile
                     for actor_id, pd in raw.items():
                         staged_risk_profiles[actor_id] = RiskProfile(
@@ -616,7 +619,6 @@ class PersistenceLayer:
             self.store.alerts = staged_alerts
             self.store.responses = staged_responses
             self.store.incidents_by_correlation = staged_incidents
-            self.store.actor_sessions = staged_actor_sessions
             self.store.risk_profiles = staged_risk_profiles
             self.store.blocked_routes = staged_blocked_routes
             self.store.scenario_history = staged_scenario_history
@@ -628,17 +630,17 @@ class PersistenceLayer:
             self.store.disabled_services = staged_sets.get("disabled_services", set())
             self.store.quarantined_artifacts = staged_sets.get("quarantined_artifacts", set())
             self.store.policy_change_restricted_actors = staged_sets.get("policy_change_restricted_actors", set())
-            self.store.alert_signatures = staged_sets.get("alert_signatures", set())
 
-            # Clear derived indices before rebuilding so a second load()
-            # on the same store doesn't accumulate stale entries.
+            # Reset ephemeral state explicitly.
+            self.store.actor_sessions = {}
+
+            # Clear and rebuild all derived state from authoritative data.
             self.store.login_failures_by_actor.clear()
             self.store.document_reads_by_actor.clear()
             self.store.authorization_failures_by_actor.clear()
             self.store.artifact_failures_by_actor.clear()
-
-            # Rebuild derived event indices from loaded events.
             self._rebuild_event_indices()
+            self._rebuild_alert_signatures()
 
             return True
         except Exception as exc:
@@ -689,3 +691,17 @@ class PersistenceLayer:
             index = event_type_to_index.get(event.event_type)
             if index is not None:
                 index[event.actor_id].append(event)
+
+    def _rebuild_alert_signatures(self) -> None:
+        """Rebuild alert_signatures from the loaded alerts list.
+
+        alert_signatures is a derived deduplication set. Each entry is
+        deterministically derivable as (rule_id, actor_id, correlation_id)
+        from the authoritative alerts list. Rebuilding on load eliminates
+        the timing gap between incremental alert persistence and the
+        next save_operational_state() call.
+        """
+        self.store.alert_signatures = {
+            (a.rule_id, a.actor_id, a.correlation_id)
+            for a in self.store.alerts
+        }
