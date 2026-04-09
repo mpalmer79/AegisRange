@@ -49,7 +49,7 @@ Where possible, services should be stateless so they can scale horizontally, res
 | Frontend | Next.js 14 dev server | Runs via `npm run dev` |
 | Persistence | In-memory primary + hybrid SQLite persistence | Incremental entity writes + operational state snapshots; state survives restart |
 | Database | SQLite (auto-created) | `aegisrange.db`, disabled in test env; path configurable via `DB_PATH` |
-| Authentication | JWT (HMAC-SHA256) enforced on all 35 protected routes | RBAC with 5 roles; PBKDF2-hashed passwords; secret externalized via `JWT_SECRET` |
+| Authentication | JWT (HMAC-SHA256) enforced on all 35 protected routes | RBAC with 5 roles; PBKDF2-hashed passwords; secret externalized via `JWT_SECRET`; rate limited |
 | Containerization | Dockerfiles + docker-compose | Backend and frontend containers |
 | CI | GitHub Actions | Runs ruff lint + pytest (backend), lint + build (frontend) |
 | Secrets | `.env.example` template | `JWT_SECRET`, `CORS_ORIGINS`, `TOKEN_EXPIRY_HOURS`, `DB_PATH`, `LOG_LEVEL`, `APP_ENV` |
