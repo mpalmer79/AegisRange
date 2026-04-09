@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
@@ -130,7 +130,11 @@ class TestTokenExpirySingleSource(unittest.TestCase):
         self.assertIsNotNone(data["expires_at"])
         # Verify it's a valid ISO datetime
         expiry = datetime.fromisoformat(data["expires_at"])
-        self.assertGreater(expiry, datetime.utcnow())
+        # expiry may be tz-aware (from updated auth); compare correctly
+        now = datetime.now(timezone.utc)
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        self.assertGreater(expiry, now)
 
     def test_expiry_matches_jwt_payload(self) -> None:
         client = TestClient(app)

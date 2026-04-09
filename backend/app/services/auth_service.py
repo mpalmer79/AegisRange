@@ -5,13 +5,17 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException, Request
 
+from app.models import utc_now as _utc_now
+
 logger = logging.getLogger("aegisrange.auth")
+
 
 # ---------------------------------------------------------------------------
 # Role definitions
@@ -26,16 +30,73 @@ ROLES: dict[str, dict[str, object]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Default simulation users (in-memory only)
+# Password hashing (PBKDF2-HMAC-SHA256)
 # ---------------------------------------------------------------------------
 
-DEFAULT_USERS: dict[str, dict[str, str]] = {
-    "admin": {"password_hash": "admin_hash", "role": "admin", "display_name": "Platform Admin"},
-    "soc_lead": {"password_hash": "soc_hash", "role": "soc_manager", "display_name": "SOC Manager"},
-    "analyst1": {"password_hash": "analyst_hash", "role": "analyst", "display_name": "Security Analyst"},
-    "red_team1": {"password_hash": "redteam_hash", "role": "red_team", "display_name": "Red Team Operator"},
-    "viewer1": {"password_hash": "viewer_hash", "role": "viewer", "display_name": "Dashboard Viewer"},
-}
+_PBKDF2_ITERATIONS = 260_000
+_PBKDF2_HASH_NAME = "sha256"
+_PBKDF2_DK_LEN = 32
+
+
+def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
+    """Hash a password with PBKDF2-HMAC-SHA256.
+
+    Returns (hex_hash, hex_salt).
+    """
+    if salt is None:
+        salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac(
+        _PBKDF2_HASH_NAME,
+        password.encode(),
+        salt,
+        _PBKDF2_ITERATIONS,
+        dklen=_PBKDF2_DK_LEN,
+    )
+    return dk.hex(), salt.hex()
+
+
+def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
+    """Verify a password against a stored PBKDF2 hash and salt."""
+    salt = bytes.fromhex(stored_salt)
+    dk = hashlib.pbkdf2_hmac(
+        _PBKDF2_HASH_NAME,
+        password.encode(),
+        salt,
+        _PBKDF2_ITERATIONS,
+        dklen=_PBKDF2_DK_LEN,
+    )
+    return hmac.compare_digest(dk.hex(), stored_hash)
+
+
+# ---------------------------------------------------------------------------
+# Default simulation users (in-memory only)
+#
+# Passwords follow the pattern {username}_pass.  Hashes are computed at
+# module load time so the plain-text passwords are never stored.
+# ---------------------------------------------------------------------------
+
+def _build_default_users() -> dict[str, dict[str, str]]:
+    """Build default user entries with PBKDF2-hashed passwords."""
+    users_spec = [
+        ("admin", "admin", "Platform Admin"),
+        ("soc_lead", "soc_manager", "SOC Manager"),
+        ("analyst1", "analyst", "Security Analyst"),
+        ("red_team1", "red_team", "Red Team Operator"),
+        ("viewer1", "viewer", "Dashboard Viewer"),
+    ]
+    result: dict[str, dict[str, str]] = {}
+    for username, role, display_name in users_spec:
+        pw_hash, pw_salt = _hash_password(f"{username}_pass")
+        result[username] = {
+            "password_hash": pw_hash,
+            "password_salt": pw_salt,
+            "role": role,
+            "display_name": display_name,
+        }
+    return result
+
+
+DEFAULT_USERS: dict[str, dict[str, str]] = _build_default_users()
 
 # ---------------------------------------------------------------------------
 # Endpoint access matrix
@@ -62,7 +123,7 @@ class AuthUser:
     username: str
     role: str
     display_name: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utc_now)
 
 
 @dataclass
@@ -82,13 +143,12 @@ class TokenPayload:
 class AuthService:
     """JWT authentication and user management for the AegisRange simulation platform."""
 
-    DEFAULT_SECRET = "aegisrange-dev-secret-key-change-in-production"
-    TOKEN_EXPIRY_HOURS = 24
-
-    def __init__(self, secret_key: str = DEFAULT_SECRET) -> None:
-        self._secret_key = secret_key
+    def __init__(self, secret_key: str | None = None, token_expiry_hours: int | None = None) -> None:
+        from app.config import settings
+        self._secret_key = secret_key or settings.jwt_secret_key
+        self._token_expiry_hours = token_expiry_hours or settings.TOKEN_EXPIRY_HOURS
         self._users: dict[str, AuthUser] = {}
-        self._password_map: dict[str, str] = {}
+        self._password_store: dict[str, tuple[str, str]] = {}  # username -> (hash, salt)
         self._init_default_users()
 
     # -- bootstrap -----------------------------------------------------------
@@ -102,7 +162,7 @@ class AuthService:
                 display_name=info["display_name"],
             )
             self._users[username] = user
-            self._password_map[username] = info["password_hash"]
+            self._password_store[username] = (info["password_hash"], info["password_salt"])
 
     # -- public API ----------------------------------------------------------
 
@@ -112,22 +172,23 @@ class AuthService:
         The returned ``expires_at`` is read back from the newly-created
         token so there is a single source of truth for expiration.
 
-        For the simulation platform the accepted password is
-        ``{username}_pass`` (e.g. ``"admin_pass"`` for the admin user).
+        Passwords are verified using PBKDF2-HMAC-SHA256.  For the
+        simulation platform the accepted password is ``{username}_pass``
+        (e.g. ``"admin_pass"`` for the admin user).
         """
         user = self._users.get(username)
         if user is None:
+            # Perform a dummy hash to avoid timing side-channels
+            _hash_password(password)
             logger.warning("Authentication failed: unknown user %s", username)
             return False, None, None
 
-        expected_password = f"{username}_pass"
-        if password != expected_password:
+        stored_hash, stored_salt = self._password_store[username]
+        if not _verify_password(password, stored_hash, stored_salt):
             logger.warning("Authentication failed: bad password for %s", username)
             return False, None, None
 
         token = self.create_token(username, user.role)
-        # Read expiry back from the token we just created so callers
-        # never have to compute it independently.
         payload = self.verify_token(token)
         expires_at = payload.exp if payload else None
         logger.info("User %s authenticated successfully", username)
@@ -139,12 +200,12 @@ class AuthService:
         Format: ``base64(header).base64(payload).base64(signature)``
         where the signature is HMAC-SHA256 of ``header_b64.payload_b64``.
         """
-        now = datetime.utcnow()
+        now = _utc_now()
         header = {"alg": "HS256", "typ": "JWT"}
         payload = {
             "sub": username,
             "role": role,
-            "exp": (now + timedelta(hours=self.TOKEN_EXPIRY_HOURS)).isoformat(),
+            "exp": (now + timedelta(hours=self._token_expiry_hours)).isoformat(),
             "iat": now.isoformat(),
             "jti": str(uuid4()),
         }
@@ -180,21 +241,30 @@ class AuthService:
         except Exception:
             return None
 
-        # Check expiration
+        # Check expiration (handle both tz-aware and tz-naive ISO strings)
         try:
             exp = datetime.fromisoformat(raw["exp"])
         except (KeyError, ValueError):
             return None
 
-        if datetime.utcnow() > exp:
+        now = _utc_now()
+        # Normalise: if the stored exp is naive, treat it as UTC
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+
+        if now > exp:
             return None
+
+        iat = datetime.fromisoformat(raw["iat"])
+        if iat.tzinfo is None:
+            iat = iat.replace(tzinfo=timezone.utc)
 
         try:
             return TokenPayload(
                 sub=raw["sub"],
                 role=raw["role"],
                 exp=exp,
-                iat=datetime.fromisoformat(raw["iat"]),
+                iat=iat,
                 jti=raw["jti"],
             )
         except (KeyError, ValueError):
@@ -231,10 +301,10 @@ class AuthService:
 
 
 # ---------------------------------------------------------------------------
-# Module-level service instance
+# Module-level service instance (reads secret from config)
 # ---------------------------------------------------------------------------
 
-_auth_service = AuthService()
+_auth_service = AuthService()  # secret_key sourced from settings.jwt_secret_key
 
 # ---------------------------------------------------------------------------
 # FastAPI dependency helpers

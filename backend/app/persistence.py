@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,17 @@ from app.models import (
 )
 
 DEFAULT_DB_PATH = Path("aegisrange.db")
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware UTC.
+
+    Handles legacy naive datetimes persisted before the UTC migration
+    by treating them as UTC and attaching the timezone.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 class PersistenceLayer:
@@ -142,8 +153,8 @@ class PersistenceLayer:
             confidence=Confidence(d["confidence"]),
             risk_score=d.get("risk_score"),
             payload=d["payload"],
-            timestamp=datetime.fromisoformat(d["timestamp"]),
-            ingestion_timestamp=datetime.fromisoformat(d["ingestion_timestamp"]),
+            timestamp=_ensure_utc(datetime.fromisoformat(d["timestamp"])),
+            ingestion_timestamp=_ensure_utc(datetime.fromisoformat(d["ingestion_timestamp"])),
         )
 
     @staticmethod
@@ -176,7 +187,7 @@ class PersistenceLayer:
             contributing_event_ids=d["contributing_event_ids"],
             summary=d["summary"],
             payload=d["payload"],
-            created_at=datetime.fromisoformat(d["created_at"]),
+            created_at=_ensure_utc(datetime.fromisoformat(d["created_at"])),
         )
 
     @staticmethod
@@ -205,7 +216,7 @@ class PersistenceLayer:
             reason=d["reason"],
             related_alert_id=d["related_alert_id"],
             payload=d["payload"],
-            created_at=datetime.fromisoformat(d["created_at"]),
+            created_at=_ensure_utc(datetime.fromisoformat(d["created_at"])),
         )
 
     @staticmethod
@@ -265,14 +276,14 @@ class PersistenceLayer:
             affected_documents=d.get("affected_documents", []),
             affected_sessions=d.get("affected_sessions", []),
             affected_services=d.get("affected_services", []),
-            created_at=datetime.fromisoformat(d["created_at"]),
-            updated_at=datetime.fromisoformat(d["updated_at"]),
-            closed_at=datetime.fromisoformat(d["closed_at"]) if d.get("closed_at") else None,
+            created_at=_ensure_utc(datetime.fromisoformat(d["created_at"])),
+            updated_at=_ensure_utc(datetime.fromisoformat(d["updated_at"])),
+            closed_at=_ensure_utc(datetime.fromisoformat(d["closed_at"])) if d.get("closed_at") else None,
         )
         for te in d.get("timeline", []):
             incident.timeline.append(
                 TimelineEntry(
-                    timestamp=datetime.fromisoformat(te["timestamp"]),
+                    timestamp=_ensure_utc(datetime.fromisoformat(te["timestamp"])),
                     entry_type=te["entry_type"],
                     reference_id=te["reference_id"],
                     summary=te["summary"],
@@ -280,83 +291,137 @@ class PersistenceLayer:
             )
         return incident
 
+    # --- Transaction context ---
+
+    _txn_conn: sqlite3.Connection | None = None
+
+    def begin_transaction(self) -> sqlite3.Connection:
+        """Open a shared connection for grouped writes.
+
+        All ``persist_*`` calls made while the transaction is active
+        will use this shared connection instead of opening their own.
+        Call :meth:`commit_transaction` or :meth:`rollback_transaction`
+        to finalise.
+        """
+        if self._txn_conn is not None:
+            return self._txn_conn
+        self._txn_conn = self._connect()
+        self._txn_conn.execute("BEGIN IMMEDIATE")
+        return self._txn_conn
+
+    def commit_transaction(self) -> None:
+        """Commit and close the shared transaction connection."""
+        if self._txn_conn is not None:
+            self._txn_conn.commit()
+            self._txn_conn.close()
+            self._txn_conn = None
+
+    def rollback_transaction(self) -> None:
+        """Rollback and close the shared transaction connection."""
+        if self._txn_conn is not None:
+            self._txn_conn.rollback()
+            self._txn_conn.close()
+            self._txn_conn = None
+
+    def _get_conn(self) -> tuple[sqlite3.Connection, bool]:
+        """Return (connection, should_close).
+
+        If a transaction is active, return the shared connection
+        (caller must NOT close it).  Otherwise open a new one.
+        """
+        if self._txn_conn is not None:
+            return self._txn_conn, False
+        return self._connect(), True
+
     # --- Incremental persistence ---
 
     def persist_event(self, event: Event) -> None:
         """INSERT a single event (append-only)."""
-        conn = self._connect()
+        conn, should_close = self._get_conn()
         try:
             conn.execute(
                 "INSERT OR IGNORE INTO events (event_id, data) VALUES (?, ?)",
                 (event.event_id, self._serialize_event(event)),
             )
-            conn.commit()
+            if should_close:
+                conn.commit()
         finally:
-            conn.close()
+            if should_close:
+                conn.close()
 
     def persist_alerts(self, alerts: list[Alert]) -> None:
         """INSERT a batch of alerts (append-only)."""
         if not alerts:
             return
-        conn = self._connect()
+        conn, should_close = self._get_conn()
         try:
             conn.executemany(
                 "INSERT OR IGNORE INTO alerts (alert_id, data) VALUES (?, ?)",
                 [(a.alert_id, self._serialize_alert(a)) for a in alerts],
             )
-            conn.commit()
+            if should_close:
+                conn.commit()
         finally:
-            conn.close()
+            if should_close:
+                conn.close()
 
     def persist_responses(self, responses: list[ResponseAction]) -> None:
         """INSERT a batch of responses (append-only)."""
         if not responses:
             return
-        conn = self._connect()
+        conn, should_close = self._get_conn()
         try:
             conn.executemany(
                 "INSERT OR IGNORE INTO responses (response_id, data) VALUES (?, ?)",
                 [(r.response_id, self._serialize_response(r)) for r in responses],
             )
-            conn.commit()
+            if should_close:
+                conn.commit()
         finally:
-            conn.close()
+            if should_close:
+                conn.close()
 
     def persist_incident(self, incident: Incident) -> None:
         """INSERT OR REPLACE a single incident (upsert)."""
-        conn = self._connect()
+        conn, should_close = self._get_conn()
         try:
             conn.execute(
                 "INSERT OR REPLACE INTO incidents (correlation_id, data) VALUES (?, ?)",
                 (incident.correlation_id, self._serialize_incident(incident)),
             )
-            conn.commit()
+            if should_close:
+                conn.commit()
         finally:
-            conn.close()
+            if should_close:
+                conn.close()
 
     def persist_incident_note(self, correlation_id: str, note: dict) -> None:
         """INSERT a single incident note (append-only)."""
-        conn = self._connect()
+        conn, should_close = self._get_conn()
         try:
             conn.execute(
                 "INSERT OR IGNORE INTO incident_notes (note_id, correlation_id, data) VALUES (?, ?, ?)",
                 (note["note_id"], correlation_id, json.dumps(note)),
             )
-            conn.commit()
+            if should_close:
+                conn.commit()
         finally:
-            conn.close()
+            if should_close:
+                conn.close()
 
     def persist_scenario_history_entry(self, entry: dict) -> None:
         """INSERT a single scenario history entry (append-only)."""
-        conn = self._connect()
+        conn, should_close = self._get_conn()
         try:
             conn.execute(
                 "INSERT INTO scenario_history (data) VALUES (?)",
                 (json.dumps(entry),),
             )
-            conn.commit()
+            if should_close:
+                conn.commit()
         finally:
-            conn.close()
+            if should_close:
+                conn.close()
 
     # --- Operational state snapshot ---
 
@@ -593,7 +658,7 @@ class PersistenceLayer:
                             peak_score=pd["peak_score"],
                             contributing_rules=pd["contributing_rules"],
                             score_history=pd["score_history"],
-                            last_updated=datetime.fromisoformat(pd["last_updated"]),
+                            last_updated=_ensure_utc(datetime.fromisoformat(pd["last_updated"])),
                         )
                 elif key == "blocked_routes":
                     staged_blocked_routes = {

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
+from app.models import utc_now
 
 from app.store import InMemoryStore
 
@@ -54,7 +54,7 @@ class StreamService:
         message = {
             "event_type": event_type,
             "data": data,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
         disconnected: list[asyncio.Queue] = []

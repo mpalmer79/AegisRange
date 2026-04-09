@@ -105,9 +105,42 @@ Every system decision must be:
 | ReportService | `report_service.py` | Active — exercise report generation |
 | StreamService | `stream_service.py` | Active — SSE subscriber management |
 
-### 3.3 Service Wiring
+### 3.3 Application Structure
 
-All services are instantiated at module level in `main.py` and wired together through constructor injection. The `InMemoryStore` singleton is shared across services that need state access. Services do not communicate through the store — they are composed through the `EventPipelineService` which orchestrates the event-detection-response-incident flow.
+```
+app/
+├── main.py                 (Application entry point, middleware, lifespan)
+├���─ dependencies.py         (Service wiring and shared instances)
+├── schemas.py              (Pydantic request/response models)
+├── serializers.py          (Domain model → API dict serialization)
+├── models.py               (Core domain dataclasses and enums)
+├���─ store.py                (InMemoryStore singleton)
+├── persistence.py          (SQLite persistence layer)
+├── config.py               (Settings from environment)
+├── logging_config.py       (Structured logging setup)
+├── routers/                (FastAPI APIRouter modules)
+│   ├── admin.py            (Store reset)
+│   ├─��� alerts.py           (Alert listing)
+│   ├── analytics.py        (Risk profiles, rule effectiveness)
+│   ├── auth.py             (Platform login, user listing)
+│   ├── campaigns.py        (Campaign detection)
+│   ├── documents.py        (Document read/download simulation)
+│   ├── events.py           (Event listing, export)
+│   ├── health.py           (Health check)
+│   ├── identity.py         (Simulation identity login, session revoke)
+│   ├── incidents.py        (Incident CRUD, notes, status)
+│   ├── killchain.py        (Kill chain analysis)
+│   ├── metrics.py          (Dashboard metrics)
+│   ├── mitre.py            (MITRE ATT&CK mappings, coverage)
+│   ├── reports.py          (Exercise report generation)
+│   ├── scenarios.py        (Scenario execution)
+│   └── stream.py           (SSE event streaming)
+└── services/               (15 domain service modules)
+```
+
+### 3.4 Service Wiring
+
+All services are instantiated in `dependencies.py` and wired together through constructor injection. The `InMemoryStore` singleton is shared across services that need state access. Services do not communicate through the store — they are composed through the `EventPipelineService` which orchestrates the event-detection-response-incident flow. Route handlers live in `app/routers/` and import services from `dependencies.py`.
 
 ---
 
@@ -219,13 +252,17 @@ Maps all 10 detection rules to MITRE ATT&CK techniques and tactics. Provides:
 ### 4.11 Auth Service
 
 Implements:
-- JWT token creation/verification (HMAC-SHA256)
-- 5 roles: admin, soc_manager, analyst, red_team, viewer
+- JWT token creation/verification (HMAC-SHA256, stdlib only)
+- PBKDF2-HMAC-SHA256 password hashing (260,000 iterations, 32-byte key, 16-byte salt)
+- Timing-safe authentication (dummy hash on unknown users)
+- 5 roles: admin (100), soc_manager (75), analyst (50), red_team (50), viewer (25)
 - 5 default users with role assignments
 - `require_role()` FastAPI dependency for route protection
 - Role hierarchy with numeric levels
+- JWT secret externalized via `JWT_SECRET` env var (refuses to start without it in production)
+- Token expiry configurable via `TOKEN_EXPIRY_HOURS`
 
-**Current state**: Enforced on all 35 protected routes. Public endpoints: `/health`, `/auth/login`.
+**Current state**: Enforced on all 35 protected routes. Public endpoints: `/health`, `/auth/login`. Rate limited at 20 requests per 60 seconds per client IP on auth endpoints.
 
 ### 4.12 Supporting Services
 
@@ -448,8 +485,8 @@ Each incident contains:
 | Frontend | Next.js 14, TypeScript, Tailwind CSS |
 | Backend | FastAPI, Python 3.x |
 | Persistence | In-memory primary + SQLite hybrid persistence |
-| Auth | PyJWT (HMAC-SHA256), enforced on all protected routes |
-| Testing | pytest (352 tests across 19 files), unittest |
+| Auth | HMAC-SHA256 JWT (stdlib), PBKDF2 passwords, enforced on all protected routes |
+| Testing | pytest (397 tests across 22 files), unittest |
 | Containerization | Docker, docker-compose |
 | CI | GitHub Actions |
 
@@ -466,20 +503,26 @@ Each incident contains:
 - Exercise reporting
 - SSE streaming
 - JWT auth enforced on all 35 protected routes with RBAC
+- PBKDF2-HMAC-SHA256 password hashing (260K iterations)
+- JWT secret externalized via `JWT_SECRET` env var (enforced in production)
+- Input validation on query parameters (ge/le constraints)
+- Rate limiting on authentication endpoints (20 requests/60s per IP)
+- Global exception handler (prevents stack trace leaks)
 - Hybrid SQLite persistence with incremental entity writes
+- Transaction boundary on pipeline writes (atomic entity persistence)
+- Timezone-aware UTC datetimes throughout backend
 - Frontend login page, AuthProvider, AuthGuard
 - Frontend/backend API contract alignment
 - Centralized serialization boundary
+- Router-based route organization (16 APIRouter modules)
+- Lifespan context manager (replaces deprecated on_event)
 
 ### Not Yet Implemented
 - PostgreSQL persistence option
-- Rate limiting
-- Input validation on query parameters
 - Multi-worker / horizontal scaling support
 - Machine learning detection
 - Multi-tenant support
 - Message queue / streaming pipeline
-- Externalized JWT secret management
 
 ---
 
@@ -496,3 +539,8 @@ Each incident contains:
 - Explicit state classification (authoritative / derived / ephemeral)
 - Centralized serialization layer to prevent field drift
 - Platform user attribution on all mutating operations
+- Router-based route organization for separation of concerns
+- Service wiring centralized in `dependencies.py` to avoid circular imports
+- PBKDF2 password hashing over plain-text storage
+- JWT secret externalization with production enforcement
+- Rate limiting on auth endpoints to mitigate brute-force attacks

@@ -34,6 +34,16 @@ class EventPipelineService:
         self.risk = risk
 
     def process(self, event: Event) -> dict[str, int]:
+        """Ingest an event through the full pipeline.
+
+        All persistence writes within a single ``process()`` call are
+        grouped in a SQLite transaction so that a crash cannot leave
+        partial entity state on disk.
+        """
+        with self.store.transaction():
+            return self._process_inner(event)
+
+    def _process_inner(self, event: Event) -> dict[str, int]:
         self.telemetry.emit(event)
         self.incidents.register_event(event)
 

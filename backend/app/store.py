@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import contextmanager
+from typing import Generator
 
 from app.models import Alert, Event, Incident, ResponseAction
 
@@ -68,6 +70,33 @@ class InMemoryStore:
         self.scenario_history.append(entry)
         if self._persistence:
             self._persistence.persist_scenario_history_entry(entry)
+
+    # --- Transaction context ---
+
+    @contextmanager
+    def transaction(self) -> Generator[None, None, None]:
+        """Group multiple persistence writes into a single SQLite transaction.
+
+        Usage::
+
+            with store.transaction():
+                store.append_event(event)
+                store.extend_alerts(alerts)
+                store.upsert_incident(incident)
+
+        If persistence is not enabled, this is a no-op context manager.
+        On exception the transaction is rolled back; otherwise it commits.
+        """
+        if self._persistence is None:
+            yield
+            return
+        self._persistence.begin_transaction()
+        try:
+            yield
+            self._persistence.commit_transaction()
+        except Exception:
+            self._persistence.rollback_transaction()
+            raise
 
     # --- Persistence lifecycle ---
 

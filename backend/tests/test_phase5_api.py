@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.main import STORE
+from app.store import STORE
 from tests.auth_helper import authenticated_client
 
 
