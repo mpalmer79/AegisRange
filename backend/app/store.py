@@ -33,7 +33,7 @@ class InMemoryStore:
         self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
         self._persistence = None
 
-    # --- Write methods (single owners of entity mutations) ---
+    # --- Entity write methods (incremental persistence) ---
 
     def append_event(self, event: Event) -> None:
         """Append a single event and persist incrementally."""
@@ -70,6 +70,148 @@ class InMemoryStore:
         self.scenario_history.append(entry)
         if self._persistence:
             self._persistence.persist_scenario_history_entry(entry)
+
+    # --- Authoritative operational-state write methods ---
+    #
+    # Containment sets and risk profiles are authoritative state that
+    # must persist across restarts.  These methods encapsulate all
+    # mutations so callers never touch the raw collections directly.
+    # Persistence happens via operational-state snapshots (save()).
+
+    def revoke_session(self, session_id: str) -> None:
+        """Mark a session as revoked (authoritative containment state)."""
+        self.revoked_sessions.add(session_id)
+
+    def require_step_up(self, actor_id: str) -> None:
+        """Require step-up authentication for an actor."""
+        self.step_up_required.add(actor_id)
+
+    def clear_step_up(self, actor_id: str) -> None:
+        """Remove step-up requirement for an actor."""
+        self.step_up_required.discard(actor_id)
+
+    def restrict_downloads(self, actor_id: str) -> None:
+        """Restrict download access for an actor."""
+        self.download_restricted_actors.add(actor_id)
+
+    def disable_service(self, service_id: str) -> None:
+        """Disable a service."""
+        self.disabled_services.add(service_id)
+
+    def block_routes(self, service_id: str, routes: list[str]) -> None:
+        """Block specific routes for a service."""
+        if service_id not in self.blocked_routes:
+            self.blocked_routes[service_id] = set()
+        self.blocked_routes[service_id].update(routes)
+
+    def quarantine_artifact(self, artifact_id: str) -> None:
+        """Quarantine an artifact."""
+        self.quarantined_artifacts.add(artifact_id)
+
+    def restrict_policy_changes(self, actor_id: str) -> None:
+        """Restrict policy changes for an actor."""
+        self.policy_change_restricted_actors.add(actor_id)
+
+    def update_risk_profile(self, actor_id: str, profile: object) -> None:
+        """Update or create a risk profile for an actor."""
+        self.risk_profiles[actor_id] = profile
+
+    # --- Derived-state write methods ---
+    #
+    # Derived state is rebuilt from events on load. These methods
+    # still encapsulate mutations for consistency and testability,
+    # but they do NOT trigger persistence.
+
+    def record_login_failure(self, actor_id: str, event: Event) -> None:
+        """Record a login failure event for derived-state tracking."""
+        self.login_failures_by_actor[actor_id].append(event)
+
+    def record_document_read(self, actor_id: str, event: Event) -> None:
+        """Record a document read event for derived-state tracking."""
+        self.document_reads_by_actor[actor_id].append(event)
+
+    def record_authorization_failure(self, actor_id: str, event: Event) -> None:
+        """Record an authorization failure for derived-state tracking."""
+        self.authorization_failures_by_actor[actor_id].append(event)
+
+    def record_artifact_failure(self, actor_id: str, event: Event) -> None:
+        """Record an artifact failure for derived-state tracking."""
+        self.artifact_failures_by_actor[actor_id].append(event)
+
+    def add_alert_signature(self, signature: tuple[str, str, str]) -> bool:
+        """Register an alert dedup signature. Returns True if novel."""
+        if signature in self.alert_signatures:
+            return False
+        self.alert_signatures.add(signature)
+        return True
+
+    def set_actor_session(self, actor_id: str, session_id: str) -> None:
+        """Record a simulated actor's session (ephemeral state)."""
+        self.actor_sessions[actor_id] = session_id
+
+    # --- Read-only accessor methods ---
+    #
+    # Routers and services should use these instead of reaching into
+    # the raw collections.  This encapsulates the data layout and
+    # makes it straightforward to swap the backing store later.
+
+    def get_events(self) -> list[Event]:
+        """Return all events (snapshot copy)."""
+        return list(self.events)
+
+    def get_alerts(self) -> list[Alert]:
+        """Return all alerts (snapshot copy)."""
+        return list(self.alerts)
+
+    def get_responses(self) -> list[ResponseAction]:
+        """Return all responses (snapshot copy)."""
+        return list(self.responses)
+
+    def get_incident(self, correlation_id: str) -> Incident | None:
+        """Look up an incident by correlation ID."""
+        return self.incidents_by_correlation.get(correlation_id)
+
+    def get_all_incidents(self) -> list[Incident]:
+        """Return all incidents."""
+        return list(self.incidents_by_correlation.values())
+
+    def get_incident_notes_for(self, correlation_id: str) -> list[dict]:
+        """Return notes for a specific incident."""
+        return list(self.incident_notes.get(correlation_id, []))
+
+    def get_scenario_history_entries(self) -> list[dict]:
+        """Return all scenario history entries."""
+        return list(self.scenario_history)
+
+    def is_session_revoked(self, session_id: str) -> bool:
+        """Check if a session has been revoked."""
+        return session_id in self.revoked_sessions
+
+    def is_step_up_required(self, actor_id: str) -> bool:
+        """Check if step-up auth is required for an actor."""
+        return actor_id in self.step_up_required
+
+    def is_download_restricted(self, actor_id: str) -> bool:
+        """Check if download access is restricted for an actor."""
+        return actor_id in self.download_restricted_actors
+
+    def session_exists(self, session_id: str) -> bool:
+        """Check if a session exists (regardless of revocation status)."""
+        return session_id in self.actor_sessions.values()
+
+    def find_actor_for_session(self, session_id: str) -> str | None:
+        """Find the actor ID associated with a session."""
+        return next((a for a, s in self.actor_sessions.items() if s == session_id), None)
+
+    def get_containment_counts(self) -> dict[str, int]:
+        """Return counts of all active containment measures."""
+        return {
+            "step_up_required": len(self.step_up_required),
+            "revoked_sessions": len(self.revoked_sessions),
+            "download_restricted": len(self.download_restricted_actors),
+            "disabled_services": len(self.disabled_services),
+            "quarantined_artifacts": len(self.quarantined_artifacts),
+        }
 
     # --- Transaction context ---
 

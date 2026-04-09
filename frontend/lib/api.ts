@@ -1,5 +1,10 @@
 // ============================================================
 // AegisRange API Client
+//
+// Authentication uses httpOnly cookies set by the backend.
+// The JWT token never touches JavaScript.  All requests include
+// credentials: 'include' so the browser sends the cookie
+// automatically.
 // ============================================================
 
 import {
@@ -26,40 +31,20 @@ import {
   Campaign,
   ExerciseReport,
   AuthToken,
+  CurrentUser,
   PlatformUser,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const STORAGE_KEY = 'aegisrange_auth';
-
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed.token && parsed.expires_at && new Date(parsed.expires_at) > new Date()) {
-        return parsed.token;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${path}`;
-  const token = getAuthToken();
-  const authHeaders: Record<string, string> = token
-    ? { Authorization: `Bearer ${token}` }
-    : {};
 
   const res = await fetch(url, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders,
       ...options?.headers,
     },
   });
@@ -265,6 +250,16 @@ export async function platformLogin(username: string, password: string): Promise
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
+}
+
+export async function platformLogout(): Promise<void> {
+  await request<{ status: string }>('/auth/logout', {
+    method: 'POST',
+  });
+}
+
+export async function getCurrentUser(): Promise<CurrentUser> {
+  return request<CurrentUser>('/auth/me');
 }
 
 export async function getPlatformUsers(): Promise<PlatformUser[]> {

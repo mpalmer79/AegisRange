@@ -89,7 +89,10 @@ class TestAuthAPI(unittest.TestCase):
         })
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertIn("token", data)
+        # Token is in httpOnly cookie, NOT in JSON body
+        self.assertNotIn("token", data)
+        cookie = resp.cookies.get("aegisrange_token")
+        self.assertIsNotNone(cookie, "httpOnly cookie should be set on login")
         self.assertEqual(data["username"], "admin")
         self.assertEqual(data["role"], "admin")
         self.assertIn("expires_at", data)

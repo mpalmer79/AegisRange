@@ -143,7 +143,9 @@ class TestTokenExpirySingleSource(unittest.TestCase):
             "password": "admin_pass",
         })
         data = resp.json()
-        token = data["token"]
+        # Token is in the httpOnly cookie, not the JSON body
+        token = resp.cookies.get("aegisrange_token")
+        self.assertIsNotNone(token, "httpOnly cookie should be set on login")
         # Verify the token and check its embedded expiry
         payload = _auth_service.verify_token(token)
         self.assertIsNotNone(payload)
@@ -197,15 +199,18 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
         # No JWT token in identity login response
         self.assertNotIn("token", data)
 
-    def test_platform_login_returns_jwt(self) -> None:
+    def test_platform_login_sets_httponly_cookie(self) -> None:
         client = TestClient(app)
         resp = client.post("/auth/login", json={
             "username": "admin",
             "password": "admin_pass",
         })
         data = resp.json()
-        self.assertIn("token", data)
+        # Token is in the httpOnly cookie, NOT in the JSON body
+        self.assertNotIn("token", data)
         self.assertIn("role", data)
+        cookie = resp.cookies.get("aegisrange_token")
+        self.assertIsNotNone(cookie, "httpOnly cookie should be set")
         # No simulated actor fields
         self.assertNotIn("actor_id", data)
         self.assertNotIn("session_id", data)

@@ -312,7 +312,20 @@ _auth_service = AuthService()  # secret_key sourced from settings.jwt_secret_key
 
 
 def _extract_bearer_token(request: Request) -> str | None:
-    """Pull the bearer token from the Authorization header."""
+    """Extract the bearer token from an httpOnly cookie or Authorization header.
+
+    Priority: httpOnly cookie > Authorization header.  The cookie path
+    is the primary channel for browser clients (token never touches JS).
+    The header fallback supports API clients and the test suite.
+    """
+    from app.config import settings
+
+    # 1. httpOnly cookie (primary — browser clients)
+    cookie_token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+    if cookie_token:
+        return cookie_token
+
+    # 2. Authorization header (fallback — API clients / tests)
     auth_header: str | None = request.headers.get("authorization")
     if not auth_header:
         return None

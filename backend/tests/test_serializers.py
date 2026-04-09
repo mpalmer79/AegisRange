@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime
 
-from app.models import Alert, Confidence, Event, Incident, Severity, TimelineEntry
+from app.models import Alert, Confidence, Event, Incident, Severity, TimelineEntry, utc_now
 from app.serializers import (
     alert_to_dict,
     auth_user_to_dict,
@@ -179,7 +179,7 @@ class TestRiskProfileSerializer(unittest.TestCase):
             peak_score: int = 90
             contributing_rules: list = dc_field(default_factory=lambda: ["DET-AUTH-001"])
             score_history: list = dc_field(default_factory=list)
-            last_updated: datetime = dc_field(default_factory=datetime.utcnow)
+            last_updated: datetime = dc_field(default_factory=utc_now)
 
         d = risk_profile_to_dict(FakeProfile())
         self.assertEqual(
@@ -198,7 +198,7 @@ class TestAuthUserSerializer(unittest.TestCase):
             username: str = "admin"
             role: str = "admin"
             display_name: str = "Admin User"
-            created_at: datetime = dc_field(default_factory=datetime.utcnow)
+            created_at: datetime = dc_field(default_factory=utc_now)
 
         d = auth_user_to_dict(FakeUser())
         self.assertEqual(

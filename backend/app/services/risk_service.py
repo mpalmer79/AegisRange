@@ -41,7 +41,7 @@ class RiskScoringService:
         profile = self.store.risk_profiles.get(alert.actor_id)
         if profile is None:
             profile = RiskProfile(actor_id=alert.actor_id)
-            self.store.risk_profiles[alert.actor_id] = profile
+            self.store.update_risk_profile(alert.actor_id, profile)
 
         base_score = SEVERITY_WEIGHTS.get(alert.severity, 0)
         multiplier = CONFIDENCE_MULTIPLIERS.get(alert.confidence, 0.5)

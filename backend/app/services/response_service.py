@@ -44,7 +44,7 @@ class ResponseOrchestrator:
         ]
 
     def _suspicious_login_containment(self, alert: Alert) -> list[ResponseAction]:
-        self.store.step_up_required.add(alert.actor_id)
+        self.store.require_step_up(alert.actor_id)
         return [
             ResponseAction(
                 playbook_id="PB-AUTH-002",
@@ -60,7 +60,7 @@ class ResponseOrchestrator:
     def _session_hijack_containment(self, alert: Alert) -> list[ResponseAction]:
         session_id = alert.payload.get("session_id")
         if session_id:
-            self.store.revoked_sessions.add(session_id)
+            self.store.revoke_session(session_id)
         return [
             ResponseAction(
                 playbook_id="PB-SESSION-003",
@@ -91,7 +91,7 @@ class ResponseOrchestrator:
         ]
 
     def _bulk_access_constraint(self, alert: Alert) -> list[ResponseAction]:
-        self.store.download_restricted_actors.add(alert.actor_id)
+        self.store.restrict_downloads(alert.actor_id)
         return [
             ResponseAction(
                 playbook_id="PB-DOC-005",
@@ -105,7 +105,7 @@ class ResponseOrchestrator:
         ]
 
     def _data_exfiltration_containment(self, alert: Alert) -> list[ResponseAction]:
-        self.store.download_restricted_actors.add(alert.actor_id)
+        self.store.restrict_downloads(alert.actor_id)
         return [
             ResponseAction(
                 playbook_id="PB-DOC-006",
@@ -126,10 +126,8 @@ class ResponseOrchestrator:
         service_id = alert.payload.get("service_id")
         route_list = alert.payload.get("route_list", [])
         if service_id:
-            self.store.disabled_services.add(service_id)
-            if service_id not in self.store.blocked_routes:
-                self.store.blocked_routes[service_id] = set()
-            self.store.blocked_routes[service_id].update(route_list)
+            self.store.disable_service(service_id)
+            self.store.block_routes(service_id, route_list)
         return [
             ResponseAction(
                 playbook_id="PB-SVC-007",
@@ -148,7 +146,7 @@ class ResponseOrchestrator:
     def _artifact_quarantine(self, alert: Alert) -> list[ResponseAction]:
         artifact_ids = alert.payload.get("artifact_ids", [])
         for artifact_id in artifact_ids:
-            self.store.quarantined_artifacts.add(artifact_id)
+            self.store.quarantine_artifact(artifact_id)
         return [
             ResponseAction(
                 playbook_id="PB-ART-008",
@@ -165,8 +163,8 @@ class ResponseOrchestrator:
         ]
 
     def _privileged_change_control(self, alert: Alert) -> list[ResponseAction]:
-        self.store.policy_change_restricted_actors.add(alert.actor_id)
-        self.store.step_up_required.add(alert.actor_id)
+        self.store.restrict_policy_changes(alert.actor_id)
+        self.store.require_step_up(alert.actor_id)
         return [
             ResponseAction(
                 playbook_id="PB-POL-009",
@@ -184,8 +182,8 @@ class ResponseOrchestrator:
 
     def _multi_signal_incident_containment(self, alert: Alert) -> list[ResponseAction]:
         # Apply strongest reversible containment: step-up + download restriction
-        self.store.step_up_required.add(alert.actor_id)
-        self.store.download_restricted_actors.add(alert.actor_id)
+        self.store.require_step_up(alert.actor_id)
+        self.store.restrict_downloads(alert.actor_id)
         return [
             ResponseAction(
                 playbook_id="PB-CORR-010",
