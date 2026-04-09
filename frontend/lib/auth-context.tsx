@@ -1,10 +1,9 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { platformLogin } from './api';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { platformLogin, platformLogout, getCurrentUser } from './api';
 
 interface AuthState {
-  token: string | null;
   username: string | null;
   role: string | null;
   isAuthenticated: boolean;
@@ -13,81 +12,63 @@ interface AuthState {
 interface AuthContextType extends AuthState {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  authHeaders: Record<string, string>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 /**
- * Session-scoped storage key.  We use sessionStorage (not localStorage)
- * so tokens are scoped to the browser tab and cleared on close.
- * This reduces the exposure window compared to localStorage which
- * persists across tabs and browser restarts.
+ * Authentication is cookie-based.  The JWT token is stored in an
+ * httpOnly cookie set by the backend — it never touches JavaScript.
  *
- * NOTE: Any JS-accessible storage is vulnerable to XSS.  The real
- * mitigation is the strict CSP and input sanitisation enforced by
- * the Next.js framework.  A full httpOnly-cookie auth flow would
- * require backend Set-Cookie support (future enhancement).
+ * React state holds only non-secret UI metadata (username, role)
+ * needed for rendering role-gated components.  On mount we call
+ * GET /auth/me to check if the cookie is still valid.
  */
-const STORAGE_KEY = 'aegisrange_auth';
-
-function loadAuth(): AuthState {
-  if (typeof window === 'undefined') {
-    return { token: null, username: null, role: null, isAuthenticated: false };
-  }
-  try {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed.token && parsed.expires_at) {
-        const expiry = new Date(parsed.expires_at);
-        if (expiry > new Date()) {
-          return {
-            token: parsed.token,
-            username: parsed.username,
-            role: parsed.role,
-            isAuthenticated: true,
-          };
-        }
-      }
-    }
-  } catch {
-    // Corrupted storage
-  }
-  return { token: null, username: null, role: null, isAuthenticated: false };
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>(() => loadAuth());
+  const [auth, setAuth] = useState<AuthState>({
+    username: null,
+    role: null,
+    isAuthenticated: false,
+  });
+
+  // On mount, check if the httpOnly cookie is still valid
+  useEffect(() => {
+    getCurrentUser()
+      .then((user) => {
+        setAuth({
+          username: user.username,
+          role: user.role,
+          isAuthenticated: true,
+        });
+      })
+      .catch(() => {
+        // No valid cookie — stay logged out
+      });
+  }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     const result = await platformLogin(username, password);
-    const state: AuthState = {
-      token: result.token,
+    // The httpOnly cookie was set by the backend response.
+    // We only store non-secret UI metadata in React state.
+    setAuth({
       username: result.username,
       role: result.role,
       isAuthenticated: true,
-    };
-    setAuth(state);
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-      token: result.token,
-      username: result.username,
-      role: result.role,
-      expires_at: result.expires_at,
-    }));
+    });
   }, []);
 
-  const logout = useCallback(() => {
-    setAuth({ token: null, username: null, role: null, isAuthenticated: false });
-    sessionStorage.removeItem(STORAGE_KEY);
+  const logout = useCallback(async () => {
+    try {
+      await platformLogout();
+    } catch {
+      // Best-effort — clear local state regardless
+    }
+    setAuth({ username: null, role: null, isAuthenticated: false });
   }, []);
-
-  const authHeaders: Record<string, string> = auth.token
-    ? { Authorization: `Bearer ${auth.token}` }
-    : {};
 
   return (
-    <AuthContext.Provider value={{ ...auth, login, logout, authHeaders }}>
+    <AuthContext.Provider value={{ ...auth, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

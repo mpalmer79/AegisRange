@@ -312,10 +312,15 @@ export interface ExerciseReport {
 }
 
 export interface AuthToken {
-  token: string;
   username: string;
   role: string;
   expires_at: string;
+}
+
+export interface CurrentUser {
+  username: string;
+  role: string;
+  display_name: string;
 }
 
 export interface PlatformUser {

@@ -16,7 +16,7 @@ def list_alerts(
     correlation_id: str | None = Query(default=None),
     rule_id: str | None = Query(default=None),
 ) -> list[dict]:
-    alerts = STORE.alerts
+    alerts = STORE.get_alerts()
     if actor_id:
         alerts = [a for a in alerts if a.actor_id == actor_id]
     if correlation_id:

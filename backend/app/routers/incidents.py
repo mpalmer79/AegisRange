@@ -18,17 +18,17 @@ router = APIRouter(tags=["incidents"])
 
 def _serialize_incident(incident) -> dict:
     """Serialize an incident, injecting notes from the store."""
-    return incident_to_dict(incident, notes=STORE.incident_notes.get(incident.correlation_id, []))
+    return incident_to_dict(incident, notes=STORE.get_incident_notes_for(incident.correlation_id))
 
 
 @router.get("/incidents", dependencies=[Depends(require_role("viewer"))])
 def list_incidents() -> list[dict]:
-    return [_serialize_incident(inc) for inc in STORE.incidents_by_correlation.values()]
+    return [_serialize_incident(inc) for inc in STORE.get_all_incidents()]
 
 
 @router.get("/incidents/{correlation_id}", dependencies=[Depends(require_role("viewer"))])
 def get_incident(correlation_id: str) -> dict:
-    incident = STORE.incidents_by_correlation.get(correlation_id)
+    incident = STORE.get_incident(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     return _serialize_incident(incident)
@@ -36,7 +36,7 @@ def get_incident(correlation_id: str) -> dict:
 
 @router.patch("/incidents/{correlation_id}/status", dependencies=[Depends(require_role("analyst"))])
 def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, request: Request) -> dict:
-    incident = STORE.incidents_by_correlation.get(correlation_id)
+    incident = STORE.get_incident(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
 
@@ -75,7 +75,7 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, r
 
 @router.post("/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("analyst"))])
 def add_incident_note(correlation_id: str, note: IncidentNote, request: Request) -> dict:
-    incident = STORE.incidents_by_correlation.get(correlation_id)
+    incident = STORE.get_incident(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     platform_user = getattr(request.state, "platform_user", None)
@@ -98,7 +98,7 @@ def add_incident_note(correlation_id: str, note: IncidentNote, request: Request)
 
 @router.get("/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("viewer"))])
 def get_incident_notes(correlation_id: str) -> list[dict]:
-    incident = STORE.incidents_by_correlation.get(correlation_id)
+    incident = STORE.get_incident(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
-    return STORE.incident_notes.get(correlation_id, [])
+    return STORE.get_incident_notes_for(correlation_id)

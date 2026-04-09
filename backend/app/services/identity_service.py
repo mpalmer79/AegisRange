@@ -58,7 +58,21 @@ class IdentityService:
         return True
 
     def is_step_up_required(self, actor_id: str) -> bool:
-        return actor_id in self.store.step_up_required
+        return self.store.is_step_up_required(actor_id)
+
+    def is_session_revoked(self, session_id: str) -> bool:
+        return self.store.is_session_revoked(session_id)
+
+    def session_exists(self, session_id: str) -> bool:
+        return self.store.session_exists(session_id)
+
+    def find_actor_by_session(self, session_id: str) -> str | None:
+        return self.store.find_actor_for_session(session_id)
+
+    def is_known_simulation_actor(self, actor_id: str) -> bool:
+        """Check whether actor_id matches a known simulation identity."""
+        known_actor_ids = {u["actor_id"] for u in self._users.values()}
+        return actor_id in known_actor_ids
 
     def clear_step_up(self, actor_id: str) -> None:
         self.store.clear_step_up(actor_id)

@@ -13,6 +13,18 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SimulationLoginRequest(LoginRequest):
+    """Extended login request for simulation identity endpoints.
+
+    ``simulated_source_ip`` is optional simulation metadata describing
+    the fictional source IP of the emulated threat actor.  It is recorded
+    in the event payload but is NOT used as the event's ``source_ip``
+    (that is always derived from the real TCP connection).
+    """
+
+    simulated_source_ip: str = "127.0.0.1"
+
+
 class ReadRequest(BaseModel):
     """Simulation-context request body.
 
@@ -20,6 +32,11 @@ class ReadRequest(BaseModel):
     being emulated within a scenario.  They are NOT the authenticated
     platform user — that identity comes from the JWT bearer token and is
     recorded in every emitted event's ``payload.platform_user_id`` field.
+
+    ``simulated_source_ip`` is optional simulation metadata describing
+    the fictional source IP of the emulated threat actor.  It is recorded
+    in the event payload but is NOT used as the event's ``source_ip``
+    (that is always derived from the real TCP connection).
 
     The backend treats these fields as untrusted simulation metadata:
     they drive scenario logic (e.g. which documents the actor can access)
@@ -33,6 +50,7 @@ class ReadRequest(BaseModel):
     actor_id: str
     actor_role: str
     session_id: str | None = None
+    simulated_source_ip: str = "127.0.0.1"
 
 
 class DownloadRequest(BaseModel):
@@ -41,6 +59,7 @@ class DownloadRequest(BaseModel):
     actor_id: str
     actor_role: str
     session_id: str | None = None
+    simulated_source_ip: str = "127.0.0.1"
 
 
 class IncidentStatusUpdate(BaseModel):

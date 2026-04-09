@@ -27,7 +27,7 @@ def get_risk_profile(actor_id: str) -> dict:
 @router.get("/rule-effectiveness", dependencies=[Depends(require_role("analyst"))])
 def get_rule_effectiveness() -> list[dict]:
     rule_counts: dict[str, dict] = {}
-    for alert in STORE.alerts:
+    for alert in STORE.get_alerts():
         if alert.rule_id not in rule_counts:
             rule_counts[alert.rule_id] = {
                 "rule_id": alert.rule_id,
@@ -47,4 +47,4 @@ def get_rule_effectiveness() -> list[dict]:
 
 @router.get("/scenario-history", dependencies=[Depends(require_role("analyst"))])
 def get_scenario_history() -> list[dict]:
-    return STORE.scenario_history
+    return STORE.get_scenario_history_entries()

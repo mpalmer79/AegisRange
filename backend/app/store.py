@@ -149,6 +149,70 @@ class InMemoryStore:
         """Record a simulated actor's session (ephemeral state)."""
         self.actor_sessions[actor_id] = session_id
 
+    # --- Read-only accessor methods ---
+    #
+    # Routers and services should use these instead of reaching into
+    # the raw collections.  This encapsulates the data layout and
+    # makes it straightforward to swap the backing store later.
+
+    def get_events(self) -> list[Event]:
+        """Return all events (snapshot copy)."""
+        return list(self.events)
+
+    def get_alerts(self) -> list[Alert]:
+        """Return all alerts (snapshot copy)."""
+        return list(self.alerts)
+
+    def get_responses(self) -> list[ResponseAction]:
+        """Return all responses (snapshot copy)."""
+        return list(self.responses)
+
+    def get_incident(self, correlation_id: str) -> Incident | None:
+        """Look up an incident by correlation ID."""
+        return self.incidents_by_correlation.get(correlation_id)
+
+    def get_all_incidents(self) -> list[Incident]:
+        """Return all incidents."""
+        return list(self.incidents_by_correlation.values())
+
+    def get_incident_notes_for(self, correlation_id: str) -> list[dict]:
+        """Return notes for a specific incident."""
+        return list(self.incident_notes.get(correlation_id, []))
+
+    def get_scenario_history_entries(self) -> list[dict]:
+        """Return all scenario history entries."""
+        return list(self.scenario_history)
+
+    def is_session_revoked(self, session_id: str) -> bool:
+        """Check if a session has been revoked."""
+        return session_id in self.revoked_sessions
+
+    def is_step_up_required(self, actor_id: str) -> bool:
+        """Check if step-up auth is required for an actor."""
+        return actor_id in self.step_up_required
+
+    def is_download_restricted(self, actor_id: str) -> bool:
+        """Check if download access is restricted for an actor."""
+        return actor_id in self.download_restricted_actors
+
+    def session_exists(self, session_id: str) -> bool:
+        """Check if a session exists (regardless of revocation status)."""
+        return session_id in self.actor_sessions.values()
+
+    def find_actor_for_session(self, session_id: str) -> str | None:
+        """Find the actor ID associated with a session."""
+        return next((a for a, s in self.actor_sessions.items() if s == session_id), None)
+
+    def get_containment_counts(self) -> dict[str, int]:
+        """Return counts of all active containment measures."""
+        return {
+            "step_up_required": len(self.step_up_required),
+            "revoked_sessions": len(self.revoked_sessions),
+            "download_restricted": len(self.download_restricted_actors),
+            "disabled_services": len(self.disabled_services),
+            "quarantined_artifacts": len(self.quarantined_artifacts),
+        }
+
     # --- Transaction context ---
 
     @contextmanager

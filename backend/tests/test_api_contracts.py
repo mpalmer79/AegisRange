@@ -152,7 +152,7 @@ class TestPlatformLoginContract(unittest.TestCase):
         data = resp.json()
         self.assertEqual(
             set(data.keys()),
-            {"token", "username", "role", "expires_at"},
+            {"username", "role", "expires_at"},
         )
 
 

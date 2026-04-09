@@ -7,17 +7,20 @@ threat actor — they are NOT the authenticated platform user.
 
 The authenticated platform user is identified via the JWT bearer token
 and recorded on every emitted event via ``platform_user_id``.
+
+``simulated_source_ip`` is provided in the request body (not as a
+header) so it is clearly simulation metadata, not a trusted network
+property.
 """
 from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.dependencies import document_service, pipeline, require_role
+from app.dependencies import document_service, identity_service, pipeline, require_role
 from app.models import Confidence, Event, Severity
 from app.schemas import DownloadRequest, ReadRequest
-from app.store import STORE
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -36,16 +39,13 @@ def read_document(
     document_id: str,
     payload: ReadRequest,
     request: Request,
-    x_source_ip: str = Header(
-        default="127.0.0.1",
-        description="Simulation metadata: fictional source IP for the emulated actor. "
-        "NOT used as the real source_ip — that is derived from the TCP connection.",
-    ),
 ) -> dict:
-    if payload.session_id and payload.session_id in STORE.revoked_sessions:
+    if payload.session_id and identity_service.is_session_revoked(payload.session_id):
         raise HTTPException(status_code=401, detail="Session revoked")
-    if payload.actor_id in STORE.step_up_required:
+    if identity_service.is_step_up_required(payload.actor_id):
         raise HTTPException(status_code=403, detail="Step-up authentication required")
+    if not identity_service.is_known_simulation_actor(payload.actor_id):
+        raise HTTPException(status_code=422, detail=f"Unknown simulation actor: {payload.actor_id}")
 
     allowed, document = document_service.can_read(payload.actor_role, document_id)
     if document is None:
@@ -76,7 +76,7 @@ def read_document(
         payload={
             "document_id": document.document_id,
             "classification": document.classification,
-            "simulated_source_ip": x_source_ip,
+            "simulated_source_ip": payload.simulated_source_ip,
             "platform_user_id": platform_user_id,
         },
     )
@@ -90,16 +90,13 @@ def download_document(
     document_id: str,
     payload: DownloadRequest,
     request: Request,
-    x_source_ip: str = Header(
-        default="127.0.0.1",
-        description="Simulation metadata: fictional source IP for the emulated actor. "
-        "NOT used as the real source_ip — that is derived from the TCP connection.",
-    ),
 ) -> dict:
-    if payload.session_id and payload.session_id in STORE.revoked_sessions:
+    if payload.session_id and identity_service.is_session_revoked(payload.session_id):
         raise HTTPException(status_code=401, detail="Session revoked")
-    if payload.actor_id in STORE.step_up_required:
+    if identity_service.is_step_up_required(payload.actor_id):
         raise HTTPException(status_code=403, detail="Step-up authentication required")
+    if not identity_service.is_known_simulation_actor(payload.actor_id):
+        raise HTTPException(status_code=422, detail=f"Unknown simulation actor: {payload.actor_id}")
 
     allowed, document = document_service.can_download(payload.actor_role, document_id, actor_id=payload.actor_id)
     if document is None:
@@ -130,7 +127,7 @@ def download_document(
         payload={
             "document_id": document.document_id,
             "classification": document.classification,
-            "simulated_source_ip": x_source_ip,
+            "simulated_source_ip": payload.simulated_source_ip,
             "platform_user_id": platform_user_id,
         },
     )

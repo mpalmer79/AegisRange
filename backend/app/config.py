@@ -11,6 +11,13 @@ class Settings:
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")
     TOKEN_EXPIRY_HOURS: int = int(os.getenv("TOKEN_EXPIRY_HOURS", "24"))
     DB_PATH: str = os.getenv("DB_PATH", "aegisrange.db")
+    AUTH_COOKIE_NAME: str = "aegisrange_token"
+    AUTH_COOKIE_SAMESITE: str = "lax"
+
+    @property
+    def auth_cookie_secure(self) -> bool:
+        """Only set Secure flag in production (requires HTTPS)."""
+        return self.APP_ENV == "production"
 
     @property
     def jwt_secret_key(self) -> str:

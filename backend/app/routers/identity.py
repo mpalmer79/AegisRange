@@ -1,9 +1,10 @@
 """Simulation identity routes (threat actor authentication).
 
 These endpoints simulate threat-actor authentication within adversary
-scenarios.  The ``actor_id`` / ``actor_role`` in the request body and
-the ``x_source_ip`` header are **simulation metadata** describing the
-emulated threat actor — they are NOT the authenticated platform user.
+scenarios.  The ``actor_id`` / ``actor_role`` produced by the identity
+service and the ``simulated_source_ip`` in the request body are
+**simulation metadata** describing the emulated threat actor — they are
+NOT the authenticated platform user.
 
 The authenticated platform user is identified via the JWT bearer token
 and recorded on every emitted event via ``platform_user_id``.
@@ -13,12 +14,11 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.dependencies import identity_service, pipeline, require_role
 from app.models import Confidence, Event, Severity
-from app.schemas import LoginRequest
-from app.store import STORE
+from app.schemas import SimulationLoginRequest
 
 logger = logging.getLogger("aegisrange")
 router = APIRouter(prefix="/identity", tags=["identity"])
@@ -35,13 +35,8 @@ def _client_ip(request: Request) -> str:
 
 @router.post("/login", dependencies=[Depends(require_role("viewer"))])
 def login(
-    payload: LoginRequest,
+    payload: SimulationLoginRequest,
     request: Request,
-    x_source_ip: str = Header(
-        default="127.0.0.1",
-        description="Simulation metadata: fictional source IP for the emulated actor. "
-        "NOT used as the real source_ip — that is derived from the TCP connection.",
-    ),
 ) -> dict:
     platform_user = getattr(request.state, "platform_user", None)
     platform_user_id = platform_user.sub if platform_user else "unknown"
@@ -71,7 +66,7 @@ def login(
         payload={
             "username": payload.username,
             "authentication_method": "password",
-            "simulated_source_ip": x_source_ip,
+            "simulated_source_ip": payload.simulated_source_ip,
             "platform_user_id": platform_user_id,
         },
     )
@@ -82,16 +77,16 @@ def login(
         "actor_id": result.actor_id,
         "actor_role": result.actor_role,
         "session_id": result.session_id,
-        "step_up_required": result.actor_id in STORE.step_up_required,
+        "step_up_required": identity_service.is_step_up_required(result.actor_id),
     }
 
 
 @router.post("/sessions/{session_id}/revoke", dependencies=[Depends(require_role("analyst"))])
 def revoke_session(session_id: str, request: Request) -> dict:
-    if session_id not in STORE.actor_sessions.values():
+    if not identity_service.session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
-    STORE.revoke_session(session_id)
-    actor_id = next((a for a, s in STORE.actor_sessions.items() if s == session_id), None)
+    identity_service.revoke_session(session_id)
+    actor_id = identity_service.find_actor_by_session(session_id)
 
     platform_user = getattr(request.state, "platform_user", None)
     platform_user_id = platform_user.sub if platform_user else "unknown"
