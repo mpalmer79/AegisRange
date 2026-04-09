@@ -1,4 +1,5 @@
 """Incident management routes."""
+
 from __future__ import annotations
 
 import logging
@@ -18,7 +19,9 @@ router = APIRouter(tags=["incidents"])
 
 def _serialize_incident(incident) -> dict:
     """Serialize an incident, injecting notes from the store."""
-    return incident_to_dict(incident, notes=STORE.get_incident_notes_for(incident.correlation_id))
+    return incident_to_dict(
+        incident, notes=STORE.get_incident_notes_for(incident.correlation_id)
+    )
 
 
 @router.get("/incidents", dependencies=[Depends(require_role("viewer"))])
@@ -26,7 +29,9 @@ def list_incidents() -> list[dict]:
     return [_serialize_incident(inc) for inc in STORE.get_all_incidents()]
 
 
-@router.get("/incidents/{correlation_id}", dependencies=[Depends(require_role("viewer"))])
+@router.get(
+    "/incidents/{correlation_id}", dependencies=[Depends(require_role("viewer"))]
+)
 def get_incident(correlation_id: str) -> dict:
     incident = STORE.get_incident(correlation_id)
     if incident is None:
@@ -34,8 +39,13 @@ def get_incident(correlation_id: str) -> dict:
     return _serialize_incident(incident)
 
 
-@router.patch("/incidents/{correlation_id}/status", dependencies=[Depends(require_role("analyst"))])
-def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, request: Request) -> dict:
+@router.patch(
+    "/incidents/{correlation_id}/status",
+    dependencies=[Depends(require_role("analyst"))],
+)
+def update_incident_status(
+    correlation_id: str, payload: IncidentStatusUpdate, request: Request
+) -> dict:
     incident = STORE.get_incident(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
@@ -56,7 +66,15 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, r
     platform_user = getattr(request.state, "platform_user", None)
     changed_by = platform_user.sub if platform_user else "unknown"
     old_status = incident.status
-    logger.info("Incident status update", extra={"correlation_id": correlation_id, "from": old_status, "to": payload.status, "changed_by": changed_by})
+    logger.info(
+        "Incident status update",
+        extra={
+            "correlation_id": correlation_id,
+            "from": old_status,
+            "to": payload.status,
+            "changed_by": changed_by,
+        },
+    )
     incident.status = payload.status
     if payload.status == "closed":
         incident.closed_at = utc_now()
@@ -73,8 +91,12 @@ def update_incident_status(correlation_id: str, payload: IncidentStatusUpdate, r
     return _serialize_incident(incident)
 
 
-@router.post("/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("analyst"))])
-def add_incident_note(correlation_id: str, note: IncidentNote, request: Request) -> dict:
+@router.post(
+    "/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("analyst"))]
+)
+def add_incident_note(
+    correlation_id: str, note: IncidentNote, request: Request
+) -> dict:
     incident = STORE.get_incident(correlation_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
@@ -96,7 +118,9 @@ def add_incident_note(correlation_id: str, note: IncidentNote, request: Request)
     return entry
 
 
-@router.get("/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("viewer"))])
+@router.get(
+    "/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("viewer"))]
+)
 def get_incident_notes(correlation_id: str) -> list[dict]:
     incident = STORE.get_incident(correlation_id)
     if incident is None:

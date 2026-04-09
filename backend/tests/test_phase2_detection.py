@@ -1,4 +1,5 @@
 """Phase 2: Unit tests for DET-SVC-007, DET-ART-008, DET-POL-009 detection rules."""
+
 from __future__ import annotations
 
 import unittest
@@ -99,7 +100,9 @@ class TestDETSVC007(unittest.TestCase):
         self.assertEqual(len(matched), 0)
 
     def test_ignores_non_authorization_failure(self) -> None:
-        event = _make_event(event_type="authentication.login.failure", category="authentication")
+        event = _make_event(
+            event_type="authentication.login.failure", category="authentication"
+        )
         self.telemetry.emit(event)
         alerts = self.detection.evaluate(event)
         matched = [a for a in alerts if a.rule_id == "DET-SVC-007"]
@@ -170,7 +173,11 @@ class TestDETART008(unittest.TestCase):
         self.assertEqual(len(matched[0].payload["artifact_ids"]), 3)
 
     def test_ignores_other_event_types(self) -> None:
-        event = _make_event(event_type="artifact.validation.success", status="success", status_code="200")
+        event = _make_event(
+            event_type="artifact.validation.success",
+            status="success",
+            status_code="200",
+        )
         self.telemetry.emit(event)
         alerts = self.detection.evaluate(event)
         matched = [a for a in alerts if a.rule_id == "DET-ART-008"]

@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  backend-test:
+  backend-lint:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -17,15 +17,53 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt -r dev-requirements.txt
-      - name: Lint
+        run: pip install -r requirements.txt -r dev-requirements.txt
+      - name: Ruff check
         run: ruff check app/ tests/
-      - name: Test
-        run: python -m pytest tests/ -v --tb=short
+      - name: Ruff format check
+        run: ruff format --check app/ tests/
 
-  frontend-build:
+  backend-test:
+    runs-on: ubuntu-latest
+    needs: backend-lint
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r dev-requirements.txt
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+      - name: Verify no datetime.utcnow usage
+        run: |
+          python -c "
+          import ast, pathlib, sys
+          def scan(src):
+              try: tree = ast.parse(src)
+              except SyntaxError: return []
+              return [n.lineno for n in ast.walk(tree)
+                      if isinstance(n, ast.Attribute) and n.attr == 'utcnow'
+                      and isinstance(n.value, ast.Name) and n.value.id == 'datetime']
+          hits = []
+          for f in pathlib.Path('.').rglob('*.py'):
+              h = scan(f.read_text())
+              if h: hits.append((str(f), h))
+          if hits:
+              for f, lines in hits: print(f'ERROR: {f} lines {lines}')
+              sys.exit(1)
+          print('OK: zero datetime.utcnow usage')
+          "
+
+  frontend-lint:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,9 +73,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
       - name: Lint
         run: npm run lint
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript type check
+        run: npx tsc --noEmit
       - name: Build
         run: npm run build
+      - name: Verify standalone output
+        run: test -f .next/standalone/server.js
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t aegisrange-backend ./backend
+      - name: Build frontend image
+        run: docker build -t aegisrange-frontend ./frontend

@@ -1,4 +1,5 @@
 """Tests for Phase 6: MITRE ATT&CK service and API endpoints."""
+
 from __future__ import annotations
 
 import unittest
@@ -15,9 +16,16 @@ class TestMitreAttackService(unittest.TestCase):
         mappings = self.service.get_all_mappings()
         rule_ids = {m.rule_id for m in mappings}
         expected = {
-            "DET-AUTH-001", "DET-AUTH-002", "DET-SESSION-003",
-            "DET-DOC-004", "DET-DOC-005", "DET-DOC-006",
-            "DET-SVC-007", "DET-ART-008", "DET-POL-009", "DET-CORR-010",
+            "DET-AUTH-001",
+            "DET-AUTH-002",
+            "DET-SESSION-003",
+            "DET-DOC-004",
+            "DET-DOC-005",
+            "DET-DOC-006",
+            "DET-SVC-007",
+            "DET-ART-008",
+            "DET-POL-009",
+            "DET-CORR-010",
         }
         self.assertEqual(rule_ids, expected)
 
@@ -73,8 +81,11 @@ class TestMitreAttackService(unittest.TestCase):
     def test_kill_chain_phases_in_mappings(self) -> None:
         mappings = self.service.get_all_mappings()
         for m in mappings:
-            self.assertGreater(len(m.kill_chain_phases), 0,
-                f"{m.rule_id} should have kill chain phases")
+            self.assertGreater(
+                len(m.kill_chain_phases),
+                0,
+                f"{m.rule_id} should have kill chain phases",
+            )
 
 
 class TestMitreAPI(unittest.TestCase):

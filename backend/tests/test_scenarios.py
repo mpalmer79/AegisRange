@@ -1,4 +1,5 @@
 """1E.3: Integration tests for each scenario end-to-end."""
+
 from __future__ import annotations
 
 import unittest

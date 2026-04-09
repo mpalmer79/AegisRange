@@ -23,9 +23,15 @@ logger = logging.getLogger("aegisrange.auth")
 
 ROLES: dict[str, dict[str, object]] = {
     "admin": {"level": 100, "description": "Full platform access"},
-    "soc_manager": {"level": 75, "description": "SOC operations and incident management"},
+    "soc_manager": {
+        "level": 75,
+        "description": "SOC operations and incident management",
+    },
     "analyst": {"level": 50, "description": "Detection analysis and investigation"},
-    "red_team": {"level": 50, "description": "Scenario execution and adversary emulation"},
+    "red_team": {
+        "level": 50,
+        "description": "Scenario execution and adversary emulation",
+    },
     "viewer": {"level": 25, "description": "Read-only access to dashboards"},
 }
 
@@ -75,6 +81,7 @@ def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
 # module load time so the plain-text passwords are never stored.
 # ---------------------------------------------------------------------------
 
+
 def _build_default_users() -> dict[str, dict[str, str]]:
     """Build default user entries with PBKDF2-hashed passwords."""
     users_spec = [
@@ -103,13 +110,13 @@ DEFAULT_USERS: dict[str, dict[str, str]] = _build_default_users()
 # ---------------------------------------------------------------------------
 
 ENDPOINT_ROLES: dict[str, str] = {
-    "scenarios": "red_team",       # red_team, soc_manager, admin
+    "scenarios": "red_team",  # red_team, soc_manager, admin
     "incidents_write": "analyst",  # analyst, soc_manager, admin
-    "incidents_read": "viewer",    # all roles
-    "analytics": "analyst",        # analyst, soc_manager, admin
-    "admin": "admin",              # admin only
-    "events": "viewer",            # all roles
-    "alerts": "viewer",            # all roles
+    "incidents_read": "viewer",  # all roles
+    "analytics": "analyst",  # analyst, soc_manager, admin
+    "admin": "admin",  # admin only
+    "events": "viewer",  # all roles
+    "alerts": "viewer",  # all roles
 }
 
 # ---------------------------------------------------------------------------
@@ -143,12 +150,17 @@ class TokenPayload:
 class AuthService:
     """JWT authentication and user management for the AegisRange simulation platform."""
 
-    def __init__(self, secret_key: str | None = None, token_expiry_hours: int | None = None) -> None:
+    def __init__(
+        self, secret_key: str | None = None, token_expiry_hours: int | None = None
+    ) -> None:
         from app.config import settings
+
         self._secret_key = secret_key or settings.jwt_secret_key
         self._token_expiry_hours = token_expiry_hours or settings.TOKEN_EXPIRY_HOURS
         self._users: dict[str, AuthUser] = {}
-        self._password_store: dict[str, tuple[str, str]] = {}  # username -> (hash, salt)
+        self._password_store: dict[
+            str, tuple[str, str]
+        ] = {}  # username -> (hash, salt)
         self._init_default_users()
 
     # -- bootstrap -----------------------------------------------------------
@@ -162,11 +174,16 @@ class AuthService:
                 display_name=info["display_name"],
             )
             self._users[username] = user
-            self._password_store[username] = (info["password_hash"], info["password_salt"])
+            self._password_store[username] = (
+                info["password_hash"],
+                info["password_salt"],
+            )
 
     # -- public API ----------------------------------------------------------
 
-    def authenticate(self, username: str, password: str) -> tuple[bool, str | None, datetime | None]:
+    def authenticate(
+        self, username: str, password: str
+    ) -> tuple[bool, str | None, datetime | None]:
         """Authenticate a user and return ``(success, token | None, expires_at | None)``.
 
         The returned ``expires_at`` is read back from the newly-created
@@ -378,7 +395,7 @@ def require_role(minimum_role: str):
             raise HTTPException(
                 status_code=403,
                 detail=f"Role '{payload.role}' (level {user_level}) does not meet "
-                       f"minimum required role '{minimum_role}' (level {minimum_level})",
+                f"minimum required role '{minimum_role}' (level {minimum_level})",
             )
 
         # Stash the verified identity on request.state so handlers

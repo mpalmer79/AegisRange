@@ -9,6 +9,7 @@ NOT the authenticated platform user.
 The authenticated platform user is identified via the JWT bearer token
 and recorded on every emitted event via ``platform_user_id``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,7 +43,11 @@ def login(
     platform_user_id = platform_user.sub if platform_user else "unknown"
 
     result = identity_service.authenticate(payload.username, payload.password)
-    event_type = "authentication.login.success" if result.success else "authentication.login.failure"
+    event_type = (
+        "authentication.login.success"
+        if result.success
+        else "authentication.login.failure"
+    )
 
     event = Event(
         event_type=event_type,
@@ -81,7 +86,9 @@ def login(
     }
 
 
-@router.post("/sessions/{session_id}/revoke", dependencies=[Depends(require_role("analyst"))])
+@router.post(
+    "/sessions/{session_id}/revoke", dependencies=[Depends(require_role("analyst"))]
+)
 def revoke_session(session_id: str, request: Request) -> dict:
     if not identity_service.session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")

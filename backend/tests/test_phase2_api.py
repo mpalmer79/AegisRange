@@ -1,4 +1,5 @@
 """Phase 2-3: API route tests for new endpoints."""
+
 from __future__ import annotations
 
 import unittest
@@ -36,9 +37,13 @@ class TestMetricsEndpoint(APITestBase):
         resp = self.client.get("/metrics")
         data = resp.json()
         expected_keys = {
-            "total_events", "total_alerts", "total_responses",
-            "total_incidents", "active_containments",
-            "events_by_category", "alerts_by_severity",
+            "total_events",
+            "total_alerts",
+            "total_responses",
+            "total_incidents",
+            "active_containments",
+            "events_by_category",
+            "alerts_by_severity",
             "incidents_by_status",
         }
         self.assertEqual(set(data.keys()), expected_keys)
@@ -107,7 +112,9 @@ class TestNewAlertFiltering(APITestBase):
 class TestNewEventFiltering(APITestBase):
     def test_events_filter_authorization_failure(self) -> None:
         self.client.post("/scenarios/scn-svc-005")
-        resp = self.client.get("/events", params={"event_type": "authorization.failure"})
+        resp = self.client.get(
+            "/events", params={"event_type": "authorization.failure"}
+        )
         self.assertEqual(resp.status_code, 200)
         events = resp.json()
         self.assertGreater(len(events), 0)

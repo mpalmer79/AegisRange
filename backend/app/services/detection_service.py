@@ -108,7 +108,10 @@ class DetectionService:
             confidence=Confidence.HIGH,
             actor_id=event.actor_id,
             correlation_id=event.correlation_id,
-            contributing_event_ids=[*map(lambda failure: failure.event_id, failures), event.event_id],
+            contributing_event_ids=[
+                *map(lambda failure: failure.event_id, failures),
+                event.event_id,
+            ],
             summary="Successful authentication followed repeated failures within 5 minutes.",
             payload={
                 "failure_count": len(failures),
@@ -118,13 +121,20 @@ class DetectionService:
         )
 
     def _detect_token_reuse_conflicting_origins(self, event: Event) -> Alert | None:
-        if event.event_type not in ("authorization.check.success", "authorization.check.failure"):
+        if event.event_type not in (
+            "authorization.check.success",
+            "authorization.check.failure",
+        ):
             return None
         if not event.session_id:
             return None
 
         session_events = self.telemetry.lookup_events(
-            event_types={"session.token.issued", "authorization.check.success", "authorization.check.failure"},
+            event_types={
+                "session.token.issued",
+                "authorization.check.success",
+                "authorization.check.failure",
+            },
             since_minutes=5,
         )
         same_session = [e for e in session_events if e.session_id == event.session_id]
@@ -336,15 +346,14 @@ class DetectionService:
         )
         # Filter by same actor_id or same correlation_id
         related = [
-            e for e in detection_events
-            if e.correlation_id == event.correlation_id or
-            e.payload.get("matched_conditions", {}).get("source_ip") == event.payload.get("matched_conditions", {}).get("source_ip")
+            e
+            for e in detection_events
+            if e.correlation_id == event.correlation_id
+            or e.payload.get("matched_conditions", {}).get("source_ip")
+            == event.payload.get("matched_conditions", {}).get("source_ip")
         ]
         # Also include events for the same actor from the payload
-        actor_related = [
-            e for e in detection_events
-            if e.actor_id == event.actor_id
-        ]
+        actor_related = [e for e in detection_events if e.actor_id == event.actor_id]
         # Merge and deduplicate
         seen_ids = set()
         merged: list[Event] = []
@@ -355,8 +364,7 @@ class DetectionService:
 
         # Count distinct rule_ids
         distinct_rules = {
-            e.payload.get("rule_id") for e in merged
-            if e.payload.get("rule_id")
+            e.payload.get("rule_id") for e in merged if e.payload.get("rule_id")
         }
 
         if len(distinct_rules) < 3:

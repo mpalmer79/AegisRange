@@ -4,6 +4,7 @@ Login sets an httpOnly cookie as the primary auth channel so the JWT
 token never touches JavaScript.  The JSON body still returns non-secret
 metadata (username, role, expires_at) for UI state.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -42,7 +43,9 @@ def _clear_auth_cookie(response: JSONResponse) -> None:
 
 @router.post("/login")
 def platform_login(payload: LoginRequest) -> JSONResponse:
-    success, token, expires_at = auth_service.authenticate(payload.username, payload.password)
+    success, token, expires_at = auth_service.authenticate(
+        payload.username, payload.password
+    )
     if not success or token is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     user = auth_service.get_user(payload.username)

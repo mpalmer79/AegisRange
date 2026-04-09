@@ -1,4 +1,5 @@
 """Tests for SQLite persistence layer."""
+
 from __future__ import annotations
 
 import os
@@ -20,7 +21,9 @@ class TestPersistenceRoundTrip(unittest.TestCase):
         if os.path.exists(self.db_path):
             os.unlink(self.db_path)
 
-    def _make_event(self, actor_id: str = "user-alice", event_type: str = "test.event") -> Event:
+    def _make_event(
+        self, actor_id: str = "user-alice", event_type: str = "test.event"
+    ) -> Event:
         return Event(
             event_type=event_type,
             category="test",
@@ -128,11 +131,13 @@ class TestPersistenceRoundTrip(unittest.TestCase):
 
     def test_save_and_load_scenario_history(self) -> None:
         store1 = InMemoryStore()
-        store1.scenario_history.append({
-            "scenario_id": "SCN-AUTH-001",
-            "correlation_id": "corr-001",
-            "events_total": 10,
-        })
+        store1.scenario_history.append(
+            {
+                "scenario_id": "SCN-AUTH-001",
+                "correlation_id": "corr-001",
+                "events_total": 10,
+            }
+        )
 
         PersistenceLayer(store1, db_path=self.db_path).save()
 
@@ -143,12 +148,14 @@ class TestPersistenceRoundTrip(unittest.TestCase):
 
     def test_save_and_load_incident_notes(self) -> None:
         store1 = InMemoryStore()
-        store1.incident_notes["corr-001"].append({
-            "note_id": "note-001",
-            "author": "analyst1",
-            "content": "Investigating",
-            "created_at": "2024-01-01T00:00:00",
-        })
+        store1.incident_notes["corr-001"].append(
+            {
+                "note_id": "note-001",
+                "author": "analyst1",
+                "content": "Investigating",
+                "created_at": "2024-01-01T00:00:00",
+            }
+        )
 
         PersistenceLayer(store1, db_path=self.db_path).save()
 
@@ -211,6 +218,7 @@ class TestPersistenceRoundTrip(unittest.TestCase):
 
         # Verify the store has data
         from app.store import STORE
+
         self.assertGreater(len(STORE.events), 0)
         self.assertGreater(len(STORE.alerts), 0)
 
@@ -243,7 +251,11 @@ class TestPersistenceCorrectness(unittest.TestCase):
         if os.path.exists(self.db_path):
             os.unlink(self.db_path)
 
-    def _make_event(self, actor_id: str = "user-alice", event_type: str = "authentication.login.failure") -> Event:
+    def _make_event(
+        self,
+        actor_id: str = "user-alice",
+        event_type: str = "authentication.login.failure",
+    ) -> Event:
         return Event(
             event_type=event_type,
             category="authentication",
@@ -270,8 +282,11 @@ class TestPersistenceCorrectness(unittest.TestCase):
 
         # Corrupt the events table by inserting invalid JSON
         import sqlite3
+
         conn = sqlite3.connect(self.db_path)
-        conn.execute("INSERT INTO events (event_id, data) VALUES ('bad-id', 'NOT-VALID-JSON{')")
+        conn.execute(
+            "INSERT INTO events (event_id, data) VALUES ('bad-id', 'NOT-VALID-JSON{')"
+        )
         conn.commit()
         conn.close()
 
@@ -308,6 +323,7 @@ class TestPersistenceCorrectness(unittest.TestCase):
 
         # Corrupt the incidents table so deserialization fails mid-load
         import sqlite3
+
         conn = sqlite3.connect(self.db_path)
         conn.execute(
             "INSERT INTO incidents (correlation_id, data) VALUES ('bad', 'CORRUPT')"
@@ -340,17 +356,19 @@ class TestPersistenceCorrectness(unittest.TestCase):
         # Save a known state to SQLite
         save_store = InMemoryStore()
         save_store.events.append(self._make_event("user-from-db"))
-        save_store.alerts.append(Alert(
-            rule_id="DET-AUTH-001",
-            rule_name="Test",
-            severity=Severity.HIGH,
-            confidence=Confidence.HIGH,
-            actor_id="user-from-db",
-            correlation_id="corr-db",
-            contributing_event_ids=["e1"],
-            summary="From DB",
-            payload={},
-        ))
+        save_store.alerts.append(
+            Alert(
+                rule_id="DET-AUTH-001",
+                rule_name="Test",
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                actor_id="user-from-db",
+                correlation_id="corr-db",
+                contributing_event_ids=["e1"],
+                summary="From DB",
+                payload={},
+            )
+        )
         save_store.revoked_sessions = {"db-sess"}
         PersistenceLayer(save_store, db_path=self.db_path).save()
 
@@ -384,8 +402,18 @@ class TestPersistenceCorrectness(unittest.TestCase):
             peak_score=90,
             contributing_rules=["DET-AUTH-001", "DET-DOC-005"],
             score_history=[
-                {"timestamp": "2024-01-01T00:00:00", "rule_id": "DET-AUTH-001", "delta": 15, "new_score": 15},
-                {"timestamp": "2024-01-01T00:01:00", "rule_id": "DET-DOC-005", "delta": 60, "new_score": 75},
+                {
+                    "timestamp": "2024-01-01T00:00:00",
+                    "rule_id": "DET-AUTH-001",
+                    "delta": 15,
+                    "new_score": 15,
+                },
+                {
+                    "timestamp": "2024-01-01T00:01:00",
+                    "rule_id": "DET-DOC-005",
+                    "delta": 60,
+                    "new_score": 75,
+                },
             ],
             last_updated=datetime(2024, 1, 1, 0, 1, 0, tzinfo=timezone.utc),
         )
@@ -403,12 +431,17 @@ class TestPersistenceCorrectness(unittest.TestCase):
         self.assertEqual(restored.peak_score, 90)
         self.assertEqual(restored.contributing_rules, ["DET-AUTH-001", "DET-DOC-005"])
         self.assertEqual(len(restored.score_history), 2)
-        self.assertEqual(restored.last_updated, datetime(2024, 1, 1, 0, 1, 0, tzinfo=timezone.utc))
+        self.assertEqual(
+            restored.last_updated, datetime(2024, 1, 1, 0, 1, 0, tzinfo=timezone.utc)
+        )
 
     def test_blocked_routes_round_trip(self) -> None:
         """Blocked routes must survive save/load cycle."""
         store1 = InMemoryStore()
-        store1.blocked_routes["svc-data-processor"] = {"/admin/config", "/admin/secrets"}
+        store1.blocked_routes["svc-data-processor"] = {
+            "/admin/config",
+            "/admin/secrets",
+        }
         store1.blocked_routes["svc-analytics"] = {"/admin/users"}
 
         PersistenceLayer(store1, db_path=self.db_path).save()
@@ -417,7 +450,10 @@ class TestPersistenceCorrectness(unittest.TestCase):
         loaded = PersistenceLayer(store2, db_path=self.db_path).load()
         self.assertTrue(loaded)
         self.assertIn("svc-data-processor", store2.blocked_routes)
-        self.assertEqual(store2.blocked_routes["svc-data-processor"], {"/admin/config", "/admin/secrets"})
+        self.assertEqual(
+            store2.blocked_routes["svc-data-processor"],
+            {"/admin/config", "/admin/secrets"},
+        )
         self.assertIn("svc-analytics", store2.blocked_routes)
         self.assertEqual(store2.blocked_routes["svc-analytics"], {"/admin/users"})
 
@@ -425,23 +461,29 @@ class TestPersistenceCorrectness(unittest.TestCase):
         """After load, login_failures_by_actor etc. must be rebuilt from events."""
         store1 = InMemoryStore()
         # Add events of different types
-        store1.events.append(self._make_event("user-alice", "authentication.login.failure"))
-        store1.events.append(self._make_event("user-alice", "authentication.login.failure"))
+        store1.events.append(
+            self._make_event("user-alice", "authentication.login.failure")
+        )
+        store1.events.append(
+            self._make_event("user-alice", "authentication.login.failure")
+        )
         store1.events.append(self._make_event("user-bob", "document.read.success"))
-        store1.events.append(Event(
-            event_type="authorization.failure",
-            category="system",
-            actor_id="svc-data",
-            actor_type="service",
-            request_id="req-002",
-            correlation_id="corr-002",
-            status="failure",
-            source_ip="10.0.0.2",
-            origin="test",
-            payload={},
-            severity=Severity.MEDIUM,
-            confidence=Confidence.HIGH,
-        ))
+        store1.events.append(
+            Event(
+                event_type="authorization.failure",
+                category="system",
+                actor_id="svc-data",
+                actor_type="service",
+                request_id="req-002",
+                correlation_id="corr-002",
+                status="failure",
+                source_ip="10.0.0.2",
+                origin="test",
+                payload={},
+                severity=Severity.MEDIUM,
+                confidence=Confidence.HIGH,
+            )
+        )
 
         PersistenceLayer(store1, db_path=self.db_path).save()
 
@@ -485,7 +527,9 @@ class TestIncrementalPersistence(unittest.TestCase):
         if os.path.exists(self.db_path):
             os.unlink(self.db_path)
 
-    def _make_event(self, actor_id: str = "user-alice", event_type: str = "test.event") -> Event:
+    def _make_event(
+        self, actor_id: str = "user-alice", event_type: str = "test.event"
+    ) -> Event:
         return Event(
             event_type=event_type,
             category="test",
@@ -594,7 +638,9 @@ class TestIncrementalPersistence(unittest.TestCase):
         fresh = InMemoryStore()
         fresh.enable_persistence(db_path=self.db_path)
         self.assertIn("corr-001", fresh.incidents_by_correlation)
-        self.assertEqual(fresh.incidents_by_correlation["corr-001"].incident_id, incident.incident_id)
+        self.assertEqual(
+            fresh.incidents_by_correlation["corr-001"].incident_id, incident.incident_id
+        )
 
     def test_upsert_incident_updates_existing(self) -> None:
         """Repeated upsert_incident() should update, not duplicate."""
@@ -628,7 +674,12 @@ class TestIncrementalPersistence(unittest.TestCase):
         """append_incident_note() should write to SQLite without needing save()."""
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
-        note = {"note_id": "note-001", "author": "admin", "content": "test", "created_at": "2024-01-01"}
+        note = {
+            "note_id": "note-001",
+            "author": "admin",
+            "content": "test",
+            "created_at": "2024-01-01",
+        }
         store.append_incident_note("corr-001", note)
 
         fresh = InMemoryStore()
@@ -640,7 +691,11 @@ class TestIncrementalPersistence(unittest.TestCase):
         """append_scenario_history() should write to SQLite without needing save()."""
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
-        entry = {"scenario_id": "SCN-AUTH-001", "correlation_id": "corr-001", "executed_at": "2024-01-01"}
+        entry = {
+            "scenario_id": "SCN-AUTH-001",
+            "correlation_id": "corr-001",
+            "executed_at": "2024-01-01",
+        }
         store.append_scenario_history(entry)
 
         fresh = InMemoryStore()
@@ -657,11 +712,21 @@ class TestIncrementalPersistence(unittest.TestCase):
         store.revoked_sessions.add("sess-001")
         store.step_up_required.add("user-alice")
         # alert_signatures is derived — add an alert so it rebuilds on load
-        store.extend_alerts([Alert(
-            rule_id="DET-AUTH-001", rule_name="Test", severity=Severity.HIGH,
-            confidence=Confidence.HIGH, actor_id="user-alice", correlation_id="corr-001",
-            contributing_event_ids=[], summary="s", payload={},
-        )])
+        store.extend_alerts(
+            [
+                Alert(
+                    rule_id="DET-AUTH-001",
+                    rule_name="Test",
+                    severity=Severity.HIGH,
+                    confidence=Confidence.HIGH,
+                    actor_id="user-alice",
+                    correlation_id="corr-001",
+                    contributing_event_ids=[],
+                    summary="s",
+                    payload={},
+                )
+            ]
+        )
         store.save()
 
         fresh = InMemoryStore()
@@ -669,7 +734,9 @@ class TestIncrementalPersistence(unittest.TestCase):
         self.assertEqual(fresh.revoked_sessions, {"sess-001"})
         self.assertEqual(fresh.step_up_required, {"user-alice"})
         # alert_signatures rebuilt from alerts
-        self.assertIn(("DET-AUTH-001", "user-alice", "corr-001"), fresh.alert_signatures)
+        self.assertIn(
+            ("DET-AUTH-001", "user-alice", "corr-001"), fresh.alert_signatures
+        )
 
     def test_append_event_is_idempotent(self) -> None:
         """Appending the same event twice should only persist one copy (INSERT OR IGNORE)."""
@@ -682,6 +749,7 @@ class TestIncrementalPersistence(unittest.TestCase):
         store._persistence.persist_event(event)
 
         import sqlite3
+
         conn = sqlite3.connect(self.db_path)
         count = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
         conn.close()
@@ -695,11 +763,22 @@ class TestIncrementalPersistence(unittest.TestCase):
         self.assertEqual(len(store.events), 1)
 
         from app.models import Alert
-        store.extend_alerts([Alert(
-            rule_id="DET-AUTH-001", rule_name="Test", severity=Severity.HIGH,
-            confidence=Confidence.HIGH, actor_id="a", correlation_id="c",
-            contributing_event_ids=[], summary="s", payload={},
-        )])
+
+        store.extend_alerts(
+            [
+                Alert(
+                    rule_id="DET-AUTH-001",
+                    rule_name="Test",
+                    severity=Severity.HIGH,
+                    confidence=Confidence.HIGH,
+                    actor_id="a",
+                    correlation_id="c",
+                    contributing_event_ids=[],
+                    summary="s",
+                    payload={},
+                )
+            ]
+        )
         self.assertEqual(len(store.alerts), 1)
 
         store.append_scenario_history({"test": True})
@@ -723,9 +802,15 @@ class TestIncrementalPersistence(unittest.TestCase):
             confidence=Confidence.HIGH,
         )
         store.upsert_incident(incident)
-        store.append_incident_note("corr-001", {
-            "note_id": "note-001", "author": "admin", "content": "test", "created_at": "2024-01-01",
-        })
+        store.append_incident_note(
+            "corr-001",
+            {
+                "note_id": "note-001",
+                "author": "admin",
+                "content": "test",
+                "created_at": "2024-01-01",
+            },
+        )
 
         # Operational writes (saved via save())
         store.revoked_sessions.add("sess-001")
@@ -755,7 +840,9 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         if os.path.exists(self.db_path):
             os.unlink(self.db_path)
 
-    def _make_event(self, actor_id: str = "user-alice", correlation_id: str = "corr-001") -> Event:
+    def _make_event(
+        self, actor_id: str = "user-alice", correlation_id: str = "corr-001"
+    ) -> Event:
         return Event(
             event_type="authentication.login.failure",
             category="authentication",
@@ -876,7 +963,9 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         loaded = fresh.incidents_by_correlation["corr-001"]
         self.assertEqual(loaded.status, "investigating")
         self.assertTrue(
-            any(e.summary == "Status changed to investigating." for e in loaded.timeline),
+            any(
+                e.summary == "Status changed to investigating." for e in loaded.timeline
+            ),
         )
 
     def test_insert_or_ignore_deduplicates_events(self) -> None:
@@ -904,9 +993,15 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
         alert = Alert(
-            rule_id="DET-AUTH-001", rule_name="Test", severity=Severity.HIGH,
-            confidence=Confidence.HIGH, actor_id="a", correlation_id="c",
-            contributing_event_ids=[], summary="s", payload={},
+            rule_id="DET-AUTH-001",
+            rule_name="Test",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            actor_id="a",
+            correlation_id="c",
+            contributing_event_ids=[],
+            summary="s",
+            payload={},
         )
 
         store.extend_alerts([alert])
@@ -925,8 +1020,13 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
         resp = ResponseAction(
-            playbook_id="PB-AUTH-001", action_type="rate_limit", actor_id="a",
-            correlation_id="c", reason="r", related_alert_id="al", payload={},
+            playbook_id="PB-AUTH-001",
+            action_type="rate_limit",
+            actor_id="a",
+            correlation_id="c",
+            reason="r",
+            related_alert_id="al",
+            payload={},
         )
 
         store.extend_responses([resp])
@@ -935,7 +1035,9 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         conn = sqlite3.connect(self.db_path)
         count = conn.execute("SELECT COUNT(*) FROM responses").fetchone()[0]
         conn.close()
-        self.assertEqual(count, 1, "INSERT OR IGNORE should prevent duplicate responses")
+        self.assertEqual(
+            count, 1, "INSERT OR IGNORE should prevent duplicate responses"
+        )
 
     def test_insert_or_ignore_deduplicates_notes(self) -> None:
         """Appending the same note twice must not create duplicates."""
@@ -943,7 +1045,12 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
 
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
-        note = {"note_id": "note-001", "author": "admin", "content": "test", "created_at": "2024-01-01"}
+        note = {
+            "note_id": "note-001",
+            "author": "admin",
+            "content": "test",
+            "created_at": "2024-01-01",
+        }
 
         store.append_incident_note("corr-001", note)
         store._persistence.persist_incident_note("corr-001", note)
@@ -986,7 +1093,11 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         conn = sqlite3.connect(self.db_path)
         count = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
         conn.close()
-        self.assertEqual(count, 1, "INSERT OR REPLACE should maintain exactly one row per correlation_id")
+        self.assertEqual(
+            count,
+            1,
+            "INSERT OR REPLACE should maintain exactly one row per correlation_id",
+        )
 
         # And it has the latest state
         fresh = InMemoryStore()
@@ -1014,27 +1125,32 @@ class TestPersistenceBoundaryIntegrity(unittest.TestCase):
         incidents = IncidentService(store)
         risk = RiskScoringService(store)
         pipeline = EventPipelineService(
-            telemetry=telemetry, detection=detection,
-            response=response, incidents=incidents,
-            store=store, risk=risk,
+            telemetry=telemetry,
+            detection=detection,
+            response=response,
+            incidents=incidents,
+            store=store,
+            risk=risk,
         )
 
         # Generate 5 login failures to trigger DET-AUTH-001
         for _ in range(5):
-            pipeline.process(Event(
-                event_type="authentication.login.failure",
-                category="authentication",
-                actor_id="user-alice",
-                actor_type="user",
-                request_id=f"req-{_}",
-                correlation_id="corr-pipe",
-                status="failure",
-                source_ip="10.0.0.1",
-                origin="test",
-                payload={"username": "alice"},
-                severity=Severity.MEDIUM,
-                confidence=Confidence.HIGH,
-            ))
+            pipeline.process(
+                Event(
+                    event_type="authentication.login.failure",
+                    category="authentication",
+                    actor_id="user-alice",
+                    actor_type="user",
+                    request_id=f"req-{_}",
+                    correlation_id="corr-pipe",
+                    status="failure",
+                    source_ip="10.0.0.1",
+                    origin="test",
+                    payload={"username": "alice"},
+                    severity=Severity.MEDIUM,
+                    confidence=Confidence.HIGH,
+                )
+            )
 
         # Verify in-memory state
         self.assertGreater(len(store.events), 0)
@@ -1093,46 +1209,79 @@ class TestStateClassificationEnforcement(unittest.TestCase):
 
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
-        store.extend_alerts([
-            Alert(
-                rule_id="DET-AUTH-001", rule_name="R1", severity=Severity.HIGH,
-                confidence=Confidence.HIGH, actor_id="user-alice",
-                correlation_id="corr-001", contributing_event_ids=[],
-                summary="s1", payload={},
-            ),
-            Alert(
-                rule_id="DET-DOC-005", rule_name="R2", severity=Severity.MEDIUM,
-                confidence=Confidence.MEDIUM, actor_id="user-bob",
-                correlation_id="corr-002", contributing_event_ids=[],
-                summary="s2", payload={},
-            ),
-        ])
+        store.extend_alerts(
+            [
+                Alert(
+                    rule_id="DET-AUTH-001",
+                    rule_name="R1",
+                    severity=Severity.HIGH,
+                    confidence=Confidence.HIGH,
+                    actor_id="user-alice",
+                    correlation_id="corr-001",
+                    contributing_event_ids=[],
+                    summary="s1",
+                    payload={},
+                ),
+                Alert(
+                    rule_id="DET-DOC-005",
+                    rule_name="R2",
+                    severity=Severity.MEDIUM,
+                    confidence=Confidence.MEDIUM,
+                    actor_id="user-bob",
+                    correlation_id="corr-002",
+                    contributing_event_ids=[],
+                    summary="s2",
+                    payload={},
+                ),
+            ]
+        )
 
         fresh = InMemoryStore()
         fresh.enable_persistence(db_path=self.db_path)
-        self.assertEqual(fresh.alert_signatures, {
-            ("DET-AUTH-001", "user-alice", "corr-001"),
-            ("DET-DOC-005", "user-bob", "corr-002"),
-        })
+        self.assertEqual(
+            fresh.alert_signatures,
+            {
+                ("DET-AUTH-001", "user-alice", "corr-001"),
+                ("DET-DOC-005", "user-bob", "corr-002"),
+            },
+        )
 
     def test_derived_event_indices_not_persisted_but_rebuilt(self) -> None:
         """Derived event indices must be rebuilt from events, not stored."""
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
-        store.append_event(Event(
-            event_type="authentication.login.failure",
-            category="authentication", actor_id="user-alice",
-            actor_type="user", request_id="r1", correlation_id="c1",
-            status="failure", source_ip="10.0.0.1", origin="test",
-            payload={}, severity=Severity.MEDIUM, confidence=Confidence.HIGH,
-        ))
-        store.append_event(Event(
-            event_type="document.read.success",
-            category="document", actor_id="user-bob",
-            actor_type="user", request_id="r2", correlation_id="c2",
-            status="success", source_ip="10.0.0.1", origin="test",
-            payload={}, severity=Severity.LOW, confidence=Confidence.LOW,
-        ))
+        store.append_event(
+            Event(
+                event_type="authentication.login.failure",
+                category="authentication",
+                actor_id="user-alice",
+                actor_type="user",
+                request_id="r1",
+                correlation_id="c1",
+                status="failure",
+                source_ip="10.0.0.1",
+                origin="test",
+                payload={},
+                severity=Severity.MEDIUM,
+                confidence=Confidence.HIGH,
+            )
+        )
+        store.append_event(
+            Event(
+                event_type="document.read.success",
+                category="document",
+                actor_id="user-bob",
+                actor_type="user",
+                request_id="r2",
+                correlation_id="c2",
+                status="success",
+                source_ip="10.0.0.1",
+                origin="test",
+                payload={},
+                severity=Severity.LOW,
+                confidence=Confidence.LOW,
+            )
+        )
 
         fresh = InMemoryStore()
         fresh.enable_persistence(db_path=self.db_path)
@@ -1172,23 +1321,44 @@ class TestStateClassificationEnforcement(unittest.TestCase):
         store.enable_persistence(db_path=self.db_path)
 
         # Authoritative entities
-        store.append_event(Event(
-            event_type="authentication.login.failure",
-            category="authentication", actor_id="user-alice",
-            actor_type="user", request_id="r1", correlation_id="c1",
-            status="failure", source_ip="10.0.0.1", origin="test",
-            payload={}, severity=Severity.MEDIUM, confidence=Confidence.HIGH,
-        ))
-        store.extend_alerts([Alert(
-            rule_id="DET-AUTH-001", rule_name="Test", severity=Severity.HIGH,
-            confidence=Confidence.HIGH, actor_id="user-alice",
-            correlation_id="c1", contributing_event_ids=[],
-            summary="s", payload={},
-        )])
+        store.append_event(
+            Event(
+                event_type="authentication.login.failure",
+                category="authentication",
+                actor_id="user-alice",
+                actor_type="user",
+                request_id="r1",
+                correlation_id="c1",
+                status="failure",
+                source_ip="10.0.0.1",
+                origin="test",
+                payload={},
+                severity=Severity.MEDIUM,
+                confidence=Confidence.HIGH,
+            )
+        )
+        store.extend_alerts(
+            [
+                Alert(
+                    rule_id="DET-AUTH-001",
+                    rule_name="Test",
+                    severity=Severity.HIGH,
+                    confidence=Confidence.HIGH,
+                    actor_id="user-alice",
+                    correlation_id="c1",
+                    contributing_event_ids=[],
+                    summary="s",
+                    payload={},
+                )
+            ]
+        )
         incident = Incident(
-            incident_type="credential_abuse", primary_actor_id="user-alice",
-            actor_type="user", correlation_id="c1",
-            severity=Severity.HIGH, confidence=Confidence.HIGH,
+            incident_type="credential_abuse",
+            primary_actor_id="user-alice",
+            actor_type="user",
+            correlation_id="c1",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
         )
         store.upsert_incident(incident)
 
@@ -1231,7 +1401,9 @@ class TestTransactionContext(unittest.TestCase):
         if os.path.exists(self.db_path):
             os.unlink(self.db_path)
 
-    def _make_event(self, actor_id: str = "user-alice", event_type: str = "test.event") -> Event:
+    def _make_event(
+        self, actor_id: str = "user-alice", event_type: str = "test.event"
+    ) -> Event:
         return Event(
             event_type=event_type,
             category="test",
@@ -1256,17 +1428,23 @@ class TestTransactionContext(unittest.TestCase):
 
         event = self._make_event()
         alert = Alert(
-            rule_id="DET-AUTH-001", rule_name="Test",
-            severity=Severity.HIGH, confidence=Confidence.HIGH,
-            actor_id="user-alice", correlation_id="corr-001",
+            rule_id="DET-AUTH-001",
+            rule_name="Test",
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            actor_id="user-alice",
+            correlation_id="corr-001",
             contributing_event_ids=[event.event_id],
-            summary="Test alert", payload={},
+            summary="Test alert",
+            payload={},
         )
         incident = Incident(
             incident_type="credential_abuse",
-            primary_actor_id="user-alice", actor_type="user",
+            primary_actor_id="user-alice",
+            actor_type="user",
             correlation_id="corr-001",
-            severity=Severity.HIGH, confidence=Confidence.HIGH,
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
         )
 
         with store.transaction():
@@ -1467,18 +1645,24 @@ class TestEntityRoundTrip(unittest.TestCase):
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
 
-        store.append_incident_note("corr-rt-005", {
-            "note_id": "note-rt-001",
-            "author": "analyst1",
-            "content": "Initial triage complete",
-            "created_at": "2025-01-01T00:00:00+00:00",
-        })
-        store.append_incident_note("corr-rt-005", {
-            "note_id": "note-rt-002",
-            "author": "soc_lead",
-            "content": "Escalated to IR team",
-            "created_at": "2025-01-01T01:00:00+00:00",
-        })
+        store.append_incident_note(
+            "corr-rt-005",
+            {
+                "note_id": "note-rt-001",
+                "author": "analyst1",
+                "content": "Initial triage complete",
+                "created_at": "2025-01-01T00:00:00+00:00",
+            },
+        )
+        store.append_incident_note(
+            "corr-rt-005",
+            {
+                "note_id": "note-rt-002",
+                "author": "soc_lead",
+                "content": "Escalated to IR team",
+                "created_at": "2025-01-01T01:00:00+00:00",
+            },
+        )
 
         fresh = InMemoryStore()
         fresh.enable_persistence(db_path=self.db_path)
@@ -1492,18 +1676,22 @@ class TestEntityRoundTrip(unittest.TestCase):
         store = InMemoryStore()
         store.enable_persistence(db_path=self.db_path)
 
-        store.append_scenario_history({
-            "scenario_id": "scn-auth-001",
-            "correlation_id": "corr-001",
-            "operated_by": "red_team1",
-            "executed_at": "2025-01-01T00:00:00+00:00",
-        })
-        store.append_scenario_history({
-            "scenario_id": "scn-corr-006",
-            "correlation_id": "corr-002",
-            "operated_by": "admin",
-            "executed_at": "2025-01-01T01:00:00+00:00",
-        })
+        store.append_scenario_history(
+            {
+                "scenario_id": "scn-auth-001",
+                "correlation_id": "corr-001",
+                "operated_by": "red_team1",
+                "executed_at": "2025-01-01T00:00:00+00:00",
+            }
+        )
+        store.append_scenario_history(
+            {
+                "scenario_id": "scn-corr-006",
+                "correlation_id": "corr-002",
+                "operated_by": "admin",
+                "executed_at": "2025-01-01T01:00:00+00:00",
+            }
+        )
 
         fresh = InMemoryStore()
         fresh.enable_persistence(db_path=self.db_path)

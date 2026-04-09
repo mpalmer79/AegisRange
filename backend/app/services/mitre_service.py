@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class MitreTactic:
     id: str
@@ -373,6 +374,7 @@ _SCENARIO_TECHNIQUES: dict[str, list[str]] = {
 # Service
 # ---------------------------------------------------------------------------
 
+
 class MitreAttackService:
     """Maps AegisRange detection rules and adversary scenarios to the MITRE
     ATT&CK framework.  Maintains a hardcoded knowledge-base subset relevant
@@ -422,7 +424,11 @@ class MitreAttackService:
         for mapping in _RULE_MAPPINGS:
             tactic_ids = list(mapping["tactic_ids"])
             phases = sorted(
-                {_TACTIC_TO_KILL_CHAIN[tid] for tid in tactic_ids if tid in _TACTIC_TO_KILL_CHAIN}
+                {
+                    _TACTIC_TO_KILL_CHAIN[tid]
+                    for tid in tactic_ids
+                    if tid in _TACTIC_TO_KILL_CHAIN
+                }
             )
             self._rule_mappings[mapping["rule_id"]] = TTPMapping(
                 rule_id=mapping["rule_id"],
@@ -510,9 +516,7 @@ class MitreAttackService:
         stats: dict[str, dict] = {}
         for tactic_id, tech_ids in sorted(self._tactic_technique_map.items()):
             total = len(tech_ids)
-            covered = sum(
-                1 for tid in tech_ids if tid in self._technique_to_rules
-            )
+            covered = sum(1 for tid in tech_ids if tid in self._technique_to_rules)
             tactic = self._tactics.get(tactic_id)
             tactic_name = tactic.name if tactic else tactic_id
             stats[tactic_id] = {

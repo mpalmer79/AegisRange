@@ -1,4 +1,5 @@
 """Real-time event streaming routes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

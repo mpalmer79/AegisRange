@@ -18,7 +18,10 @@ class IncidentService:
     def register_alert(self, alert: Alert, source_event: Event) -> Incident:
         incident = self.store.incidents_by_correlation.get(alert.correlation_id)
 
-        should_create = alert.severity in {Severity.HIGH, Severity.CRITICAL} or alert.rule_id == "DET-AUTH-002"
+        should_create = (
+            alert.severity in {Severity.HIGH, Severity.CRITICAL}
+            or alert.rule_id == "DET-AUTH-002"
+        )
         if incident is None and should_create:
             incident = Incident(
                 incident_type=self._classify_incident(alert),
@@ -48,8 +51,16 @@ class IncidentService:
             )
 
         # Escalate severity if new alert is more severe
-        severity_order = [Severity.INFORMATIONAL, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
-        if severity_order.index(alert.severity) > severity_order.index(incident.severity):
+        severity_order = [
+            Severity.INFORMATIONAL,
+            Severity.LOW,
+            Severity.MEDIUM,
+            Severity.HIGH,
+            Severity.CRITICAL,
+        ]
+        if severity_order.index(alert.severity) > severity_order.index(
+            incident.severity
+        ):
             old_severity = incident.severity
             incident.severity = alert.severity
             incident.add_timeline_entry(

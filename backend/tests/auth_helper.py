@@ -2,6 +2,7 @@
 
 Provides a pre-authenticated TestClient wrapper for use in tests.
 """
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient

@@ -1,4 +1,5 @@
 """Analytics routes (risk profiles, rule effectiveness, scenario history)."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,7 +17,9 @@ def get_risk_profiles() -> list[dict]:
     return [risk_profile_to_dict(p) for p in profiles]
 
 
-@router.get("/risk-profiles/{actor_id}", dependencies=[Depends(require_role("analyst"))])
+@router.get(
+    "/risk-profiles/{actor_id}", dependencies=[Depends(require_role("analyst"))]
+)
 def get_risk_profile(actor_id: str) -> dict:
     profile = risk_service.get_profile(actor_id)
     if profile is None:
@@ -41,7 +44,9 @@ def get_rule_effectiveness() -> list[dict]:
 
     return [
         {**v, "actors_affected": len(v["actors_affected"])}
-        for v in sorted(rule_counts.values(), key=lambda x: x["trigger_count"], reverse=True)
+        for v in sorted(
+            rule_counts.values(), key=lambda x: x["trigger_count"], reverse=True
+        )
     ]
 
 

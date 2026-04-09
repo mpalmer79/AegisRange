@@ -99,7 +99,9 @@ class EventPipelineService:
         )
         self.telemetry.emit(detection_event)
 
-    def _emit_response_event(self, response_action: ResponseAction, source_event: Event) -> None:
+    def _emit_response_event(
+        self, response_action: ResponseAction, source_event: Event
+    ) -> None:
         response_event = Event(
             event_type=f"response.{response_action.action_type}.executed",
             category="response",

@@ -1,4 +1,5 @@
 """Tests for Phase 6: Exercise report generation and SSE streaming."""
+
 from __future__ import annotations
 
 import unittest

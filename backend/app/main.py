@@ -5,6 +5,7 @@ exception handlers, and includes all route modules.  Business logic
 lives in ``app/services/``, request schemas in ``app/schemas.py``,
 and route handlers in ``app/routers/``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -56,7 +57,9 @@ def _is_rate_limited(client_ip: str) -> bool:
     now = time.monotonic()
     # Prune entries older than the window
     timestamps = _rate_limit_store[client_ip]
-    _rate_limit_store[client_ip] = [t for t in timestamps if now - t < _RATE_LIMIT_WINDOW]
+    _rate_limit_store[client_ip] = [
+        t for t in timestamps if now - t < _RATE_LIMIT_WINDOW
+    ]
     if len(_rate_limit_store[client_ip]) >= _RATE_LIMIT_MAX_REQUESTS:
         return True
     _rate_limit_store[client_ip].append(now)
@@ -72,12 +75,16 @@ def reset_rate_limits() -> None:
 # Lifespan (replaces deprecated on_event("startup"))
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- startup ---
     if settings.APP_ENV != "test":
         STORE.enable_persistence(db_path=settings.DB_PATH)
-        logger.info("SQLite persistence enabled", extra={"env": settings.APP_ENV, "db_path": settings.DB_PATH})
+        logger.info(
+            "SQLite persistence enabled",
+            extra={"env": settings.APP_ENV, "db_path": settings.DB_PATH},
+        )
     logger.info("AegisRange API started", extra={"env": settings.APP_ENV})
     yield
     # --- shutdown ---
@@ -123,7 +130,10 @@ async def rate_limit_middleware(request: Request, call_next):
     if request.url.path in auth_paths and request.method == "POST":
         client_ip = request.client.host if request.client else "unknown"
         if _is_rate_limited(client_ip):
-            logger.warning("Rate limit exceeded", extra={"client_ip": client_ip, "path": request.url.path})
+            logger.warning(
+                "Rate limit exceeded",
+                extra={"client_ip": client_ip, "path": request.url.path},
+            )
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Try again later."},

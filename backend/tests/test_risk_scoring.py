@@ -1,4 +1,5 @@
 """Phase 5: Unit tests for risk scoring engine."""
+
 from __future__ import annotations
 
 import unittest
@@ -15,6 +16,7 @@ class TestRiskScoringService(unittest.TestCase):
         self.store = InMemoryStore()
         # Import here to avoid issues if risk_service doesn't exist yet during collection
         from app.services.risk_service import RiskScoringService
+
         self.risk = RiskScoringService(self.store)
 
     def _make_alert(
@@ -45,7 +47,9 @@ class TestRiskScoringService(unittest.TestCase):
 
     def test_severity_weights(self) -> None:
         # Medium severity with medium confidence: 15 * 0.75 = 11
-        alert_med = self._make_alert(severity=Severity.MEDIUM, confidence=Confidence.MEDIUM)
+        alert_med = self._make_alert(
+            severity=Severity.MEDIUM, confidence=Confidence.MEDIUM
+        )
         profile = self.risk.update_risk(alert_med)
         self.assertEqual(profile.current_score, 11)
 
@@ -53,7 +57,9 @@ class TestRiskScoringService(unittest.TestCase):
         self.store.risk_profiles.clear()
 
         # High severity with high confidence: 30 * 1.0 = 30
-        alert_high = self._make_alert(severity=Severity.HIGH, confidence=Confidence.HIGH)
+        alert_high = self._make_alert(
+            severity=Severity.HIGH, confidence=Confidence.HIGH
+        )
         profile = self.risk.update_risk(alert_high)
         self.assertEqual(profile.current_score, 30)
 
@@ -61,12 +67,16 @@ class TestRiskScoringService(unittest.TestCase):
         self.store.risk_profiles.clear()
 
         # Critical with high: 50 * 1.0 = 50
-        alert_crit = self._make_alert(severity=Severity.CRITICAL, confidence=Confidence.HIGH)
+        alert_crit = self._make_alert(
+            severity=Severity.CRITICAL, confidence=Confidence.HIGH
+        )
         profile = self.risk.update_risk(alert_crit)
         self.assertEqual(profile.current_score, 50)
 
     def test_risk_accumulates(self) -> None:
-        alert1 = self._make_alert(severity=Severity.MEDIUM, confidence=Confidence.MEDIUM)
+        alert1 = self._make_alert(
+            severity=Severity.MEDIUM, confidence=Confidence.MEDIUM
+        )
         alert2 = self._make_alert(
             rule_id="DET-AUTH-002",
             severity=Severity.HIGH,
@@ -106,8 +116,12 @@ class TestRiskScoringService(unittest.TestCase):
         self.assertIsNone(profile)
 
     def test_get_all_profiles_sorted(self) -> None:
-        self.risk.update_risk(self._make_alert(actor_id="user-alice", severity=Severity.LOW))
-        self.risk.update_risk(self._make_alert(actor_id="user-bob", severity=Severity.CRITICAL))
+        self.risk.update_risk(
+            self._make_alert(actor_id="user-alice", severity=Severity.LOW)
+        )
+        self.risk.update_risk(
+            self._make_alert(actor_id="user-bob", severity=Severity.CRITICAL)
+        )
         profiles = self.risk.get_all_profiles()
         self.assertEqual(len(profiles), 2)
         self.assertEqual(profiles[0].actor_id, "user-bob")
@@ -123,6 +137,7 @@ class TestRiskScoringService(unittest.TestCase):
 
     def test_incident_risk_score_updated(self) -> None:
         from app.models import Incident
+
         incident = Incident(
             incident_type="test",
             primary_actor_id="user-alice",
@@ -133,7 +148,9 @@ class TestRiskScoringService(unittest.TestCase):
         )
         self.store.incidents_by_correlation["corr-test"] = incident
 
-        self.risk.update_risk(self._make_alert(severity=Severity.HIGH, confidence=Confidence.HIGH))
+        self.risk.update_risk(
+            self._make_alert(severity=Severity.HIGH, confidence=Confidence.HIGH)
+        )
         self.assertEqual(incident.risk_score, 30)
 
 

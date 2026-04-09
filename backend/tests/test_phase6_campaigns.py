@@ -1,4 +1,5 @@
 """Tests for Phase 6: Campaign detection service and API endpoints."""
+
 from __future__ import annotations
 
 import unittest
@@ -40,10 +41,15 @@ class TestCampaignService(unittest.TestCase):
         c = campaigns[0]
         self.assertGreater(len(c.incident_correlation_ids), 1)
         self.assertGreater(len(c.campaign_name), 0)
-        self.assertIn(c.campaign_type, {
-            "credential_campaign", "exfiltration_campaign",
-            "session_campaign", "multi_vector_campaign",
-        })
+        self.assertIn(
+            c.campaign_type,
+            {
+                "credential_campaign",
+                "exfiltration_campaign",
+                "session_campaign",
+                "multi_vector_campaign",
+            },
+        )
 
     def test_campaign_to_dict(self) -> None:
         client = authenticated_client()

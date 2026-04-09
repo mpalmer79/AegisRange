@@ -1,4 +1,5 @@
 """1E.1: Unit tests for each detection rule individually."""
+
 from __future__ import annotations
 
 import unittest
@@ -78,7 +79,11 @@ class TestDETAUTH001(unittest.TestCase):
         self.assertEqual(len(matched), 0)
 
     def test_ignores_success_events(self) -> None:
-        event = _make_event(event_type="authentication.login.success", status="success", status_code="200")
+        event = _make_event(
+            event_type="authentication.login.success",
+            status="success",
+            status_code="200",
+        )
         self.telemetry.emit(event)
         alerts = self.detection.evaluate(event)
         matched = [a for a in alerts if a.rule_id == "DET-AUTH-001"]
@@ -349,16 +354,18 @@ class TestDETDOC006(unittest.TestCase):
         doc_ids = ["doc-001", "doc-002", "doc-003"]
 
         for doc_id in doc_ids:
-            self.telemetry.emit(_make_event(
-                event_type="document.read.success",
-                category="document",
-                target_type="document",
-                target_id=doc_id,
-                status="success",
-                status_code="200",
-                correlation_id=corr,
-                payload={"document_id": doc_id, "classification": "internal"},
-            ))
+            self.telemetry.emit(
+                _make_event(
+                    event_type="document.read.success",
+                    category="document",
+                    target_type="document",
+                    target_id=doc_id,
+                    status="success",
+                    status_code="200",
+                    correlation_id=corr,
+                    payload={"document_id": doc_id, "classification": "internal"},
+                )
+            )
 
         for doc_id in doc_ids:
             event = _make_event(
@@ -418,16 +425,18 @@ class TestDETDOC006(unittest.TestCase):
 
     def test_no_trigger_insufficient_overlap(self) -> None:
         corr = f"corr-{uuid4()}"
-        self.telemetry.emit(_make_event(
-            event_type="document.read.success",
-            category="document",
-            target_type="document",
-            target_id="doc-001",
-            status="success",
-            status_code="200",
-            correlation_id=corr,
-            payload={"document_id": "doc-001", "classification": "internal"},
-        ))
+        self.telemetry.emit(
+            _make_event(
+                event_type="document.read.success",
+                category="document",
+                target_type="document",
+                target_id="doc-001",
+                status="success",
+                status_code="200",
+                correlation_id=corr,
+                payload={"document_id": "doc-001", "classification": "internal"},
+            )
+        )
         event = _make_event(
             event_type="document.download.success",
             category="document",

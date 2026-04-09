@@ -70,7 +70,9 @@ class TelemetryService:
         if actor_id:
             events = (event for event in events if event.actor_id == actor_id)
         if correlation_id:
-            events = (event for event in events if event.correlation_id == correlation_id)
+            events = (
+                event for event in events if event.correlation_id == correlation_id
+            )
         if event_types:
             events = (event for event in events if event.event_type in event_types)
         if since_minutes is not None:
@@ -88,16 +90,24 @@ class TelemetryService:
             raise ValueError(f"Event missing required fields: {missing_fields}")
 
         if not event.event_type or "." not in event.event_type:
-            raise ValueError(f"Invalid event_type format: '{event.event_type}'. Expected dotted notation (e.g. 'authentication.login.success').")
+            raise ValueError(
+                f"Invalid event_type format: '{event.event_type}'. Expected dotted notation (e.g. 'authentication.login.success')."
+            )
 
         if event.category not in VALID_CATEGORIES:
-            raise ValueError(f"Invalid category: '{event.category}'. Must be one of: {sorted(VALID_CATEGORIES)}")
+            raise ValueError(
+                f"Invalid category: '{event.category}'. Must be one of: {sorted(VALID_CATEGORIES)}"
+            )
 
         if event.status not in VALID_STATUSES:
-            raise ValueError(f"Invalid status: '{event.status}'. Must be one of: {sorted(VALID_STATUSES)}")
+            raise ValueError(
+                f"Invalid status: '{event.status}'. Must be one of: {sorted(VALID_STATUSES)}"
+            )
 
         if event.actor_type not in VALID_ACTOR_TYPES:
-            raise ValueError(f"Invalid actor_type: '{event.actor_type}'. Must be one of: {sorted(VALID_ACTOR_TYPES)}")
+            raise ValueError(
+                f"Invalid actor_type: '{event.actor_type}'. Must be one of: {sorted(VALID_ACTOR_TYPES)}"
+            )
 
         if not isinstance(event.payload, dict):
             raise ValueError("Event payload must be a dict.")

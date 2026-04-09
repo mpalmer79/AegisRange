@@ -3,13 +3,14 @@
 Covers: rate limiting, global exception handling, router structure,
 schema extraction, and lifespan management.
 """
+
 from __future__ import annotations
 
 import unittest
 
 from fastapi.testclient import TestClient
 
-from app.main import app, reset_rate_limits, _rate_limit_store, _RATE_LIMIT_MAX_REQUESTS
+from app.main import app, reset_rate_limits, _RATE_LIMIT_MAX_REQUESTS
 from tests.auth_helper import authenticated_client
 
 
@@ -26,17 +27,23 @@ class TestRateLimiting(unittest.TestCase):
     def test_auth_login_rate_limited_after_threshold(self) -> None:
         """Exceeding the rate limit should return 429."""
         for _ in range(_RATE_LIMIT_MAX_REQUESTS):
-            resp = self.client.post("/auth/login", json={
-                "username": "admin",
-                "password": "admin_pass",
-            })
+            resp = self.client.post(
+                "/auth/login",
+                json={
+                    "username": "admin",
+                    "password": "admin_pass",
+                },
+            )
             self.assertIn(resp.status_code, (200, 401))
 
         # Next request should be rate limited
-        resp = self.client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = self.client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 429)
         self.assertIn("Retry-After", resp.headers)
 
@@ -50,48 +57,66 @@ class TestRateLimiting(unittest.TestCase):
     def test_rate_limit_reset_clears_counters(self) -> None:
         """reset_rate_limits() should allow fresh requests."""
         for _ in range(_RATE_LIMIT_MAX_REQUESTS):
-            self.client.post("/auth/login", json={
-                "username": "admin",
-                "password": "admin_pass",
-            })
+            self.client.post(
+                "/auth/login",
+                json={
+                    "username": "admin",
+                    "password": "admin_pass",
+                },
+            )
 
         reset_rate_limits()
 
-        resp = self.client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = self.client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
 
     def test_admin_reset_clears_rate_limits(self) -> None:
         """POST /admin/reset should also clear rate limits."""
         for _ in range(_RATE_LIMIT_MAX_REQUESTS):
-            self.client.post("/auth/login", json={
-                "username": "admin",
-                "password": "admin_pass",
-            })
+            self.client.post(
+                "/auth/login",
+                json={
+                    "username": "admin",
+                    "password": "admin_pass",
+                },
+            )
 
         admin = authenticated_client("admin")
         admin.post("/admin/reset")
 
-        resp = self.client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = self.client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
 
     def test_429_response_format(self) -> None:
         """Rate limit response should have proper JSON body."""
         for _ in range(_RATE_LIMIT_MAX_REQUESTS):
-            self.client.post("/auth/login", json={
+            self.client.post(
+                "/auth/login",
+                json={
+                    "username": "x",
+                    "password": "y",
+                },
+            )
+
+        resp = self.client.post(
+            "/auth/login",
+            json={
                 "username": "x",
                 "password": "y",
-            })
-
-        resp = self.client.post("/auth/login", json={
-            "username": "x",
-            "password": "y",
-        })
+            },
+        )
         self.assertEqual(resp.status_code, 429)
         body = resp.json()
         self.assertIn("detail", body)
@@ -138,8 +163,12 @@ class TestRouterStructure(unittest.TestCase):
         """Refactoring should not have lost or duplicated routes."""
         # Count only API routes (exclude OpenAPI docs routes)
         api_routes = [
-            r for r in app.routes
-            if hasattr(r, "path") and not r.path.startswith("/openapi") and r.path != "/docs" and r.path != "/redoc"
+            r
+            for r in app.routes
+            if hasattr(r, "path")
+            and not r.path.startswith("/openapi")
+            and r.path != "/docs"
+            and r.path != "/redoc"
         ]
         # Original had 40 endpoint definitions; account for that
         self.assertGreaterEqual(len(api_routes), 38)
@@ -157,6 +186,7 @@ class TestSchemaExtraction(unittest.TestCase):
             IncidentNote,
             ReportRequest,
         )
+
         # Verify they are Pydantic models
         self.assertTrue(hasattr(LoginRequest, "model_validate"))
         self.assertTrue(hasattr(ReadRequest, "model_validate"))
@@ -168,6 +198,7 @@ class TestSchemaExtraction(unittest.TestCase):
     def test_read_request_trust_boundary_documented(self) -> None:
         """ReadRequest should document the simulation trust boundary."""
         from app.schemas import ReadRequest
+
         self.assertIn("simulated threat actor", ReadRequest.__doc__)
 
 
@@ -176,6 +207,7 @@ class TestDependenciesModule(unittest.TestCase):
 
     def test_services_are_instantiated(self) -> None:
         from app import dependencies as deps
+
         self.assertIsNotNone(deps.telemetry_service)
         self.assertIsNotNone(deps.detection_service)
         self.assertIsNotNone(deps.pipeline)
@@ -186,6 +218,7 @@ class TestDependenciesModule(unittest.TestCase):
     def test_pipeline_has_risk_service(self) -> None:
         """Pipeline should be wired with risk scoring."""
         from app import dependencies as deps
+
         self.assertIsNotNone(deps.pipeline.risk)
 
 

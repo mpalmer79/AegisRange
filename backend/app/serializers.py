@@ -3,6 +3,7 @@
 Single-owner module for converting domain models to API response dicts.
 Route handlers import these functions instead of building dicts inline.
 """
+
 from __future__ import annotations
 
 from app.models import Alert, Event, Incident
@@ -69,8 +70,12 @@ def incident_to_dict(incident: Incident, notes: list[dict] | None = None) -> dic
         "actor_type": incident.actor_type,
         "actor_role": incident.actor_role,
         "correlation_id": incident.correlation_id,
-        "severity": incident.severity.value if hasattr(incident.severity, "value") else incident.severity,
-        "confidence": incident.confidence.value if hasattr(incident.confidence, "value") else incident.confidence,
+        "severity": incident.severity.value
+        if hasattr(incident.severity, "value")
+        else incident.severity,
+        "confidence": incident.confidence.value
+        if hasattr(incident.confidence, "value")
+        else incident.confidence,
         "risk_score": incident.risk_score,
         "detection_ids": incident.detection_ids,
         "detection_summary": incident.detection_summary,

@@ -1,4 +1,5 @@
 """Phase 2-3: Integration tests for SCN-SVC-005 and SCN-CORR-006 scenarios."""
+
 from __future__ import annotations
 
 import unittest
@@ -79,7 +80,9 @@ class TestSCNSVC005(ScenarioTestBase):
     def test_response_playbook(self) -> None:
         corr = f"corr-{uuid4()}"
         self.engine.run_svc_005(corr)
-        playbook_ids = {r.playbook_id for r in self.store.responses if r.correlation_id == corr}
+        playbook_ids = {
+            r.playbook_id for r in self.store.responses if r.correlation_id == corr
+        }
         self.assertIn("PB-SVC-007", playbook_ids)
 
 
@@ -137,7 +140,9 @@ class TestSCNCORR006(ScenarioTestBase):
     def test_multiple_response_playbooks(self) -> None:
         corr = f"corr-{uuid4()}"
         self.engine.run_corr_006(corr)
-        playbook_ids = {r.playbook_id for r in self.store.responses if r.correlation_id == corr}
+        playbook_ids = {
+            r.playbook_id for r in self.store.responses if r.correlation_id == corr
+        }
         # Should have auth and doc response playbooks
         self.assertIn("PB-AUTH-001", playbook_ids)
         self.assertIn("PB-AUTH-002", playbook_ids)

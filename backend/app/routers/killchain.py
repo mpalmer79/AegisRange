@@ -1,4 +1,5 @@
 """Kill chain analysis routes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,7 +15,9 @@ def get_all_killchain_analyses() -> list[dict]:
     return [killchain_service.to_dict(a) for a in analyses]
 
 
-@router.get("/killchain/{correlation_id}", dependencies=[Depends(require_role("viewer"))])
+@router.get(
+    "/killchain/{correlation_id}", dependencies=[Depends(require_role("viewer"))]
+)
 def get_killchain_analysis(correlation_id: str) -> dict:
     analysis = killchain_service.analyze_incident(correlation_id)
     if analysis is None:

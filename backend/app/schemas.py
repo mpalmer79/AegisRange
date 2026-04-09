@@ -3,6 +3,7 @@
 All Pydantic models used for FastAPI request bodies live here.
 Route handlers import these instead of defining models inline.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel

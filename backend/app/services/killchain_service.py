@@ -124,7 +124,9 @@ class KillChainService:
         detected_stages = [s for s in stages if s.detected]
         detected_count = len(detected_stages)
         total_count = len(stages)
-        progression_percentage = round((detected_count / total_count) * 100, 1) if total_count > 0 else 0.0
+        progression_percentage = (
+            round((detected_count / total_count) * 100, 1) if total_count > 0 else 0.0
+        )
 
         # Determine highest stage (latest in the kill chain that was detected)
         highest_stage = KILL_CHAIN_STAGES[0]
@@ -180,12 +182,18 @@ class KillChainService:
                     "order": stage.order,
                     "detected": stage.detected,
                     "detection_rule_ids": stage.detection_rule_ids,
-                    "first_seen": stage.first_seen.isoformat() if stage.first_seen else None,
+                    "first_seen": stage.first_seen.isoformat()
+                    if stage.first_seen
+                    else None,
                 }
                 for stage in analysis.stages
             ],
             "progression_percentage": analysis.progression_percentage,
             "highest_stage": analysis.highest_stage,
-            "first_activity": analysis.first_activity.isoformat() if analysis.first_activity else None,
-            "last_activity": analysis.last_activity.isoformat() if analysis.last_activity else None,
+            "first_activity": analysis.first_activity.isoformat()
+            if analysis.first_activity
+            else None,
+            "last_activity": analysis.last_activity.isoformat()
+            if analysis.last_activity
+            else None,
         }

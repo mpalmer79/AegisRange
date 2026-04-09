@@ -10,6 +10,7 @@ Usage:
     persistence.load()   # restore from last saved state
     persistence.save()   # persist current state to SQLite
 """
+
 from __future__ import annotations
 
 import json
@@ -102,31 +103,33 @@ class PersistenceLayer:
 
     @staticmethod
     def _serialize_event(event: Event) -> str:
-        return json.dumps({
-            "event_id": event.event_id,
-            "event_type": event.event_type,
-            "category": event.category,
-            "actor_id": event.actor_id,
-            "actor_type": event.actor_type,
-            "actor_role": event.actor_role,
-            "target_type": event.target_type,
-            "target_id": event.target_id,
-            "request_id": event.request_id,
-            "correlation_id": event.correlation_id,
-            "session_id": event.session_id,
-            "source_ip": event.source_ip,
-            "user_agent": event.user_agent,
-            "origin": event.origin,
-            "status": event.status,
-            "status_code": event.status_code,
-            "error_message": event.error_message,
-            "severity": event.severity.value,
-            "confidence": event.confidence.value,
-            "risk_score": event.risk_score,
-            "payload": event.payload,
-            "timestamp": event.timestamp.isoformat(),
-            "ingestion_timestamp": event.ingestion_timestamp.isoformat(),
-        })
+        return json.dumps(
+            {
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "category": event.category,
+                "actor_id": event.actor_id,
+                "actor_type": event.actor_type,
+                "actor_role": event.actor_role,
+                "target_type": event.target_type,
+                "target_id": event.target_id,
+                "request_id": event.request_id,
+                "correlation_id": event.correlation_id,
+                "session_id": event.session_id,
+                "source_ip": event.source_ip,
+                "user_agent": event.user_agent,
+                "origin": event.origin,
+                "status": event.status,
+                "status_code": event.status_code,
+                "error_message": event.error_message,
+                "severity": event.severity.value,
+                "confidence": event.confidence.value,
+                "risk_score": event.risk_score,
+                "payload": event.payload,
+                "timestamp": event.timestamp.isoformat(),
+                "ingestion_timestamp": event.ingestion_timestamp.isoformat(),
+            }
+        )
 
     @staticmethod
     def _deserialize_event(data: str) -> Event:
@@ -154,24 +157,28 @@ class PersistenceLayer:
             risk_score=d.get("risk_score"),
             payload=d["payload"],
             timestamp=_ensure_utc(datetime.fromisoformat(d["timestamp"])),
-            ingestion_timestamp=_ensure_utc(datetime.fromisoformat(d["ingestion_timestamp"])),
+            ingestion_timestamp=_ensure_utc(
+                datetime.fromisoformat(d["ingestion_timestamp"])
+            ),
         )
 
     @staticmethod
     def _serialize_alert(alert: Alert) -> str:
-        return json.dumps({
-            "alert_id": alert.alert_id,
-            "rule_id": alert.rule_id,
-            "rule_name": alert.rule_name,
-            "severity": alert.severity.value,
-            "confidence": alert.confidence.value,
-            "actor_id": alert.actor_id,
-            "correlation_id": alert.correlation_id,
-            "contributing_event_ids": alert.contributing_event_ids,
-            "summary": alert.summary,
-            "payload": alert.payload,
-            "created_at": alert.created_at.isoformat(),
-        })
+        return json.dumps(
+            {
+                "alert_id": alert.alert_id,
+                "rule_id": alert.rule_id,
+                "rule_name": alert.rule_name,
+                "severity": alert.severity.value,
+                "confidence": alert.confidence.value,
+                "actor_id": alert.actor_id,
+                "correlation_id": alert.correlation_id,
+                "contributing_event_ids": alert.contributing_event_ids,
+                "summary": alert.summary,
+                "payload": alert.payload,
+                "created_at": alert.created_at.isoformat(),
+            }
+        )
 
     @staticmethod
     def _deserialize_alert(data: str) -> Alert:
@@ -192,17 +199,19 @@ class PersistenceLayer:
 
     @staticmethod
     def _serialize_response(resp: ResponseAction) -> str:
-        return json.dumps({
-            "response_id": resp.response_id,
-            "playbook_id": resp.playbook_id,
-            "action_type": resp.action_type,
-            "actor_id": resp.actor_id,
-            "correlation_id": resp.correlation_id,
-            "reason": resp.reason,
-            "related_alert_id": resp.related_alert_id,
-            "payload": resp.payload,
-            "created_at": resp.created_at.isoformat(),
-        })
+        return json.dumps(
+            {
+                "response_id": resp.response_id,
+                "playbook_id": resp.playbook_id,
+                "action_type": resp.action_type,
+                "actor_id": resp.actor_id,
+                "correlation_id": resp.correlation_id,
+                "reason": resp.reason,
+                "related_alert_id": resp.related_alert_id,
+                "payload": resp.payload,
+                "created_at": resp.created_at.isoformat(),
+            }
+        )
 
     @staticmethod
     def _deserialize_response(data: str) -> ResponseAction:
@@ -221,38 +230,46 @@ class PersistenceLayer:
 
     @staticmethod
     def _serialize_incident(incident: Incident) -> str:
-        return json.dumps({
-            "incident_id": incident.incident_id,
-            "incident_type": incident.incident_type,
-            "primary_actor_id": incident.primary_actor_id,
-            "actor_type": incident.actor_type,
-            "actor_role": incident.actor_role,
-            "correlation_id": incident.correlation_id,
-            "severity": incident.severity.value if hasattr(incident.severity, "value") else incident.severity,
-            "confidence": incident.confidence.value if hasattr(incident.confidence, "value") else incident.confidence,
-            "status": incident.status,
-            "risk_score": incident.risk_score,
-            "detection_ids": incident.detection_ids,
-            "detection_summary": incident.detection_summary,
-            "response_ids": incident.response_ids,
-            "containment_status": incident.containment_status,
-            "event_ids": incident.event_ids,
-            "affected_documents": incident.affected_documents,
-            "affected_sessions": incident.affected_sessions,
-            "affected_services": incident.affected_services,
-            "timeline": [
-                {
-                    "timestamp": e.timestamp.isoformat(),
-                    "entry_type": e.entry_type,
-                    "reference_id": e.reference_id,
-                    "summary": e.summary,
-                }
-                for e in incident.timeline
-            ],
-            "created_at": incident.created_at.isoformat(),
-            "updated_at": incident.updated_at.isoformat(),
-            "closed_at": incident.closed_at.isoformat() if incident.closed_at else None,
-        })
+        return json.dumps(
+            {
+                "incident_id": incident.incident_id,
+                "incident_type": incident.incident_type,
+                "primary_actor_id": incident.primary_actor_id,
+                "actor_type": incident.actor_type,
+                "actor_role": incident.actor_role,
+                "correlation_id": incident.correlation_id,
+                "severity": incident.severity.value
+                if hasattr(incident.severity, "value")
+                else incident.severity,
+                "confidence": incident.confidence.value
+                if hasattr(incident.confidence, "value")
+                else incident.confidence,
+                "status": incident.status,
+                "risk_score": incident.risk_score,
+                "detection_ids": incident.detection_ids,
+                "detection_summary": incident.detection_summary,
+                "response_ids": incident.response_ids,
+                "containment_status": incident.containment_status,
+                "event_ids": incident.event_ids,
+                "affected_documents": incident.affected_documents,
+                "affected_sessions": incident.affected_sessions,
+                "affected_services": incident.affected_services,
+                "timeline": [
+                    {
+                        "timestamp": e.timestamp.isoformat(),
+                        "entry_type": e.entry_type,
+                        "reference_id": e.reference_id,
+                        "summary": e.summary,
+                    }
+                    for e in incident.timeline
+                ],
+                "created_at": incident.created_at.isoformat(),
+                "updated_at": incident.updated_at.isoformat(),
+                "closed_at": incident.closed_at.isoformat()
+                if incident.closed_at
+                else None,
+            }
+        )
 
     @staticmethod
     def _deserialize_incident(data: str) -> Incident:
@@ -278,7 +295,9 @@ class PersistenceLayer:
             affected_services=d.get("affected_services", []),
             created_at=_ensure_utc(datetime.fromisoformat(d["created_at"])),
             updated_at=_ensure_utc(datetime.fromisoformat(d["updated_at"])),
-            closed_at=_ensure_utc(datetime.fromisoformat(d["closed_at"])) if d.get("closed_at") else None,
+            closed_at=_ensure_utc(datetime.fromisoformat(d["closed_at"]))
+            if d.get("closed_at")
+            else None,
         )
         for te in d.get("timeline", []):
             incident.timeline.append(
@@ -448,10 +467,14 @@ class PersistenceLayer:
             set_data = {
                 "revoked_sessions": sorted(self.store.revoked_sessions),
                 "step_up_required": sorted(self.store.step_up_required),
-                "download_restricted_actors": sorted(self.store.download_restricted_actors),
+                "download_restricted_actors": sorted(
+                    self.store.download_restricted_actors
+                ),
                 "disabled_services": sorted(self.store.disabled_services),
                 "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
-                "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
+                "policy_change_restricted_actors": sorted(
+                    self.store.policy_change_restricted_actors
+                ),
             }
             for key, value in set_data.items():
                 conn.execute(
@@ -467,7 +490,9 @@ class PersistenceLayer:
                         "peak_score": v.peak_score,
                         "contributing_rules": v.contributing_rules,
                         "score_history": v.score_history,
-                        "last_updated": v.last_updated.isoformat() if hasattr(v.last_updated, "isoformat") else v.last_updated,
+                        "last_updated": v.last_updated.isoformat()
+                        if hasattr(v.last_updated, "isoformat")
+                        else v.last_updated,
                     }
                     for k, v in self.store.risk_profiles.items()
                 },
@@ -515,7 +540,10 @@ class PersistenceLayer:
             # Responses
             conn.executemany(
                 "INSERT INTO responses (response_id, data) VALUES (?, ?)",
-                [(r.response_id, self._serialize_response(r)) for r in self.store.responses],
+                [
+                    (r.response_id, self._serialize_response(r))
+                    for r in self.store.responses
+                ],
             )
 
             # Incidents
@@ -531,10 +559,14 @@ class PersistenceLayer:
             set_data = {
                 "revoked_sessions": sorted(self.store.revoked_sessions),
                 "step_up_required": sorted(self.store.step_up_required),
-                "download_restricted_actors": sorted(self.store.download_restricted_actors),
+                "download_restricted_actors": sorted(
+                    self.store.download_restricted_actors
+                ),
                 "disabled_services": sorted(self.store.disabled_services),
                 "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
-                "policy_change_restricted_actors": sorted(self.store.policy_change_restricted_actors),
+                "policy_change_restricted_actors": sorted(
+                    self.store.policy_change_restricted_actors
+                ),
             }
             for key, value in set_data.items():
                 conn.execute(
@@ -551,7 +583,9 @@ class PersistenceLayer:
                         "peak_score": v.peak_score,
                         "contributing_rules": v.contributing_rules,
                         "score_history": v.score_history,
-                        "last_updated": v.last_updated.isoformat() if hasattr(v.last_updated, "isoformat") else v.last_updated,
+                        "last_updated": v.last_updated.isoformat()
+                        if hasattr(v.last_updated, "isoformat")
+                        else v.last_updated,
                     }
                     for k, v in self.store.risk_profiles.items()
                 },
@@ -602,9 +636,16 @@ class PersistenceLayer:
         try:
             # Check if any data exists across all tables
             total = 0
-            for table in ("events", "alerts", "responses", "incidents",
-                          "state_sets", "state_dicts", "scenario_history",
-                          "incident_notes"):
+            for table in (
+                "events",
+                "alerts",
+                "responses",
+                "incidents",
+                "state_sets",
+                "state_dicts",
+                "scenario_history",
+                "incident_notes",
+            ):
                 total += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             if total == 0:
                 return False
@@ -651,6 +692,7 @@ class PersistenceLayer:
                     continue
                 if key == "risk_profiles":
                     from app.services.risk_service import RiskProfile
+
                     for actor_id, pd in raw.items():
                         staged_risk_profiles[actor_id] = RiskProfile(
                             actor_id=pd["actor_id"],
@@ -658,18 +700,19 @@ class PersistenceLayer:
                             peak_score=pd["peak_score"],
                             contributing_rules=pd["contributing_rules"],
                             score_history=pd["score_history"],
-                            last_updated=_ensure_utc(datetime.fromisoformat(pd["last_updated"])),
+                            last_updated=_ensure_utc(
+                                datetime.fromisoformat(pd["last_updated"])
+                            ),
                         )
                 elif key == "blocked_routes":
-                    staged_blocked_routes = {
-                        k: set(v) for k, v in raw.items()
-                    }
+                    staged_blocked_routes = {k: set(v) for k, v in raw.items()}
 
             staged_scenario_history: list[dict] = []
             for row in conn.execute("SELECT data FROM scenario_history ORDER BY id"):
                 staged_scenario_history.append(json.loads(row[0]))
 
             from collections import defaultdict
+
             staged_incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
             for row in conn.execute("SELECT correlation_id, data FROM incident_notes"):
                 staged_incident_notes[row[0]].append(json.loads(row[1]))
@@ -691,10 +734,16 @@ class PersistenceLayer:
 
             self.store.revoked_sessions = staged_sets.get("revoked_sessions", set())
             self.store.step_up_required = staged_sets.get("step_up_required", set())
-            self.store.download_restricted_actors = staged_sets.get("download_restricted_actors", set())
+            self.store.download_restricted_actors = staged_sets.get(
+                "download_restricted_actors", set()
+            )
             self.store.disabled_services = staged_sets.get("disabled_services", set())
-            self.store.quarantined_artifacts = staged_sets.get("quarantined_artifacts", set())
-            self.store.policy_change_restricted_actors = staged_sets.get("policy_change_restricted_actors", set())
+            self.store.quarantined_artifacts = staged_sets.get(
+                "quarantined_artifacts", set()
+            )
+            self.store.policy_change_restricted_actors = staged_sets.get(
+                "policy_change_restricted_actors", set()
+            )
 
             # Reset ephemeral state explicitly.
             self.store.actor_sessions = {}
@@ -713,6 +762,7 @@ class PersistenceLayer:
             # staging data was swapped in).  SQLite data is also
             # preserved — nothing is deleted.
             import logging
+
             logging.getLogger("aegisrange.persistence").error(
                 "Failed to load persisted state: %s. Starting with empty store.", exc
             )
@@ -767,6 +817,5 @@ class PersistenceLayer:
         next save_operational_state() call.
         """
         self.store.alert_signatures = {
-            (a.rule_id, a.actor_id, a.correlation_id)
-            for a in self.store.alerts
+            (a.rule_id, a.actor_id, a.correlation_id) for a in self.store.alerts
         }

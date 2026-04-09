@@ -3,6 +3,7 @@
 These tests assert the exact set of fields returned by key endpoints
 so that backend serializer changes don't silently break the frontend.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -61,9 +62,19 @@ class TestAlertContract(unittest.TestCase):
         client = authenticated_client("viewer")
         resp = client.get("/alerts")
         for alert in resp.json():
-            self.assertNotIn("timestamp", alert, "Alias 'timestamp' should be removed; use 'created_at'")
-            self.assertNotIn("event_ids", alert, "Alias 'event_ids' should be removed; use 'contributing_event_ids'")
-            self.assertNotIn("details", alert, "Alias 'details' should be removed; use 'payload'")
+            self.assertNotIn(
+                "timestamp",
+                alert,
+                "Alias 'timestamp' should be removed; use 'created_at'",
+            )
+            self.assertNotIn(
+                "event_ids",
+                alert,
+                "Alias 'event_ids' should be removed; use 'contributing_event_ids'",
+            )
+            self.assertNotIn(
+                "details", alert, "Alias 'details' should be removed; use 'payload'"
+            )
 
 
 class TestIncidentContract(unittest.TestCase):
@@ -121,8 +132,16 @@ class TestIncidentContract(unittest.TestCase):
         client = authenticated_client("viewer")
         resp = client.get("/incidents")
         for inc in resp.json():
-            self.assertNotIn("primary_actor", inc, "Alias 'primary_actor' should be removed; use 'primary_actor_id'")
-            self.assertNotIn("detection_summaries", inc, "Alias 'detection_summaries' should be removed; use 'detection_summary'")
+            self.assertNotIn(
+                "primary_actor",
+                inc,
+                "Alias 'primary_actor' should be removed; use 'primary_actor_id'",
+            )
+            self.assertNotIn(
+                "detection_summaries",
+                inc,
+                "Alias 'detection_summaries' should be removed; use 'detection_summary'",
+            )
 
     def test_timeline_entry_fields(self) -> None:
         """Timeline entries should use 'entry_id', not 'reference_id'."""
@@ -131,7 +150,11 @@ class TestIncidentContract(unittest.TestCase):
         for inc in resp.json():
             for entry in inc.get("timeline", []):
                 self.assertIn("entry_id", entry)
-                self.assertNotIn("reference_id", entry, "Alias 'reference_id' should be removed; use 'entry_id'")
+                self.assertNotIn(
+                    "reference_id",
+                    entry,
+                    "Alias 'reference_id' should be removed; use 'entry_id'",
+                )
                 self.assertEqual(
                     set(entry.keys()),
                     {"timestamp", "entry_type", "entry_id", "summary"},
@@ -144,10 +167,13 @@ class TestPlatformLoginContract(unittest.TestCase):
         from app.main import app
 
         client = TestClient(app)
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "admin_pass",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "admin_pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(
