@@ -58,9 +58,9 @@ Every system decision must be:
 ```
 [Frontend - Next.js 14 App Router]
         |
-        v (HTTP/SSE)
-[Backend Service (FastAPI)]
-    ├── Identity Module
+        v (HTTP/SSE, JWT auth required)
+[Backend Service (FastAPI, single worker)]
+    ├── Identity Module (simulated actors)
     ├── Document Module
     ├── Telemetry Module
     ├── Detection Engine (10 rules)
@@ -77,12 +77,13 @@ Every system decision must be:
     └── Stream Service (SSE)
         |
         v
-[In-Memory Store ←→ SQLite (write-through cache)]
+[InMemoryStore (Python singleton)]
+        |
+        v (incremental writes + operational snapshots)
+[SQLite (aegisrange.db)]
 ```
 
-**Current persistence**: All state lives in `InMemoryStore` at runtime. A SQLite write-through cache (`persistence.py`) saves state after every mutating HTTP request and reloads on startup. State survives restarts but is not designed for concurrent multi-process writes.
-
-**Current authentication**: `auth_service.py` implements JWT creation/verification (HMAC-SHA256), 5 roles (admin, soc_manager, analyst, red_team, viewer), and a `require_role()` FastAPI dependency. All 35 protected routes enforce `require_role()`. Public endpoints: `/health`, `/auth/login`. Frontend has login page, AuthProvider context, and AuthGuard redirect.
+**Single-process constraint**: The backend runs as a single Uvicorn worker. `InMemoryStore` is a process-level singleton. Multiple workers would create independent, unsynchronized stores.
 
 ### 3.2 Service Inventory (15 services)
 
@@ -92,21 +93,21 @@ Every system decision must be:
 | DocumentService | `document_service.py` | Active — role-based document access |
 | TelemetryService | `event_services.py` | Active — event storage and lookup |
 | DetectionService | `detection_service.py` | Active — 10 detection rules |
-| ResponseService | `response_service.py` | Active — 10 response playbooks |
+| ResponseOrchestrator | `response_service.py` | Active — 10 response playbooks |
 | IncidentService | `incident_service.py` | Active — incident lifecycle management |
-| PipelineService | `pipeline_service.py` | Active — event-to-incident orchestration |
-| ScenarioService | `scenario_service.py` | Active — 6 adversary simulations |
-| RiskService | `risk_service.py` | Active — actor risk scoring |
+| EventPipelineService | `pipeline_service.py` | Active — event-to-incident orchestration |
+| ScenarioEngine | `scenario_service.py` | Active — 6 adversary simulations |
+| RiskScoringService | `risk_service.py` | Active — actor risk scoring |
 | MitreAttackService | `mitre_service.py` | Active — TTP mapping and coverage |
 | KillChainService | `killchain_service.py` | Active — kill chain stage tracking |
-| CampaignService | `campaign_service.py` | Active — cross-incident correlation |
+| CampaignDetectionService | `campaign_service.py` | Active — cross-incident correlation |
 | AuthService | `auth_service.py` | Active — JWT + RBAC enforced on all routes |
 | ReportService | `report_service.py` | Active — exercise report generation |
 | StreamService | `stream_service.py` | Active — SSE subscriber management |
 
 ### 3.3 Service Wiring
 
-All services are instantiated at module level in `main.py` and wired together through constructor injection. The `InMemoryStore` singleton is shared across services that need persistence. Services do not communicate through the store — they are composed through the `PipelineService` which orchestrates the event-detection-response-incident flow.
+All services are instantiated at module level in `main.py` and wired together through constructor injection. The `InMemoryStore` singleton is shared across services that need state access. Services do not communicate through the store — they are composed through the `EventPipelineService` which orchestrates the event-detection-response-incident flow.
 
 ---
 
@@ -139,7 +140,7 @@ Central event processor.
 
 Responsibilities:
 - normalize all events into canonical `Event` dataclass
-- persist events in memory
+- persist events via `store.append_event()`
 - provide event lookup by type, actor, time range
 
 ### 4.4 Detection Engine
@@ -165,17 +166,21 @@ Executes 10 playbooks mapped to detection rules:
 - Policy change restriction
 - Multi-signal containment
 
-Each playbook produces `ResponseAction` records.
+Each playbook produces `ResponseAction` records and mutates containment state in the store.
 
 ### 4.6 Pipeline Service
 
 Orchestrates the full flow: event → detection → response → incident.
 
 When an event is ingested:
-1. Store in telemetry
-2. Run all detection rules
-3. For each alert, execute matching response playbook
-4. Create or update incident with timeline entries
+1. Store event via `store.append_event()`
+2. Register event with incident service (if incident exists for correlation)
+3. Run all detection rules
+4. Deduplicate alerts via `alert_signatures`
+5. Persist novel alerts via `store.extend_alerts()`
+6. For each alert, execute matching response playbook
+7. Create or update incident via `store.upsert_incident()`
+8. Persist responses via `store.extend_responses()`
 
 ### 4.7 Incident Service
 
@@ -184,13 +189,15 @@ Builds the incident model. Each incident contains:
 - related alerts
 - response actions
 - full timeline of events
-- status lifecycle (open → investigating → contained → resolved)
+- status lifecycle (open → investigating → contained → resolved → closed)
 - severity escalation
 - analyst notes
 
+All incident mutations are followed by `store.upsert_incident()` to ensure durability.
+
 ### 4.8 Scenario Engine
 
-6 deterministic adversary simulations that exercise the full pipeline. Each scenario injects a controlled sequence of events through the identity and document services, triggering detections and responses.
+6 deterministic adversary simulations that exercise the full pipeline. Each scenario injects a controlled sequence of events through the identity and document services, triggering detections and responses. Scenario execution is attributed to the platform user who triggered it via `operated_by`.
 
 ### 4.9 Risk Scoring Service
 
@@ -199,6 +206,8 @@ Computes per-actor risk profiles based on:
 - detection confidence multipliers
 - accumulated behavioral signals
 
+Risk score changes on incidents are persisted via `store.upsert_incident()`.
+
 ### 4.10 MITRE ATT&CK Service
 
 Maps all 10 detection rules to MITRE ATT&CK techniques and tactics. Provides:
@@ -206,7 +215,6 @@ Maps all 10 detection rules to MITRE ATT&CK techniques and tactics. Provides:
 - coverage matrix showing covered vs uncovered techniques
 - tactic-level coverage percentages
 - scenario-to-TTP resolution
-- alert enrichment with MITRE context
 
 ### 4.11 Auth Service
 
@@ -217,7 +225,7 @@ Implements:
 - `require_role()` FastAPI dependency for route protection
 - Role hierarchy with numeric levels
 
-**Current state**: Enforced on all 35 protected routes. Public endpoints: `/health`, `/auth/login`. 19 auth enforcement tests verify 401/403 behavior.
+**Current state**: Enforced on all 35 protected routes. Public endpoints: `/health`, `/auth/login`.
 
 ### 4.12 Supporting Services
 
@@ -262,7 +270,7 @@ Event Generated (frozen dataclass)
    ↓
 Telemetry Normalization
    ↓
-Event Stored (in-memory list)
+Event Stored (in-memory + SQLite)
    ↓
 Detection Engine (10 rules evaluated)
    ↓
@@ -283,34 +291,107 @@ Incident Updated (timeline entry added)
 |------|-----------|------------|
 | `Event` | Frozen dataclass | event_id, event_type, actor_id, target_type, target_id, timestamp, payload |
 | `Alert` | Frozen dataclass | alert_id, rule_id, severity, confidence, created_at, contributing_event_ids, payload |
-| `ResponseAction` | Frozen dataclass | action_id, playbook_id, action_type, target_actor, executed_at, details |
-| `TimelineEntry` | Frozen dataclass | timestamp, entry_type, source_id, summary |
-| `Incident` | Mutable dataclass | correlation_id, primary_actor_id, alerts, responses, timeline, status, severity |
-| `Severity` | Enum | low, medium, high, critical |
+| `ResponseAction` | Frozen dataclass | response_id, playbook_id, action_type, actor_id, correlation_id, payload |
+| `TimelineEntry` | Frozen dataclass | timestamp, entry_type, reference_id, summary |
+| `Incident` | Mutable dataclass | incident_id, correlation_id, primary_actor_id, status, severity, timeline, detection_ids, response_ids |
+| `Severity` | Enum | informational, low, medium, high, critical |
 | `Confidence` | Enum | low, medium, high |
 
 ### 7.2 Persistence Model
 
-All data is stored in `InMemoryStore` (singleton) at runtime. Key collections:
+#### Architecture
 
-- `events: list[Event]`
-- `alerts: list[Alert]`
-- `responses: list[ResponseAction]`
-- `incidents_by_correlation: dict[str, Incident]`
-- `risk_profiles: dict[str, RiskProfile]`
-- Various tracking dicts for login failures, document reads, session state
+All data lives in `InMemoryStore` (singleton) at runtime. A `PersistenceLayer` (`persistence.py`) provides hybrid SQLite persistence:
 
-A `PersistenceLayer` (`persistence.py`) provides SQLite write-through caching:
-- **Save**: Serializes all store state to SQLite tables after every mutating HTTP request (POST/PATCH/DELETE with status < 400)
-- **Load**: Restores full state from SQLite on startup
-- **Clear**: Drops all SQLite data on `POST /admin/reset`
-- Disabled in test environment (`APP_ENV=test`)
+- **Entity persistence** (incremental): Events, alerts, responses, incidents, incident notes, and scenario history are written to SQLite immediately when created or updated, via store write methods (`append_event`, `extend_alerts`, `extend_responses`, `upsert_incident`, `append_incident_note`, `append_scenario_history`).
+- **Operational state persistence** (snapshot): Containment sets and risk profiles are snapshot-persisted to SQLite after each mutating HTTP request via middleware.
+- **Load**: On startup, all persisted state is loaded atomically (stage-then-swap). Derived state is rebuilt deterministically. Ephemeral state resets.
 
-The `reset()` method clears SQLite, reinitializes all collections, and preserves the persistence reference.
+#### Serialization Boundary
+
+API response serialization is centralized in `serializers.py`, which owns all domain-model-to-dict conversions. Route handlers import serializer functions (`event_to_dict`, `alert_to_dict`, `incident_to_dict`, etc.) instead of building dicts inline. This prevents field drift between endpoints.
+
+#### State Classification
+
+Every collection in `InMemoryStore` is classified as one of three types:
+
+| Classification | Persistence | Load Behavior | Example |
+|----------------|-------------|---------------|---------|
+| **Authoritative** | Must persist | Load from SQLite | events, alerts, incidents, containment sets, risk_profiles |
+| **Derived** | Must NOT persist | Rebuild deterministically | login_failures_by_actor, alert_signatures |
+| **Ephemeral** | Must NOT persist | Reset to empty | actor_sessions |
+
+Full classification:
+
+| Collection | Classification | Justification |
+|------------|---------------|---------------|
+| `events` | authoritative | Primary telemetry record |
+| `alerts` | authoritative | Detection output record |
+| `responses` | authoritative | Response action record |
+| `incidents_by_correlation` | authoritative | Incident lifecycle state |
+| `incident_notes` | authoritative | Analyst observations |
+| `scenario_history` | authoritative | Execution audit trail |
+| `revoked_sessions` | authoritative | Active containment enforcement |
+| `step_up_required` | authoritative | Active containment enforcement |
+| `download_restricted_actors` | authoritative | Active containment enforcement |
+| `disabled_services` | authoritative | Active containment enforcement |
+| `quarantined_artifacts` | authoritative | Active containment enforcement |
+| `policy_change_restricted_actors` | authoritative | Active containment enforcement |
+| `blocked_routes` | authoritative | Active containment enforcement |
+| `risk_profiles` | authoritative | Accumulated risk scoring state |
+| `login_failures_by_actor` | derived | Rebuilt from events on load |
+| `document_reads_by_actor` | derived | Rebuilt from events on load |
+| `authorization_failures_by_actor` | derived | Rebuilt from events on load |
+| `artifact_failures_by_actor` | derived | Rebuilt from events on load |
+| `alert_signatures` | derived | Rebuilt from alerts on load |
+| `actor_sessions` | ephemeral | Simulated sessions; re-auth required after restart |
+
+#### Limitations
+
+- **Single-process only**: The in-memory store is a process-level singleton. Multiple workers create independent, unsynchronized stores.
+- **No concurrency guarantees**: No locking on store mutations. Acceptable for single-worker operation.
+- **SQLite write-through**: Suitable for single-process writes only. Not designed for concurrent multi-process access.
+- **Hybrid persistence gap**: A crash between an incremental entity write and the next operational state snapshot can cause operational state to lag behind entity state. Derived state recovers via rebuild; authoritative operational state may revert to last snapshot.
 
 ---
 
-## 8. Detection Model
+## 8. Identity Model
+
+AegisRange has two conceptually separate identity systems:
+
+### 8.1 Platform Users (Auth Service)
+
+- Authenticate via `/auth/login` with JWT tokens (HMAC-SHA256)
+- 5 roles: admin, soc_manager, analyst, red_team, viewer
+- All 35 protected routes enforce `require_role()` via FastAPI dependency
+- Platform user identity is stashed on `request.state.platform_user` by the auth middleware
+- Used for: scenario execution attribution (`operated_by`), incident note authorship, status transition audit trail, admin reset logging
+
+### 8.2 Simulated Actors (Identity Service)
+
+- Authenticate via `/identity/login` within simulation scenarios
+- 2 hardcoded users: alice (analyst), bob (admin)
+- Sessions are tracked in `actor_sessions` (ephemeral — reset on restart)
+- Used for: simulating threat actor behavior within scenarios
+
+### 8.3 Attribution Model
+
+Platform user identity flows through the system:
+- Scenario execution records `operated_by` (platform user who triggered it)
+- Incident notes record `author` (platform user, overriding client-supplied author)
+- Status transitions record `changed_by` (platform user)
+- Admin reset records `reset_by` (platform user)
+
+Simulated actor identity flows through events:
+- Events record `actor_id` (simulated actor like "user-alice")
+- Alerts inherit `actor_id` from triggering events
+- Incidents inherit `primary_actor_id` from the first alert
+
+These two identity systems do not cross-reference.
+
+---
+
+## 9. Detection Model
 
 ### Characteristics
 - Rule-based with explicit thresholds
@@ -328,7 +409,7 @@ The `reset()` method clears SQLite, reinitializes all collections, and preserves
 
 ---
 
-## 9. Response Model
+## 10. Response Model
 
 ### Principles
 - Proportional to risk
@@ -347,36 +428,34 @@ The `reset()` method clears SQLite, reinitializes all collections, and preserves
 
 ---
 
-## 10. Incident Model
+## 11. Incident Model
 
 Each incident contains:
 - Primary actor
 - Related alerts
 - Response actions
 - Full timeline of events, detections, responses, and state transitions
-- Status lifecycle: `open` → `investigating` → `contained` → `resolved`
+- Status lifecycle: `open` → `investigating` → `contained` → `resolved` → `closed`
 - Severity (escalates based on highest alert severity)
 - Analyst notes
 
 ---
 
-## 11. Technology Stack
-
-### Current Implemented Stack
+## 12. Technology Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Next.js 14, TypeScript, Tailwind CSS |
 | Backend | FastAPI, Python 3.x |
-| Persistence | In-memory + SQLite write-through cache |
+| Persistence | In-memory primary + SQLite hybrid persistence |
 | Auth | PyJWT (HMAC-SHA256), enforced on all protected routes |
-| Testing | pytest (281 tests across 19 files), unittest |
+| Testing | pytest (352 tests across 19 files), unittest |
 | Containerization | Docker, docker-compose |
 | CI | GitHub Actions |
 
 ---
 
-## 12. Current Constraints
+## 13. Current Constraints and Limitations
 
 ### Implemented
 - Full detection/response pipeline (10 rules, 10 playbooks, 6 scenarios)
@@ -387,51 +466,20 @@ Each incident contains:
 - Exercise reporting
 - SSE streaming
 - JWT auth enforced on all 35 protected routes with RBAC
-- SQLite write-through persistence
+- Hybrid SQLite persistence with incremental entity writes
 - Frontend login page, AuthProvider, AuthGuard
-- Frontend/backend API contract alignment (alias fields)
+- Frontend/backend API contract alignment
+- Centralized serialization boundary
 
 ### Not Yet Implemented
 - PostgreSQL persistence option
 - Rate limiting
 - Input validation on query parameters
-- Microservices deployment
+- Multi-worker / horizontal scaling support
 - Machine learning detection
 - Multi-tenant support
 - Message queue / streaming pipeline
-
----
-
-## 13. Target-State Architecture
-
-The following represents the intended evolution of the platform. These items are designed but not yet built.
-
-### 13.1 Target Topology
-
-```
-[Frontend - Next.js]
-        |
-        v
-[Reverse Proxy (TLS termination)]
-        |
-        v
-[Backend Service (FastAPI)]
-    ├── All current services
-    ├── require_role() enforced on routes  ← DONE
-    └── Rate limiting middleware
-        |
-        v
-[PostgreSQL (production) / SQLite (dev)]  ← SQLite DONE
-```
-
-### 13.2 Planned Enhancements
-- PostgreSQL persistence option for production deployments
-- Rate limiting middleware
-- Input validation hardening on query parameters
-- Streaming pipeline for asynchronous event processing
-- Advanced correlation engine with temporal pattern matching
-- Policy engine for externalized detection/response policies
-- AI-assisted detection explanations
+- Externalized JWT secret management
 
 ---
 
@@ -443,20 +491,8 @@ The following represents the intended evolution of the platform. These items are
 - Auditability over early performance optimization
 - Scenario-first validation approach
 - Frozen dataclasses for immutable events and alerts
-- In-memory persistence with SQLite write-through for durability without ORM complexity
-
----
-
-## 15. Summary
-
-AegisRange is a system-level demonstration of how modern cybersecurity platforms operate, emphasizing:
-
-- observability
-- detection engineering
-- controlled response
-- incident explainability
-- threat intelligence integration (MITRE ATT&CK)
-- kill chain analysis
-- campaign correlation
-
-The platform currently implements 15 services, 38 API endpoints, 10 detection rules, 10 response playbooks, and 6 adversary simulations with 281 automated tests across 19 test files. Persistence uses an in-memory store with SQLite write-through caching. JWT authentication is enforced on all 35 protected routes with role-based access control.
+- In-memory primary store with hybrid SQLite persistence for durability without ORM complexity
+- Incremental entity persistence to reduce snapshot overhead
+- Explicit state classification (authoritative / derived / ephemeral)
+- Centralized serialization layer to prevent field drift
+- Platform user attribution on all mutating operations
