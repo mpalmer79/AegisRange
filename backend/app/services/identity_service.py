@@ -38,7 +38,7 @@ class IdentityService:
             )
 
         session_id = f"session-{uuid4()}"
-        self.store.actor_sessions[user["actor_id"]] = session_id
+        self.store.set_actor_session(user["actor_id"], session_id)
         return AuthResult(
             success=True,
             actor_id=user["actor_id"],
@@ -54,11 +54,11 @@ class IdentityService:
     def revoke_session(self, session_id: str) -> bool:
         if session_id not in self.store.actor_sessions.values():
             return False
-        self.store.revoked_sessions.add(session_id)
+        self.store.revoke_session(session_id)
         return True
 
     def is_step_up_required(self, actor_id: str) -> bool:
         return actor_id in self.store.step_up_required
 
     def clear_step_up(self, actor_id: str) -> None:
-        self.store.step_up_required.discard(actor_id)
+        self.store.clear_step_up(actor_id)

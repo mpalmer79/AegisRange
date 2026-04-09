@@ -30,12 +30,17 @@ import {
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+/**
+ * Must match the key used in auth-context.tsx.
+ * We read from sessionStorage (not localStorage) so tokens are
+ * scoped to the current tab and cleared when the tab closes.
+ */
 const STORAGE_KEY = 'aegisrange_auth';
 
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed.token && parsed.expires_at && new Date(parsed.expires_at) > new Date()) {

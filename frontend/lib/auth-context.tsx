@@ -18,6 +18,17 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+/**
+ * Session-scoped storage key.  We use sessionStorage (not localStorage)
+ * so tokens are scoped to the browser tab and cleared on close.
+ * This reduces the exposure window compared to localStorage which
+ * persists across tabs and browser restarts.
+ *
+ * NOTE: Any JS-accessible storage is vulnerable to XSS.  The real
+ * mitigation is the strict CSP and input sanitisation enforced by
+ * the Next.js framework.  A full httpOnly-cookie auth flow would
+ * require backend Set-Cookie support (future enhancement).
+ */
 const STORAGE_KEY = 'aegisrange_auth';
 
 function loadAuth(): AuthState {
@@ -25,7 +36,7 @@ function loadAuth(): AuthState {
     return { token: null, username: null, role: null, isAuthenticated: false };
   }
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed.token && parsed.expires_at) {
@@ -58,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: true,
     };
     setAuth(state);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
       token: result.token,
       username: result.username,
       role: result.role,
@@ -68,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setAuth({ token: null, username: null, role: null, isAuthenticated: false });
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const authHeaders: Record<string, string> = auth.token

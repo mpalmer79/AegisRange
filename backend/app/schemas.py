@@ -14,10 +14,21 @@ class LoginRequest(BaseModel):
 
 
 class ReadRequest(BaseModel):
-    """Simulation-context request: actor_id and actor_role identify the
-    *simulated threat actor* being emulated, not the authenticated platform
-    user.  The platform user is identified via the JWT bearer token.
-    This separation is by design — see ARCHITECTURE.md §8 (Identity Model)."""
+    """Simulation-context request body.
+
+    ``actor_id`` and ``actor_role`` identify the **simulated threat actor**
+    being emulated within a scenario.  They are NOT the authenticated
+    platform user — that identity comes from the JWT bearer token and is
+    recorded in every emitted event's ``payload.platform_user_id`` field.
+
+    The backend treats these fields as untrusted simulation metadata:
+    they drive scenario logic (e.g. which documents the actor can access)
+    but do NOT affect platform-level authorization, which is enforced
+    exclusively via ``require_role()``.
+
+    See ARCHITECTURE.md §8 (Identity Model) for the full trust boundary
+    description.
+    """
 
     actor_id: str
     actor_role: str
@@ -25,7 +36,7 @@ class ReadRequest(BaseModel):
 
 
 class DownloadRequest(BaseModel):
-    """Simulation-context request: see ReadRequest docstring."""
+    """Simulation-context request body — see ReadRequest docstring."""
 
     actor_id: str
     actor_role: str

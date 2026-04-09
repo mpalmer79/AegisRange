@@ -47,13 +47,13 @@ class TelemetryService:
         self.store.append_event(event)
 
         if event.event_type == "authentication.login.failure":
-            self.store.login_failures_by_actor[event.actor_id].append(event)
+            self.store.record_login_failure(event.actor_id, event)
         if event.event_type == "document.read.success":
-            self.store.document_reads_by_actor[event.actor_id].append(event)
+            self.store.record_document_read(event.actor_id, event)
         if event.event_type == "authorization.failure":
-            self.store.authorization_failures_by_actor[event.actor_id].append(event)
+            self.store.record_authorization_failure(event.actor_id, event)
         if event.event_type == "artifact.validation.failed":
-            self.store.artifact_failures_by_actor[event.actor_id].append(event)
+            self.store.record_artifact_failure(event.actor_id, event)
 
         return event
 

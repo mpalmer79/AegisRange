@@ -54,10 +54,8 @@ class EventPipelineService:
         novel_alerts: list[Alert] = []
         for alert in alerts:
             signature = (alert.rule_id, alert.actor_id, alert.correlation_id)
-            if signature in self.store.alert_signatures:
-                continue
-            self.store.alert_signatures.add(signature)
-            novel_alerts.append(alert)
+            if self.store.add_alert_signature(signature):
+                novel_alerts.append(alert)
 
         self.store.extend_alerts(novel_alerts)
         total_responses = 0
