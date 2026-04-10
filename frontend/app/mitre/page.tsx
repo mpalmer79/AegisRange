@@ -195,7 +195,7 @@ export default function MitrePage() {
                 </thead>
                 <tbody>
                   {mappings.map((m) => (
-                    <tr key={m.rule_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-gray-800/30">
+                    <tr key={m.rule_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-800/30">
                       <td className="px-4 py-3 font-mono text-cyan-700 dark:text-cyan-400 text-xs">{m.rule_id}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">

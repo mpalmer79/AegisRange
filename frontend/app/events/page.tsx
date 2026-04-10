@@ -85,7 +85,7 @@ export default function EventsPage() {
         </div>
         <button
           onClick={fetchEvents}
-          className="px-3 py-1.5 text-xs font-mono bg-slate-200 dark:bg-gray-800 hover:bg-gray-700 border border-slate-300 dark:border-gray-700 rounded text-slate-700 dark:text-gray-300 transition-colors"
+          className="px-3 py-1.5 text-xs font-mono bg-slate-200 dark:bg-gray-800 hover:bg-slate-300 dark:hover:bg-gray-700 border border-slate-300 dark:border-gray-700 rounded text-slate-700 dark:text-gray-300 transition-colors"
         >
           REFRESH
         </button>
@@ -154,7 +154,7 @@ export default function EventsPage() {
               {events.map((event, i) => (
                 <tr
                   key={event.event_id || i}
-                  className="border-t border-slate-200 dark:border-gray-800/50 hover:bg-gray-900/50 transition-colors"
+                  className="border-t border-slate-200 dark:border-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-900/50 transition-colors"
                 >
                   <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap">
                     {formatTimestamp(event.timestamp)}

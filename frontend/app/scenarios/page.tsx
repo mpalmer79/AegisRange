@@ -48,27 +48,37 @@ export default function ScenariosPage() {
           return (
             <div
               key={scenario.id}
-              className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-lg overflow-hidden"
+              className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-lg overflow-hidden shadow-sm dark:shadow-none hover:border-cyan-300 dark:hover:border-cyan-500/40 transition-colors"
             >
-              {/* Card Header */}
+              {/* Card Header — the left side is a Link to the full gamified
+                  briefing; the RUN button stays as a sibling so it can run
+                  the scenario in place without triggering navigation. */}
               <div className="p-5 border-b border-slate-200 dark:border-gray-800">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
+                  <Link
+                    href={`/scenarios/${scenario.id}`}
+                    aria-label={`Open ${scenario.name} mission briefing`}
+                    className="flex-1 group block -m-2 p-2 rounded-md hover:bg-slate-50 dark:hover:bg-gray-800/40 transition-colors"
+                  >
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-mono text-cyan-500 bg-cyan-500/10 px-2 py-0.5 rounded">
                         {scenario.id.toUpperCase()}
                       </span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-gray-600 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                        Briefing &rarr;
+                      </span>
                     </div>
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-gray-100 mb-1">
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-gray-100 mb-1 group-hover:text-cyan-700 dark:group-hover:text-cyan-300 transition-colors">
                       {scenario.name}
                     </h3>
                     <p className="text-sm text-slate-600 dark:text-gray-400 leading-relaxed">
                       {scenario.description}
                     </p>
-                  </div>
+                  </Link>
                   <button
                     onClick={() => handleRun(scenario.id)}
                     disabled={running !== null}
+                    aria-label={`Run ${scenario.name} in place`}
                     className={`shrink-0 px-4 py-2 rounded text-sm font-mono font-medium transition-all ${
                       isRunning
                         ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 animate-pulse cursor-wait'

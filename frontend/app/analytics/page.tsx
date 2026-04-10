@@ -122,7 +122,7 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     {sortedProfiles.map((profile) => (
-                      <tr key={profile.actor_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                      <tr key={profile.actor_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-800/30 transition-colors">
                         <td className="px-4 py-3 font-mono text-cyan-700 dark:text-cyan-400">{profile.actor_id}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
@@ -186,7 +186,7 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     {sortedRules.map((rule) => (
-                      <tr key={rule.rule_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                      <tr key={rule.rule_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-800/30 transition-colors">
                         <td className="px-4 py-3 font-mono text-cyan-700 dark:text-cyan-400 text-xs">{rule.rule_id}</td>
                         <td className="px-4 py-3 text-slate-800 dark:text-gray-200">{rule.rule_name}</td>
                         <td className="px-4 py-3 font-mono text-slate-800 dark:text-gray-200 font-bold">{rule.trigger_count}</td>
@@ -231,7 +231,7 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     {scenarioHistory.map((entry) => (
-                      <tr key={entry.correlation_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                      <tr key={entry.correlation_id} className="border-b border-slate-200 dark:border-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-800/30 transition-colors">
                         <td className="px-4 py-3 font-mono text-slate-800 dark:text-gray-200 text-xs">{entry.scenario_id}</td>
                         <td className="px-4 py-3 font-mono text-cyan-700 dark:text-cyan-400 text-xs break-all">{entry.correlation_id}</td>
                         <td className="px-4 py-3 font-mono text-slate-700 dark:text-gray-300">{entry.events_total}</td>
