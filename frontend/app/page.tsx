@@ -202,8 +202,8 @@ export default function DashboardPage() {
         className="relative overflow-hidden mb-8 ar-slide-up rounded-2xl border-2 border-slate-200 dark:border-gray-800 bg-gradient-to-br from-white via-sky-50 to-indigo-50 dark:from-gray-900 dark:via-indigo-950/40 dark:to-gray-900 p-5 sm:p-6 shadow-lg shadow-slate-200/60 dark:shadow-black/40"
       >
         {/* Decorative orbs */}
-        <div aria-hidden className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-gradient-to-br from-amber-300/40 via-orange-300/30 to-transparent blur-3xl" />
-        <div aria-hidden className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-gradient-to-tr from-indigo-500/30 via-violet-500/20 to-transparent blur-3xl" />
+        <div aria-hidden className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-gradient-to-br from-amber-300/40 via-orange-300/30 to-transparent blur-3xl ar-drift" />
+        <div aria-hidden className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-gradient-to-tr from-indigo-500/30 via-violet-500/20 to-transparent blur-3xl ar-drift-reverse" />
 
         <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
           <div>

@@ -10,6 +10,8 @@ import {
   PersonalBest,
   Rank,
   personalBestKey,
+  Achievement,
+  AchievementCategory,
 } from '@/lib/player-progress';
 import { SCENARIO_DEFINITIONS } from '@/lib/types';
 import { computeAllOpProgress } from '@/lib/ops-content';
@@ -111,6 +113,118 @@ function AchievementIcon({ icon, earned }: { icon: string; earned: boolean }) {
   }
 }
 
+// ============================================================
+// Achievement banner palette — Phase 6 visual pass.
+// Each palette supplies every Tailwind class the banner needs,
+// enumerated (not dynamic) so the JIT picks them up.
+// ============================================================
+interface AchievementPalette {
+  border: string;       // outer border when earned
+  bg: string;           // gradient bg classes
+  title: string;        // title text color
+  iconBg: string;       // icon badge gradient
+  orbOne: string;       // decorative orb 1 color
+  orbTwo: string;       // decorative orb 2 color
+  chipText: string;     // category chip text
+  chipBg: string;       // category chip bg
+  label: string;        // chip label displayed on the card
+}
+
+const PALETTES: Record<AchievementCategory, AchievementPalette> = {
+  core: {
+    border: 'border-cyan-300 dark:border-cyan-500/40',
+    bg: 'from-cyan-50 via-sky-50 to-indigo-50 dark:from-cyan-500/10 dark:via-sky-500/10 dark:to-indigo-500/10',
+    title: 'text-cyan-700 dark:text-cyan-200',
+    iconBg: 'from-cyan-500 via-sky-500 to-indigo-600',
+    orbOne: 'bg-cyan-300/50 dark:bg-cyan-500/20',
+    orbTwo: 'bg-indigo-300/40 dark:bg-indigo-500/15',
+    chipText: 'text-cyan-700 dark:text-cyan-300',
+    chipBg: 'bg-cyan-100 dark:bg-cyan-500/15',
+    label: 'Career',
+  },
+  red: {
+    border: 'border-rose-300 dark:border-rose-500/40',
+    bg: 'from-rose-50 via-red-50 to-orange-50 dark:from-rose-500/10 dark:via-red-500/10 dark:to-orange-500/10',
+    title: 'text-rose-700 dark:text-rose-200',
+    iconBg: 'from-rose-500 via-red-500 to-orange-500',
+    orbOne: 'bg-rose-300/50 dark:bg-rose-500/20',
+    orbTwo: 'bg-orange-300/40 dark:bg-orange-500/15',
+    chipText: 'text-rose-700 dark:text-rose-300',
+    chipBg: 'bg-rose-100 dark:bg-rose-500/15',
+    label: 'Red Team',
+  },
+  blue: {
+    border: 'border-sky-300 dark:border-sky-500/40',
+    bg: 'from-sky-50 via-blue-50 to-indigo-50 dark:from-sky-500/10 dark:via-blue-500/10 dark:to-indigo-500/10',
+    title: 'text-sky-700 dark:text-sky-200',
+    iconBg: 'from-sky-500 via-blue-500 to-indigo-600',
+    orbOne: 'bg-sky-300/50 dark:bg-sky-500/20',
+    orbTwo: 'bg-indigo-300/40 dark:bg-indigo-500/15',
+    chipText: 'text-sky-700 dark:text-sky-300',
+    chipBg: 'bg-sky-100 dark:bg-sky-500/15',
+    label: 'Blue Team',
+  },
+  elite: {
+    border: 'border-amber-300 dark:border-amber-500/40',
+    bg: 'from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-500/10 dark:via-yellow-500/10 dark:to-orange-500/10',
+    title: 'text-amber-700 dark:text-amber-200',
+    iconBg: 'from-amber-400 via-orange-500 to-yellow-500',
+    orbOne: 'bg-amber-300/50 dark:bg-amber-500/20',
+    orbTwo: 'bg-yellow-300/40 dark:bg-yellow-500/15',
+    chipText: 'text-amber-700 dark:text-amber-300',
+    chipBg: 'bg-amber-100 dark:bg-amber-500/15',
+    label: 'Elite',
+  },
+  op: {
+    border: 'border-emerald-300 dark:border-emerald-500/40',
+    bg: 'from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10',
+    title: 'text-emerald-700 dark:text-emerald-200',
+    iconBg: 'from-emerald-500 via-teal-500 to-cyan-600',
+    orbOne: 'bg-emerald-300/50 dark:bg-emerald-500/20',
+    orbTwo: 'bg-teal-300/40 dark:bg-teal-500/15',
+    chipText: 'text-emerald-700 dark:text-emerald-300',
+    chipBg: 'bg-emerald-100 dark:bg-emerald-500/15',
+    label: 'Training Op',
+  },
+  daily: {
+    border: 'border-fuchsia-300 dark:border-fuchsia-500/40',
+    bg: 'from-fuchsia-50 via-violet-50 to-purple-50 dark:from-fuchsia-500/10 dark:via-violet-500/10 dark:to-purple-500/10',
+    title: 'text-fuchsia-700 dark:text-fuchsia-200',
+    iconBg: 'from-fuchsia-500 via-violet-500 to-purple-600',
+    orbOne: 'bg-fuchsia-300/50 dark:bg-fuchsia-500/20',
+    orbTwo: 'bg-violet-300/40 dark:bg-violet-500/15',
+    chipText: 'text-fuchsia-700 dark:text-fuchsia-300',
+    chipBg: 'bg-fuchsia-100 dark:bg-fuchsia-500/15',
+    label: 'Daily',
+  },
+};
+
+// Per-op overrides so each training op gets its own accent.
+const OP_ID_PALETTES: Record<string, AchievementPalette> = {
+  'op-nightshade': {
+    ...PALETTES.blue,
+    iconBg: 'from-sky-500 via-indigo-500 to-violet-600',
+    label: 'Op Nightshade',
+  },
+  'op-firestarter': {
+    ...PALETTES.red,
+    iconBg: 'from-rose-500 via-red-500 to-orange-500',
+    label: 'Op Firestarter',
+  },
+  'op-gridlock': {
+    ...PALETTES.daily,
+    iconBg: 'from-fuchsia-500 via-pink-500 to-rose-600',
+    label: 'Op Gridlock',
+  },
+};
+
+function paletteFor(a: Achievement): AchievementPalette {
+  if (a.category === 'op' && OP_ID_PALETTES[a.id]) {
+    return OP_ID_PALETTES[a.id];
+  }
+  return PALETTES[a.category];
+}
+
 function PerspectiveChip({ perspective }: { perspective: 'red' | 'blue' }) {
   const cls = perspective === 'red'
     ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30'
@@ -203,8 +317,8 @@ export default function ProfilePage() {
       <section
         className={`relative overflow-hidden rounded-3xl border-2 border-slate-200 dark:border-gray-800 bg-gradient-to-br ${accentGradient} p-6 sm:p-8 mb-8 shadow-lg dark:shadow-none ar-slide-up`}
       >
-        <div aria-hidden className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/40 dark:bg-white/5 blur-3xl" />
-        <div aria-hidden className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-white/30 dark:bg-white/5 blur-3xl" />
+        <div aria-hidden className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/40 dark:bg-white/5 blur-3xl ar-drift-slow" />
+        <div aria-hidden className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-white/30 dark:bg-white/5 blur-3xl ar-drift-reverse" />
 
         <div className="relative flex flex-col md:flex-row md:items-end md:justify-between gap-6">
           <div>
@@ -291,9 +405,9 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Achievements grid */}
+      {/* Achievements grid — gradient banners */}
       <section className="mb-8">
-        <div className="flex items-end justify-between mb-3">
+        <div className="flex items-end justify-between mb-4">
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-gray-100">Achievements</h2>
             <p className="text-xs text-slate-500 dark:text-gray-500">
@@ -304,40 +418,84 @@ export default function ProfilePage() {
             {earnedAch.size} / {ACHIEVEMENTS.length}
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 ar-stagger">
           {ACHIEVEMENTS.map((a) => {
             const earned = earnedAch.has(a.id);
+            const palette = paletteFor(a);
             return (
               <div
                 key={a.id}
-                className={`flex items-start gap-3 rounded-xl border p-4 transition-colors ${
+                aria-label={`${a.name} — ${earned ? 'earned' : 'locked'}`}
+                className={`group relative rounded-2xl border-2 overflow-hidden p-5 transition-all ${
                   earned
-                    ? 'border-amber-300 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 to-white dark:from-amber-500/10 dark:to-gray-950'
-                    : 'border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900'
+                    ? `${palette.border} bg-gradient-to-br ${palette.bg} shadow-sm hover:shadow-lg dark:shadow-none ar-shine`
+                    : 'border-slate-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/70 grayscale hover:grayscale-0'
                 }`}
               >
-                <div
-                  className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
-                    earned
-                      ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
-                      : 'bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-gray-600'
-                  }`}
-                >
-                  <AchievementIcon icon={a.icon} earned={earned} />
-                </div>
-                <div className="min-w-0">
-                  <p
-                    className={`text-sm font-semibold ${
+                {/* Decorative orbs drift slowly in the background
+                    when earned, giving a subtle sense of life. */}
+                {earned && (
+                  <>
+                    <div aria-hidden className={`absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl ${palette.orbOne} ar-drift`} />
+                    <div aria-hidden className={`absolute -bottom-16 -left-16 w-40 h-40 rounded-full blur-3xl ${palette.orbTwo} ar-drift-reverse`} />
+                  </>
+                )}
+
+                <div className="relative flex items-start gap-4">
+                  {/* Gradient badge with the achievement icon.
+                      Floats gently when earned, goes flat when locked. */}
+                  <div
+                    className={`shrink-0 w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${
                       earned
-                        ? 'text-amber-700 dark:text-amber-300'
-                        : 'text-slate-700 dark:text-gray-300'
+                        ? `bg-gradient-to-br ${palette.iconBg} text-white ar-float-slow ar-wiggle-hover`
+                        : 'bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-gray-600 shadow-none'
                     }`}
                   >
-                    {a.name}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-gray-500 mt-0.5">
-                    {a.description}
-                  </p>
+                    <div className="[&>svg]:w-6 [&>svg]:h-6">
+                      <AchievementIcon icon={a.icon} earned={earned} />
+                    </div>
+                  </div>
+
+                  {/* Text column */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span
+                        className={`inline-flex items-center text-[10px] font-mono uppercase tracking-[0.18em] px-2 py-0.5 rounded-full border ${
+                          earned
+                            ? `${palette.chipBg} ${palette.chipText} border-transparent`
+                            : 'bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-gray-600 border-slate-200 dark:border-gray-800'
+                        }`}
+                      >
+                        {palette.label}
+                      </span>
+                      {earned ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 13l4 4L19 7" />
+                          </svg>
+                          Earned
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-gray-600">
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="10" rx="2" />
+                            <path d="M7 11V7a5 5 0 0110 0v4" />
+                          </svg>
+                          Locked
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className={`text-base font-bold leading-tight truncate ${
+                        earned ? palette.title : 'text-slate-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {a.name}
+                    </p>
+                    <p className="text-xs text-slate-600 dark:text-gray-400 mt-1 leading-relaxed">
+                      {a.description}
+                    </p>
+                  </div>
                 </div>
               </div>
             );

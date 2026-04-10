@@ -175,8 +175,8 @@ export default function OpDetailPage() {
       <section
         className={`relative overflow-hidden rounded-3xl border-2 ${accent.ring} bg-gradient-to-br ${accent.heroGradient} p-6 sm:p-8 mb-8 shadow-lg dark:shadow-none ar-slide-up`}
       >
-        <div aria-hidden className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/40 dark:bg-white/5 blur-3xl" />
-        <div aria-hidden className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-white/30 dark:bg-white/5 blur-3xl" />
+        <div aria-hidden className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/40 dark:bg-white/5 blur-3xl ar-drift-slow" />
+        <div aria-hidden className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-white/30 dark:bg-white/5 blur-3xl ar-drift-reverse" />
 
         <div className="relative">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
