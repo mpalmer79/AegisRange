@@ -8,6 +8,7 @@ import { useViewport } from '@/lib/responsive';
 const navItems = [
   { href: '/', label: 'Dashboard', icon: DashboardIcon },
   { href: '/scenarios', label: 'Scenarios', icon: ScenarioIcon },
+  { href: '/profile', label: 'Career', icon: CareerIcon },
   { href: '/events', label: 'Events', icon: EventIcon },
   { href: '/alerts', label: 'Alerts', icon: AlertIcon },
   { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon },
@@ -119,6 +120,14 @@ function ScenarioIcon({ active }: { active: boolean }) {
   return (
     <svg className={`w-4 h-4 ${active ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+    </svg>
+  );
+}
+
+function CareerIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={`w-4 h-4 ${active ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111 5.52.442c.499.04.701.663.321.988l-4.204 3.602 1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 19.64a.562.562 0 01-.84-.61l1.285-5.386-4.204-3.602a.562.562 0 01.321-.988l5.52-.442 2.125-5.111z" />
     </svg>
   );
 }
