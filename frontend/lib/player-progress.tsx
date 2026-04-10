@@ -195,6 +195,9 @@ const EMPTY_PROGRESS: PlayerProgress = {
 
 const STORAGE_KEY = 'aegisrange-progress-v1';
 const MAX_HISTORY = 50;
+/** Keep at most ~1 year of daily-challenge completion keys so the
+ *  localStorage payload does not grow unbounded over time. */
+const MAX_DAILY_HISTORY = 366;
 
 /**
  * Validate the minimum v1 shape. Phase 5 fields are filled in by
@@ -251,7 +254,9 @@ function migrateLoaded(raw: unknown): PlayerProgress {
       typeof v.personalBestBeats === 'number' ? v.personalBestBeats : 0,
     streak,
     dailyCompletions: Array.isArray(v.dailyCompletions)
-      ? v.dailyCompletions.filter((d): d is string => typeof d === 'string')
+      ? v.dailyCompletions
+          .filter((d): d is string => typeof d === 'string')
+          .slice(-MAX_DAILY_HISTORY)
       : [],
   };
 }
@@ -473,9 +478,16 @@ export function PlayerProgressProvider({ children }: { children: ReactNode }) {
     }
 
     // --- Phase 5: daily challenge completion ---
+    // Append today's key (once per day), then cap to MAX_DAILY_HISTORY
+    // so long-running careers don't grow the localStorage payload
+    // without bound. Keeping the tail preserves recent-day checks.
     let nextDailyCompletions = prev.dailyCompletions;
     if (input.isDailyChallenge && !prev.dailyCompletions.includes(todayKey)) {
-      nextDailyCompletions = [...prev.dailyCompletions, todayKey];
+      const appended = [...prev.dailyCompletions, todayKey];
+      nextDailyCompletions =
+        appended.length > MAX_DAILY_HISTORY
+          ? appended.slice(appended.length - MAX_DAILY_HISTORY)
+          : appended;
     }
 
     const interim: PlayerProgress = {

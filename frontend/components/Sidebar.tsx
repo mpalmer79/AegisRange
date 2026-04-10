@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useViewport } from '@/lib/responsive';
 import { useCommandPalette } from './CommandPalette';
@@ -35,12 +36,16 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   // Desktop: always visible. Mobile/tablet: slide-over drawer.
   const isVisible = isDesktop || open;
 
-  // Display Cmd on macOS, Ctrl elsewhere. Computed client-only so
-  // the first SSR render shows the neutral form.
-  const modKey =
-    typeof navigator !== 'undefined' && /Mac|iP(hone|od|ad)/.test(navigator.platform)
-      ? '\u2318'
-      : 'Ctrl';
+  // Platform-aware modifier key for the search kbd hint. SSR and the
+  // first client render both use 'Ctrl' (neutral) to avoid React
+  // hydration mismatch; the effect upgrades to '\u2318' on macOS
+  // clients after mount.
+  const [modKey, setModKey] = useState('Ctrl');
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && /Mac|iP(hone|od|ad)/.test(navigator.platform)) {
+      setModKey('\u2318');
+    }
+  }, []);
 
   return (
     <>
@@ -84,7 +89,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-gray-900 hover:bg-slate-100 dark:hover:bg-gray-800 hover:border-cyan-300 dark:hover:border-cyan-500/40 text-slate-500 dark:text-gray-500 transition-colors group"
           aria-label="Open command palette"
         >
-          <svg className="w-4 h-4 text-slate-400 dark:text-gray-600 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" focusable="false" className="w-4 h-4 text-slate-400 dark:text-gray-600 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.3-4.3" />
           </svg>

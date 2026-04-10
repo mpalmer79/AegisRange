@@ -60,8 +60,14 @@ const GROUP_ORDER: CommandGroup[] = [
 // ---------- icons ----------
 
 function Icon({ children }: { children: ReactNode }) {
+  // Decorative wrapper — the surrounding command row carries the
+  // accessible label through its title text, so the icon itself is
+  // hidden from assistive tech.
   return (
-    <span className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 flex items-center justify-center text-slate-600 dark:text-gray-300">
+    <span
+      aria-hidden="true"
+      className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 flex items-center justify-center text-slate-600 dark:text-gray-300"
+    >
       {children}
     </span>
   );
@@ -152,6 +158,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
 
   // Navigate helper that closes the palette afterward.
   const go = useCallback(
@@ -320,14 +328,65 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     [grouped]
   );
 
-  // Reset cursor + query when opening / when results change.
+  // Reset cursor + query when opening / when results change, and
+  // save the previously focused element so we can restore focus on
+  // close (accessibility requirement for dialogs).
   useEffect(() => {
     if (open) {
+      previouslyFocused.current = (document.activeElement as HTMLElement) ?? null;
       setQuery('');
       setCursor(0);
       // Focus the search input after the dialog mounts.
       setTimeout(() => inputRef.current?.focus(), 10);
+    } else {
+      // Return focus to whatever was focused before we opened.
+      // Wait a tick so the unmount settles before refocusing.
+      const target = previouslyFocused.current;
+      if (target && typeof target.focus === 'function') {
+        setTimeout(() => target.focus(), 0);
+      }
     }
+  }, [open]);
+
+  // Body scroll lock while the palette is open.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  // Focus trap: cycle Tab / Shift+Tab within the dialog so focus
+  // cannot escape to background content while the palette is open.
+  useEffect(() => {
+    if (!open) return;
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const root = dialogRef.current;
+      if (!root) return;
+      const focusable = root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last || !root.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleTab);
+    return () => document.removeEventListener('keydown', handleTab);
   }, [open]);
 
   useEffect(() => {
@@ -387,10 +446,13 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-2xl rounded-2xl border-2 border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl overflow-hidden ar-bounce-in">
+      <div
+        ref={dialogRef}
+        className="relative w-full max-w-2xl rounded-2xl border-2 border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl overflow-hidden ar-bounce-in"
+      >
         {/* Search row */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-gray-800">
-          <svg className="w-4 h-4 text-slate-500 dark:text-gray-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" focusable="false" className="w-4 h-4 text-slate-500 dark:text-gray-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
@@ -403,6 +465,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
               setCursor(0);
             }}
             placeholder="Search scenarios, ops, pages, or theme..."
+            aria-label="Search commands"
             className="flex-1 bg-transparent text-sm text-slate-800 dark:text-gray-100 placeholder:text-slate-400 dark:placeholder:text-gray-600 outline-none"
             autoComplete="off"
             spellCheck={false}
@@ -454,7 +517,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
                           </p>
                         )}
                       </div>
-                      <span className={`shrink-0 ${isActive ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-300 dark:text-gray-700'}`}>
+                      <span aria-hidden="true" className={`shrink-0 ${isActive ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-300 dark:text-gray-700'}`}>
                         {IconSvg.arrowRight}
                       </span>
                     </button>
