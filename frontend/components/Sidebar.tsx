@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
 import { useViewport } from '@/lib/responsive';
 import { useCommandPalette } from './CommandPalette';
 
@@ -29,7 +28,6 @@ interface SidebarProps {
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { username, role, logout } = useAuth();
   const { isDesktop } = useViewport();
   const { openPalette } = useCommandPalette();
 
@@ -122,21 +120,18 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* User / Logout */}
+      {/* Demo footer (auth disabled for recruiter demo) */}
       <div className="p-4 border-t border-slate-200 dark:border-gray-800">
-        {username && (
-          <div className="mb-3">
-            <p className="text-xs font-mono text-slate-600 dark:text-gray-400 truncate">{username}</p>
-            <p className="text-[10px] font-mono text-slate-400 dark:text-gray-600 uppercase">{role}</p>
-          </div>
-        )}
-        <button
-          onClick={logout}
-          className="w-full text-left px-3 py-2 text-xs font-mono text-slate-500 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-gray-800 rounded transition-colors"
-        >
-          Sign Out
-        </button>
-        <p className="text-[10px] text-slate-300 dark:text-gray-700 font-mono mt-2">v0.6.0</p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Demo Mode</p>
+        </div>
+        <p className="text-xs font-mono text-slate-700 dark:text-gray-300 truncate">Vanta Orbital SOC</p>
+        <p className="text-[10px] font-mono text-slate-400 dark:text-gray-600 uppercase">Tier 2 · Analyst</p>
+        <p className="text-[10px] text-slate-300 dark:text-gray-700 font-mono mt-2">v0.6.0 · Live sandbox</p>
       </div>
     </aside>
     </>

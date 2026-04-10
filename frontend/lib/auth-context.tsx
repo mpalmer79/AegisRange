@@ -1,74 +1,40 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { platformLogin, platformLogout, getCurrentUser } from './api';
+import { createContext, useContext, ReactNode } from 'react';
 
-interface AuthState {
+// ============================================================
+// Demo-mode auth context.
+//
+// This deployment is a read-only recruiter demo — authentication is
+// disabled entirely. The context still exists so components that
+// historically called useAuth() keep compiling, but it returns a
+// static "Demo Operator" identity and no-op login/logout functions.
+// No backend calls, no redirects, no login page.
+// ============================================================
+
+interface AuthContextType {
   username: string | null;
   role: string | null;
   isAuthenticated: boolean;
-}
-
-interface AuthContextType extends AuthState {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
+const DEMO_IDENTITY: Omit<AuthContextType, 'login' | 'logout'> = {
+  username: 'Demo Operator',
+  role: 'analyst',
+  isAuthenticated: true,
+};
+
+const noop = async () => {
+  /* demo mode */
+};
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
-/**
- * Authentication is cookie-based.  The JWT token is stored in an
- * httpOnly cookie set by the backend — it never touches JavaScript.
- *
- * React state holds only non-secret UI metadata (username, role)
- * needed for rendering role-gated components.  On mount we call
- * GET /auth/me to check if the cookie is still valid.
- */
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>({
-    username: null,
-    role: null,
-    isAuthenticated: false,
-  });
-
-  // On mount, check if the httpOnly cookie is still valid
-  useEffect(() => {
-    getCurrentUser()
-      .then((user) => {
-        setAuth({
-          username: user.username,
-          role: user.role,
-          isAuthenticated: true,
-        });
-      })
-      .catch(() => {
-        // No valid cookie — stay logged out
-      });
-  }, []);
-
-  const login = useCallback(async (username: string, password: string) => {
-    const result = await platformLogin(username, password);
-    // The httpOnly cookie was set by the backend response.
-    // We only store non-secret UI metadata in React state.
-    setAuth({
-      username: result.username,
-      role: result.role,
-      isAuthenticated: true,
-    });
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await platformLogout();
-    } catch {
-      // Best-effort — clear local state regardless
-    }
-    setAuth({ username: null, role: null, isAuthenticated: false });
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ ...auth, login, logout }}>
+    <AuthContext.Provider value={{ ...DEMO_IDENTITY, login: noop, logout: noop }}>
       {children}
     </AuthContext.Provider>
   );

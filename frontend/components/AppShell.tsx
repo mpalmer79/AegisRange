@@ -8,10 +8,18 @@ import AuthGuard from './AuthGuard';
 import Sidebar from './Sidebar';
 import { CommandPaletteProvider } from './CommandPalette';
 
+/**
+ * Demo-mode shell.
+ *
+ * Authentication has been removed for the recruiter demo deployment
+ * (see lib/auth-context.tsx). The AuthProvider + AuthGuard wrappers
+ * are kept as no-op pass-throughs so existing imports still compile.
+ * Every route — including "/" — renders the full sidebar + command
+ * palette without redirecting anywhere.
+ */
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isDesktop } = useViewport();
-  const isLoginPage = pathname === '/login';
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Close sidebar on navigation (mobile/tablet)
@@ -23,18 +31,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isDesktop) setSidebarOpen(false);
   }, [isDesktop]);
-
-  // The login page is rendered outside the CommandPaletteProvider on
-  // purpose — it's pre-auth and has no need for global navigation.
-  if (isLoginPage) {
-    return (
-      <AuthProvider>
-        <AuthGuard>
-          <main className="min-h-screen">{children}</main>
-        </AuthGuard>
-      </AuthProvider>
-    );
-  }
 
   return (
     <AuthProvider>
