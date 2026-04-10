@@ -17,6 +17,7 @@ class InMemoryStore:
         self.incidents_by_correlation: dict[str, Incident] = {}
         self.actor_sessions: dict[str, str] = {}
         self.revoked_sessions: set[str] = set()
+        self.revoked_jtis: set[str] = set()
         self.step_up_required: set[str] = set()
         self.download_restricted_actors: set[str] = set()
         self.alert_signatures: set[tuple[str, str, str]] = set()
@@ -85,6 +86,10 @@ class InMemoryStore:
     def revoke_session(self, session_id: str) -> None:
         """Mark a session as revoked (authoritative containment state)."""
         self.revoked_sessions.add(session_id)
+
+    def revoke_jti(self, jti: str) -> None:
+        """Mark a JWT token ID as revoked (authoritative containment state)."""
+        self.revoked_jtis.add(jti)
 
     def require_step_up(self, actor_id: str) -> None:
         """Require step-up authentication for an actor."""
@@ -190,6 +195,10 @@ class InMemoryStore:
     def is_session_revoked(self, session_id: str) -> bool:
         """Check if a session has been revoked."""
         return session_id in self.revoked_sessions
+
+    def is_jti_revoked(self, jti: str) -> bool:
+        """Check if a JWT token ID has been revoked."""
+        return jti in self.revoked_jtis
 
     def is_step_up_required(self, actor_id: str) -> bool:
         """Check if step-up auth is required for an actor."""

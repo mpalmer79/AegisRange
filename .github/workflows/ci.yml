@@ -18,9 +18,11 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/dev-requirements.txt
       - name: Install dependencies
-        run: pip install -r requirements.txt -r dev-requirements.txt
+        run: pip install --require-hashes -r requirements.txt -r dev-requirements.txt
       - name: Ruff check
         run: ruff check app/ tests/
       - name: Ruff format check
@@ -38,11 +40,13 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/dev-requirements.txt
       - name: Install dependencies
-        run: pip install -r requirements.txt -r dev-requirements.txt
-      - name: Run tests
-        run: python -m pytest tests/ -v --tb=short
+        run: pip install --require-hashes -r requirements.txt -r dev-requirements.txt
+      - name: Run tests with coverage
+        run: python -m pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=90
       - name: Verify no datetime.utcnow usage
         run: |
           python -c "

@@ -236,5 +236,21 @@ class TestCorrelationMiddleware(unittest.TestCase):
         self.assertEqual(resp.headers["x-correlation-id"], "test-corr-123")
 
 
+class TestDockerfileConstraints(unittest.TestCase):
+    """Verify the Dockerfile enforces single-worker mode."""
+
+    def test_dockerfile_enforces_single_worker(self) -> None:
+        """CMD must include --workers 1 as a regression guard."""
+        import pathlib
+
+        dockerfile = pathlib.Path(__file__).resolve().parent.parent / "Dockerfile"
+        content = dockerfile.read_text()
+        self.assertIn(
+            "--workers 1",
+            content,
+            "Dockerfile CMD must enforce --workers 1 (see ARCHITECTURE.md Scaling Constraints)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

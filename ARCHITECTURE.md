@@ -142,6 +142,20 @@ app/
 
 All services are instantiated in `dependencies.py` and wired together through constructor injection. The `InMemoryStore` singleton is shared across services that need state access. Services do not communicate through the store — they are composed through the `EventPipelineService` which orchestrates the event-detection-response-incident flow. Route handlers live in `app/routers/` and import services from `dependencies.py`.
 
+### Scaling Constraints
+
+The application **must run with a single Uvicorn worker**. Two subsystems are process-local:
+
+1. **InMemoryStore** — the singleton data store is a Python-level global. Multiple workers would create independent, unsynchronized copies. Reads and writes would silently diverge.
+2. **Auth rate limiter** — the per-IP request counter in `main.py` is a `defaultdict` in process memory. With *N* workers the effective limit becomes *N × 20* rather than 20.
+
+This constraint is enforced in the Dockerfile `CMD` via `--workers 1`.
+
+**To scale beyond a single process:**
+- Replace `InMemoryStore` with an external data store (PostgreSQL, Redis).
+- Replace the in-memory rate limiter with a shared limiter backed by Redis or a similar external store.
+- Only then increase the worker count.
+
 ---
 
 ## 4. Core Components
@@ -369,6 +383,7 @@ Full classification:
 | `incident_notes` | authoritative | Analyst observations |
 | `scenario_history` | authoritative | Execution audit trail |
 | `revoked_sessions` | authoritative | Active containment enforcement |
+| `revoked_jtis` | authoritative | JWT deny-list for logged-out tokens |
 | `step_up_required` | authoritative | Active containment enforcement |
 | `download_restricted_actors` | authoritative | Active containment enforcement |
 | `disabled_services` | authoritative | Active containment enforcement |

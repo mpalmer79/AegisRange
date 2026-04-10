@@ -466,6 +466,7 @@ class PersistenceLayer:
 
             set_data = {
                 "revoked_sessions": sorted(self.store.revoked_sessions),
+                "revoked_jtis": sorted(self.store.revoked_jtis),
                 "step_up_required": sorted(self.store.step_up_required),
                 "download_restricted_actors": sorted(
                     self.store.download_restricted_actors
@@ -558,6 +559,7 @@ class PersistenceLayer:
             # Sets (transient operational state)
             set_data = {
                 "revoked_sessions": sorted(self.store.revoked_sessions),
+                "revoked_jtis": sorted(self.store.revoked_jtis),
                 "step_up_required": sorted(self.store.step_up_required),
                 "download_restricted_actors": sorted(
                     self.store.download_restricted_actors
@@ -733,6 +735,7 @@ class PersistenceLayer:
             self.store.incident_notes = staged_incident_notes
 
             self.store.revoked_sessions = staged_sets.get("revoked_sessions", set())
+            self.store.revoked_jtis = staged_sets.get("revoked_jtis", set())
             self.store.step_up_required = staged_sets.get("step_up_required", set())
             self.store.download_restricted_actors = staged_sets.get(
                 "download_restricted_actors", set()

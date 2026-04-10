@@ -276,13 +276,23 @@ class AuthService:
         if iat.tzinfo is None:
             iat = iat.replace(tzinfo=timezone.utc)
 
+        jti = raw.get("jti")
+        if jti is None:
+            return None
+
+        # Check JTI deny-list (revoked tokens from logout)
+        from app.store import STORE
+
+        if STORE.is_jti_revoked(jti):
+            return None
+
         try:
             return TokenPayload(
                 sub=raw["sub"],
                 role=raw["role"],
                 exp=exp,
                 iat=iat,
-                jti=raw["jti"],
+                jti=jti,
             )
         except (KeyError, ValueError):
             return None
@@ -294,6 +304,21 @@ class AuthService:
     def list_users(self) -> list[AuthUser]:
         """Return all platform users."""
         return list(self._users.values())
+
+    def extract_jti(self, token: str) -> str | None:
+        """Extract the JTI from a token without full verification.
+
+        Used during logout to revoke the token.  The cookie was set
+        by us, but we still guard against malformed input.
+        """
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        try:
+            raw = json.loads(self._b64_decode(parts[1]))
+            return raw.get("jti")
+        except (ValueError, KeyError):
+            return None
 
     # -- internal helpers ----------------------------------------------------
 

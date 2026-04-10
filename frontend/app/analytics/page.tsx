@@ -109,7 +109,7 @@ export default function AnalyticsPage() {
                 <p className="text-gray-500 font-mono text-sm">No risk profile data available</p>
               </div>
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+              <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-800">
@@ -173,7 +173,7 @@ export default function AnalyticsPage() {
                 <p className="text-gray-500 font-mono text-sm">No rule effectiveness data available</p>
               </div>
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+              <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-800">
@@ -216,7 +216,7 @@ export default function AnalyticsPage() {
                 <p className="text-gray-500 font-mono text-sm">No scenario history available</p>
               </div>
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+              <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-800">

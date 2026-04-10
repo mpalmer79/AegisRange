@@ -98,21 +98,21 @@ export default function EventsPage() {
           placeholder="Filter by actor_id"
           value={filterActorId}
           onChange={(e) => setFilterActorId(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-48"
+          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
         />
         <input
           type="text"
           placeholder="Filter by event_type"
           value={filterEventType}
           onChange={(e) => setFilterEventType(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-48"
+          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
         />
         <input
           type="text"
           placeholder="Filter by correlation_id"
           value={filterCorrelationId}
           onChange={(e) => setFilterCorrelationId(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-64"
+          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-64"
         />
       </div>
 

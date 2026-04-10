@@ -20,6 +20,7 @@ ENV DB_PATH=/data/aegisrange.db
 
 EXPOSE 8000
 
-# Railway sets $PORT dynamically; fall back to 8000 for local use.
-# Shell form is required so $PORT is expanded at runtime.
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Single worker required: rate limiter and InMemoryStore are
+# process-local. Scale vertically or add Redis before adding workers.
+# Shell form so $PORT is expanded at runtime (Railway sets it dynamically).
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1

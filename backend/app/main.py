@@ -45,6 +45,11 @@ logger = logging.getLogger("aegisrange")
 
 # ---------------------------------------------------------------------------
 # Rate limiting (in-memory, per-IP)
+#
+# NOTE: This rate limiter is process-local and in-memory only.
+# It is only correct when the application runs with a single worker.
+# See Dockerfile CMD and ARCHITECTURE.md section "Scaling Constraints".
+# To support multiple workers, replace with a shared limiter (e.g. Redis).
 # ---------------------------------------------------------------------------
 
 _rate_limit_store: dict[str, list[float]] = defaultdict(list)

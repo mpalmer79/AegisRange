@@ -35,7 +35,10 @@ import {
   PlatformUser,
 } from './types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// In production the frontend proxies API calls through Next.js rewrites
+// (/api/proxy/:path* → BACKEND_URL/:path*) so cookies stay same-origin.
+// For local dev, talk directly to the backend on localhost:8000.
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api/proxy' : 'http://localhost:8000');
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${path}`;

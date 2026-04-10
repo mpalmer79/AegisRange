@@ -6,6 +6,8 @@ Route handlers import these instead of defining models inline.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -64,7 +66,7 @@ class DownloadRequest(BaseModel):
 
 
 class IncidentStatusUpdate(BaseModel):
-    status: str
+    status: Literal["investigating", "contained", "resolved", "closed"]
 
 
 class IncidentNote(BaseModel):

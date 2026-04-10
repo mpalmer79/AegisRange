@@ -45,7 +45,7 @@ export default function ReportsPage() {
       {/* Report Generation */}
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-8">
         <h2 className="text-lg font-semibold text-gray-200 mb-4">Generate Report</h2>
-        <div className="flex gap-4 items-end">
+        <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
           <div className="flex-1">
             <label className="text-xs font-mono text-gray-500 uppercase tracking-wider block mb-1">Report Title</label>
             <input
@@ -79,7 +79,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               {[
                 { label: 'Events', value: report.summary.total_events, color: 'text-cyan-400' },
                 { label: 'Alerts', value: report.summary.total_alerts, color: 'text-amber-400' },
@@ -111,7 +111,7 @@ export default function ReportsPage() {
               />
             </div>
             {report.detection_coverage.rules_list && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {report.detection_coverage.rules_list.map((rule: Record<string, unknown>) => (
                   <div key={String(rule.rule_id)} className="flex items-center justify-between px-3 py-2 bg-gray-800/30 rounded">
                     <span className="text-xs font-mono text-gray-300">{String(rule.rule_id)}</span>
@@ -127,7 +127,7 @@ export default function ReportsPage() {
           {/* MITRE Coverage */}
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
             <h3 className="text-lg font-semibold text-gray-200 mb-4">MITRE ATT&CK Coverage</h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="text-center p-3 bg-gray-800/50 rounded-lg">
                 <div className="text-2xl font-bold font-mono text-purple-400">{report.mitre_coverage.tactics_covered.length}</div>
                 <div className="text-xs text-gray-500 mt-1">Tactics Covered</div>

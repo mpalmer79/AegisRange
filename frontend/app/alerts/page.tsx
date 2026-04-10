@@ -92,14 +92,14 @@ export default function AlertsPage() {
           placeholder="Filter by rule_id"
           value={filterRuleId}
           onChange={(e) => setFilterRuleId(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-48"
+          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
         />
         <input
           type="text"
           placeholder="Filter by actor_id"
           value={filterActorId}
           onChange={(e) => setFilterActorId(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-48"
+          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
         />
       </div>
 

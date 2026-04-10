@@ -105,7 +105,7 @@ export default function KillChainPage() {
           {sortedAnalyses.map((analysis) => (
             <div key={analysis.correlation_id} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
               {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+              <div className="px-4 py-3 border-b border-gray-800 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-4">
                   <Link
                     href={`/incidents/${analysis.correlation_id}`}
@@ -125,7 +125,7 @@ export default function KillChainPage() {
 
               {/* Kill Chain Stages */}
               <div className="p-4">
-                <div className="flex gap-1">
+                <div className="flex flex-wrap sm:flex-nowrap gap-1">
                   {analysis.stages.map((stage) => (
                     <div
                       key={stage.name}
@@ -154,7 +154,7 @@ export default function KillChainPage() {
               </div>
 
               {/* Footer */}
-              <div className="px-4 py-2 border-t border-gray-800/50 flex items-center justify-between">
+              <div className="px-4 py-2 border-t border-gray-800/50 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-mono text-gray-500">
                   Highest stage: <span className="text-gray-300">{STAGE_LABELS[analysis.highest_stage] || analysis.highest_stage}</span>
                 </span>

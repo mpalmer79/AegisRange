@@ -216,5 +216,45 @@ class TestScenarioResultContract(unittest.TestCase):
         )
 
 
+class TestIncidentStatusValidation(unittest.TestCase):
+    """Verify IncidentStatusUpdate rejects invalid status strings at schema level."""
+
+    def setUp(self) -> None:
+        STORE.reset()
+        client = authenticated_client("red_team")
+        resp = client.post("/scenarios/scn-auth-001")
+        self.correlation_id = resp.json()["correlation_id"]
+
+    def test_invalid_status_returns_422(self) -> None:
+        """An arbitrary status string must be rejected with 422, not 400."""
+        client = authenticated_client("analyst")
+        resp = client.patch(
+            f"/incidents/{self.correlation_id}/status",
+            json={"status": "hacked"},
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_422_body_names_status_field(self) -> None:
+        """The 422 error body must reference the 'status' field."""
+        client = authenticated_client("analyst")
+        resp = client.patch(
+            f"/incidents/{self.correlation_id}/status",
+            json={"status": ""},
+        )
+        self.assertEqual(resp.status_code, 422)
+        body = resp.json()
+        detail_str = str(body.get("detail", ""))
+        self.assertIn("status", detail_str.lower())
+
+    def test_empty_status_returns_422(self) -> None:
+        """Empty string status must be rejected with 422."""
+        client = authenticated_client("analyst")
+        resp = client.patch(
+            f"/incidents/{self.correlation_id}/status",
+            json={"status": "nonexistent_value"},
+        )
+        self.assertEqual(resp.status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()
