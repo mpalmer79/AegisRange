@@ -79,7 +79,7 @@ export default function AlertsPage() {
         </div>
         <button
           onClick={fetchAlerts}
-          className="px-3 py-1.5 text-xs font-mono bg-slate-200 dark:bg-gray-800 hover:bg-gray-700 border border-slate-300 dark:border-gray-700 rounded text-slate-700 dark:text-gray-300 transition-colors"
+          className="px-3 py-1.5 text-xs font-mono bg-slate-200 dark:bg-gray-800 hover:bg-slate-300 dark:hover:bg-gray-700 border border-slate-300 dark:border-gray-700 rounded text-slate-700 dark:text-gray-300 transition-colors"
         >
           REFRESH
         </button>
