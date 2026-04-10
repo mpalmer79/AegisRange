@@ -393,7 +393,7 @@ export default function ScenarioDetailPage() {
       <section
         className={`relative overflow-hidden rounded-2xl border-2 ${accent.ring} bg-gradient-to-br ${accent.gradient} p-6 sm:p-8 mb-6 shadow-lg ${accent.glow} ar-slide-up`}
       >
-        <div aria-hidden className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-gradient-to-br from-white/40 via-white/10 to-transparent dark:from-white/10 dark:via-white/5 blur-3xl" />
+        <div aria-hidden className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-gradient-to-br from-white/40 via-white/10 to-transparent dark:from-white/10 dark:via-white/5 blur-3xl ar-drift-slow" />
         <div className="relative flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-3">
@@ -819,7 +819,7 @@ export default function ScenarioDetailPage() {
 
                 {rankUp && (
                   <div className="mb-4 rounded-lg border-2 border-fuchsia-300 dark:border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-purple-50 dark:from-fuchsia-500/10 dark:via-violet-500/10 dark:to-purple-500/10 p-3 ar-bounce-in relative overflow-hidden">
-                    <div aria-hidden className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-fuchsia-200/50 dark:bg-fuchsia-500/10 blur-2xl" />
+                    <div aria-hidden className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-fuchsia-200/50 dark:bg-fuchsia-500/10 blur-2xl ar-drift" />
                     <div className="relative">
                       <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-fuchsia-700 dark:text-fuchsia-300 mb-1 flex items-center gap-1.5">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">

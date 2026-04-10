@@ -121,7 +121,7 @@ export default function PlayerCard() {
         <span
           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider ${accent.chipBg} ${accent.chipText}`}
         >
-          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+          <svg className="w-3 h-3 ar-float-slow" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2l2.4 7.4H22l-6.2 4.5L18.2 22 12 17.5 5.8 22l2.4-8.1L2 9.4h7.6z" />
           </svg>
           {progress.totalXp} XP

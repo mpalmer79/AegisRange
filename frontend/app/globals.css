@@ -117,6 +117,43 @@ body {
   100% { transform: scale(1.6); opacity: 0; }
 }
 
+/* --- Phase 6 motion additions --- */
+@keyframes ar-float-slow {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes ar-drift {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50%  { transform: translate3d(14px, -10px, 0) rotate(6deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+@keyframes ar-drift-reverse {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50%  { transform: translate3d(-14px, 10px, 0) rotate(-6deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+@keyframes ar-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.6) rotate(0deg); }
+  50%      { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+@keyframes ar-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-4deg); }
+  75%      { transform: rotate(4deg); }
+}
+@keyframes ar-tilt {
+  0%, 100% { transform: rotate(-1.5deg); }
+  50%      { transform: rotate(1.5deg); }
+}
+@keyframes ar-shine-sweep {
+  0%   { transform: translateX(-100%) skewX(-18deg); }
+  100% { transform: translateX(220%) skewX(-18deg); }
+}
+@keyframes ar-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50%      { transform: scale(1.04); opacity: 1; }
+}
+
 /* ---------------------------------------------------------------------------
  * Utility classes
  * ------------------------------------------------------------------------- */
@@ -127,7 +164,55 @@ body {
 .ar-pulse-ring     { animation: ar-pulse-ring 1.8s cubic-bezier(0.66, 0, 0, 1) infinite; }
 .ar-glow           { animation: ar-glow 2.4s ease-in-out infinite; }
 .ar-float          { animation: ar-float 3.2s ease-in-out infinite; }
+.ar-float-slow     { animation: ar-float-slow 5.5s ease-in-out infinite; }
+.ar-drift          { animation: ar-drift 8s ease-in-out infinite; }
+.ar-drift-slow     { animation: ar-drift 14s ease-in-out infinite; }
+.ar-drift-reverse  { animation: ar-drift-reverse 11s ease-in-out infinite; }
+.ar-sparkle        { animation: ar-sparkle 2.4s ease-in-out infinite; }
+.ar-wiggle-hover   { transition: transform 0.25s ease; }
+.ar-wiggle-hover:hover { animation: ar-wiggle 0.6s ease-in-out; }
+.ar-tilt           { animation: ar-tilt 4s ease-in-out infinite; }
+.ar-breathe        { animation: ar-breathe 3.6s ease-in-out infinite; }
 .ar-bar-grow       { animation: ar-bar-grow 1s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Shine sweep — a diagonal highlight that crosses a container on hover.
+   Apply to a parent with ar-shine; the child ::before swipes across. */
+.ar-shine {
+  position: relative;
+  overflow: hidden;
+}
+.ar-shine::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%) skewX(-18deg);
+  pointer-events: none;
+  transition: transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
+  mix-blend-mode: overlay;
+}
+.ar-shine:hover::before {
+  transform: translateX(220%) skewX(-18deg);
+}
+.ar-shine-auto::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 70%
+  );
+  animation: ar-shine-sweep 4.5s ease-in-out infinite;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
 
 .ar-shimmer {
   background: linear-gradient(
@@ -230,13 +315,23 @@ body {
   .ar-pulse-ring,
   .ar-glow,
   .ar-float,
+  .ar-float-slow,
+  .ar-drift,
+  .ar-drift-slow,
+  .ar-drift-reverse,
+  .ar-sparkle,
+  .ar-tilt,
+  .ar-breathe,
   .ar-bar-grow,
   .ar-shimmer,
   .ar-gradient-text,
   .ar-scanline::after,
+  .ar-shine::before,
+  .ar-shine-auto::before,
   .ar-stagger > * {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
+  .ar-wiggle-hover:hover { animation: none !important; }
 }

@@ -87,31 +87,45 @@ export interface MissionRecord {
 
 // ---------- achievements ----------
 
+/**
+ * Category drives the per-card gradient/flair styling on the
+ * profile page. Kept on the achievement so the catalog stays the
+ * single source of truth.
+ */
+export type AchievementCategory =
+  | 'core'     // onboarding + career milestones (cyan / sky / indigo)
+  | 'red'      // red team accomplishments (rose / red / orange)
+  | 'blue'     // blue team accomplishments (sky / blue)
+  | 'elite'    // mastery flourishes (amber / gold)
+  | 'op'       // training op completions (per-op accent)
+  | 'daily';   // phase 5 retention mechanics (fuchsia / violet)
+
 export interface Achievement {
   id: string;
   name: string;
   description: string;
   icon: string;
+  category: AchievementCategory;
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first-mission',    name: 'First Contact',               description: 'Complete your first mission.',                         icon: 'target' },
-  { id: 'red-recon',        name: 'Wear the Hood',               description: 'Complete a mission from the Red Team perspective.',    icon: 'sword' },
-  { id: 'blue-recon',       name: 'Hold the Line',               description: 'Complete a mission from the Blue Team perspective.',   icon: 'shield' },
-  { id: 'flawless',         name: 'Flawless Victory',            description: 'Clear every objective in a single mission.',           icon: 'star' },
-  { id: 'operator-tier',    name: 'Operator Ready',              description: 'Complete a mission on Operator difficulty.',           icon: 'cog' },
-  { id: 'dual-perspective', name: 'Both Sides of the Keyboard',  description: 'Play the same scenario as both Red and Blue.',         icon: 'swap' },
-  { id: 'full-library',     name: 'Full Library',                description: 'Complete all six scenarios at least once.',            icon: 'books' },
-  { id: 'xp-500',           name: 'Seasoned',                    description: 'Reach 500 XP.',                                        icon: 'silver' },
-  { id: 'xp-1500',          name: 'Decorated',                   description: 'Reach 1500 XP.',                                       icon: 'gold' },
-  { id: 'apt-hunter',       name: 'APT Hunter',                  description: 'Complete the correlated multi-stage scenario.',        icon: 'crosshair' },
-  { id: 'op-nightshade',    name: 'Nightshade Veteran',          description: 'Complete Operation Nightshade.',                       icon: 'moon' },
-  { id: 'op-firestarter',   name: 'Firestarter',                 description: 'Complete Operation Firestarter.',                      icon: 'flame' },
-  { id: 'op-gridlock',      name: 'Incident Commander',          description: 'Complete Operation Gridlock.',                         icon: 'radio' },
-  { id: 'daily-driver',     name: 'Daily Driver',                description: 'Complete any Daily Challenge.',                        icon: 'calendar' },
-  { id: 'streak-3',         name: 'On a Roll',                   description: 'Play missions three days in a row.',                   icon: 'bolt' },
-  { id: 'streak-7',         name: 'Week Warrior',                description: 'Play missions seven days in a row.',                   icon: 'inferno' },
-  { id: 'new-best',         name: 'Personal Best',               description: 'Beat a personal best on any scenario.',                 icon: 'trophy' },
+  { id: 'first-mission',    name: 'First Contact',               description: 'Complete your first mission.',                         icon: 'target',    category: 'core'  },
+  { id: 'red-recon',        name: 'Wear the Hood',               description: 'Complete a mission from the Red Team perspective.',    icon: 'sword',     category: 'red'   },
+  { id: 'blue-recon',       name: 'Hold the Line',               description: 'Complete a mission from the Blue Team perspective.',   icon: 'shield',    category: 'blue'  },
+  { id: 'flawless',         name: 'Flawless Victory',            description: 'Clear every objective in a single mission.',           icon: 'star',      category: 'elite' },
+  { id: 'operator-tier',    name: 'Operator Ready',              description: 'Complete a mission on Operator difficulty.',           icon: 'cog',       category: 'elite' },
+  { id: 'dual-perspective', name: 'Both Sides of the Keyboard',  description: 'Play the same scenario as both Red and Blue.',         icon: 'swap',      category: 'elite' },
+  { id: 'full-library',     name: 'Full Library',                description: 'Complete all six scenarios at least once.',            icon: 'books',     category: 'core'  },
+  { id: 'xp-500',           name: 'Seasoned',                    description: 'Reach 500 XP.',                                        icon: 'silver',    category: 'core'  },
+  { id: 'xp-1500',          name: 'Decorated',                   description: 'Reach 1500 XP.',                                       icon: 'gold',      category: 'core'  },
+  { id: 'apt-hunter',       name: 'APT Hunter',                  description: 'Complete the correlated multi-stage scenario.',        icon: 'crosshair', category: 'elite' },
+  { id: 'op-nightshade',    name: 'Nightshade Veteran',          description: 'Complete Operation Nightshade.',                       icon: 'moon',      category: 'op'    },
+  { id: 'op-firestarter',   name: 'Firestarter',                 description: 'Complete Operation Firestarter.',                      icon: 'flame',     category: 'op'    },
+  { id: 'op-gridlock',      name: 'Incident Commander',          description: 'Complete Operation Gridlock.',                         icon: 'radio',     category: 'op'    },
+  { id: 'daily-driver',     name: 'Daily Driver',                description: 'Complete any Daily Challenge.',                        icon: 'calendar',  category: 'daily' },
+  { id: 'streak-3',         name: 'On a Roll',                   description: 'Play missions three days in a row.',                   icon: 'bolt',      category: 'daily' },
+  { id: 'streak-7',         name: 'Week Warrior',                description: 'Play missions seven days in a row.',                   icon: 'inferno',   category: 'daily' },
+  { id: 'new-best',         name: 'Personal Best',               description: 'Beat a personal best on any scenario.',                 icon: 'trophy',    category: 'elite' },
 ];
 
 export function getAchievement(id: string): Achievement | undefined {

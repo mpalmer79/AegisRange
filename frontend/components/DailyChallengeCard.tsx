@@ -68,7 +68,7 @@ export default function DailyChallengeCard() {
       aria-label={`Open today's daily challenge: ${daily.scenarioName}`}
       className="group block w-full sm:w-[20rem] rounded-2xl border-2 border-fuchsia-300 dark:border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-purple-50 dark:from-fuchsia-500/10 dark:via-violet-500/10 dark:to-purple-500/10 p-4 shadow-sm dark:shadow-none hover:shadow-lg hover:shadow-fuchsia-400/20 dark:hover:shadow-fuchsia-500/10 hover:border-fuchsia-500 dark:hover:border-fuchsia-400 transition-all ar-card-hover relative overflow-hidden"
     >
-      <div aria-hidden className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-fuchsia-200/50 dark:bg-fuchsia-500/10 blur-2xl" />
+      <div aria-hidden className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-fuchsia-200/50 dark:bg-fuchsia-500/10 blur-2xl ar-drift" />
       <div className="relative">
         <div className="flex items-center justify-between gap-2 mb-2">
           <p className="text-[10px] font-mono tracking-[0.18em] uppercase text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1.5">
