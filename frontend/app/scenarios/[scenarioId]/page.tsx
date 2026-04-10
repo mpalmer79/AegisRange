@@ -12,7 +12,7 @@ import {
   getScenarioContent,
   ObjectiveDef,
 } from '@/lib/scenario-content';
-import { usePlayerProgress, Achievement } from '@/lib/player-progress';
+import { usePlayerProgress, Achievement, Rank } from '@/lib/player-progress';
 import { computeOpProgress, getOpsContainingScenario } from '@/lib/ops-content';
 
 /**
@@ -158,6 +158,7 @@ export default function ScenarioDetailPage() {
   // ---------- career progression (Phase 3) ----------
   const { recordMission, progress } = usePlayerProgress();
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
+  const [rankUp, setRankUp] = useState<Rank | null>(null);
   const recordedRef = useRef<string | null>(null);
 
   // ---------- op membership (Phase 4) ----------
@@ -199,6 +200,9 @@ export default function ScenarioDetailPage() {
     if (outcome.newAchievements.length > 0) {
       setNewAchievements(outcome.newAchievements);
     }
+    if (outcome.newRank) {
+      setRankUp(outcome.newRank);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, result]);
 
@@ -209,6 +213,7 @@ export default function ScenarioDetailPage() {
     setResult(null);
     setElapsedSec(0);
     setNewAchievements([]);
+    setRankUp(null);
     const started = Date.now();
     setLaunchedAt(started);
     try {
@@ -229,6 +234,7 @@ export default function ScenarioDetailPage() {
     setLaunchedAt(null);
     setElapsedSec(0);
     setNewAchievements([]);
+    setRankUp(null);
     recordedRef.current = null;
   };
 
@@ -690,6 +696,27 @@ export default function ScenarioDetailPage() {
                     .
                   </p>
                 </div>
+
+                {rankUp && (
+                  <div className="mb-4 rounded-lg border-2 border-fuchsia-300 dark:border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-purple-50 dark:from-fuchsia-500/10 dark:via-violet-500/10 dark:to-purple-500/10 p-3 ar-bounce-in relative overflow-hidden">
+                    <div aria-hidden className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-fuchsia-200/50 dark:bg-fuchsia-500/10 blur-2xl" />
+                    <div className="relative">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-fuchsia-700 dark:text-fuchsia-300 mb-1 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M7 17l5-5 5 5" />
+                          <path d="M7 11l5-5 5 5" />
+                        </svg>
+                        Rank Up
+                      </p>
+                      <p className="text-lg font-bold bg-gradient-to-r from-fuchsia-600 via-violet-500 to-purple-600 dark:from-fuchsia-300 dark:via-violet-300 dark:to-purple-300 bg-clip-text text-transparent">
+                        {rankUp.name}
+                      </p>
+                      <p className="text-[11px] text-slate-600 dark:text-gray-400 mt-0.5">
+                        {rankUp.tagline}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {newAchievements.length > 0 && (
                   <div className="mb-4 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 p-3 ar-bounce-in">
