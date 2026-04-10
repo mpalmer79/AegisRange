@@ -31,18 +31,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
             {/* Mobile header bar with hamburger */}
             {!isDesktop && (
-              <header className="fixed top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-3 bg-gray-950 border-b border-gray-800 lg:hidden">
+              <header className="fixed top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-3 bg-white/90 dark:bg-gray-950/95 backdrop-blur border-b border-slate-200 dark:border-gray-800 lg:hidden">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="p-1.5 rounded hover:bg-gray-800 text-gray-400 transition-colors"
+                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-gray-800 text-slate-600 dark:text-gray-400 transition-colors"
                   aria-label="Open navigation"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                   </svg>
                 </button>
-                <span className="text-sm font-bold text-cyan-400">Aegis</span>
-                <span className="text-sm font-bold text-gray-300">Range</span>
+                <span className="text-sm font-bold text-cyan-600 dark:text-cyan-400">Aegis</span>
+                <span className="text-sm font-bold text-slate-700 dark:text-gray-300">Range</span>
               </header>
             )}
           </>

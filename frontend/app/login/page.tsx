@@ -39,16 +39,16 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold">
-            <span className="text-cyan-400">Aegis</span>
-            <span className="text-gray-300">Range</span>
+            <span className="text-cyan-700 dark:text-cyan-400">Aegis</span>
+            <span className="text-slate-700 dark:text-gray-300">Range</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-1 font-mono">Security Operations Platform</p>
+          <p className="text-sm text-slate-500 dark:text-gray-500 mt-1 font-mono">Security Operations Platform</p>
         </div>
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-lg p-6 space-y-4">
           <div>
-            <label className="block text-xs font-mono text-gray-500 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-mono text-slate-500 dark:text-gray-500 uppercase tracking-wider mb-1.5">
               Username
             </label>
             <input
@@ -57,11 +57,11 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="admin"
               autoFocus
-              className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2.5 text-sm text-gray-200 font-mono placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
+              className="w-full bg-slate-100 dark:bg-gray-950 border border-slate-300 dark:border-gray-700 rounded px-3 py-2.5 text-sm text-slate-800 dark:text-gray-200 font-mono placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-xs font-mono text-gray-500 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-mono text-slate-500 dark:text-gray-500 uppercase tracking-wider mb-1.5">
               Password
             </label>
             <input
@@ -69,12 +69,12 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="admin_pass"
-              className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2.5 text-sm text-gray-200 font-mono placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
+              className="w-full bg-slate-100 dark:bg-gray-950 border border-slate-300 dark:border-gray-700 rounded px-3 py-2.5 text-sm text-slate-800 dark:text-gray-200 font-mono placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-red-700 dark:text-red-400 text-sm">
               {error}
             </div>
           )}
@@ -89,13 +89,13 @@ export default function LoginPage() {
         </form>
 
         {/* Quick reference */}
-        <div className="mt-6 bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-2">Demo Credentials</p>
-          <div className="space-y-1 text-xs font-mono text-gray-400">
-            <div className="flex justify-between"><span>admin</span><span className="text-gray-600">admin_pass</span></div>
-            <div className="flex justify-between"><span>analyst1</span><span className="text-gray-600">analyst1_pass</span></div>
-            <div className="flex justify-between"><span>red_team1</span><span className="text-gray-600">red_team1_pass</span></div>
-            <div className="flex justify-between"><span>viewer1</span><span className="text-gray-600">viewer1_pass</span></div>
+        <div className="mt-6 bg-white dark:bg-gray-900/50 border border-slate-200 dark:border-gray-800 rounded-lg p-4">
+          <p className="text-xs font-mono text-slate-500 dark:text-gray-500 uppercase tracking-wider mb-2">Demo Credentials</p>
+          <div className="space-y-1 text-xs font-mono text-slate-600 dark:text-gray-400">
+            <div className="flex justify-between"><span>admin</span><span className="text-slate-400 dark:text-gray-600">admin_pass</span></div>
+            <div className="flex justify-between"><span>analyst1</span><span className="text-slate-400 dark:text-gray-600">analyst1_pass</span></div>
+            <div className="flex justify-between"><span>red_team1</span><span className="text-slate-400 dark:text-gray-600">red_team1_pass</span></div>
+            <div className="flex justify-between"><span>viewer1</span><span className="text-slate-400 dark:text-gray-600">viewer1_pass</span></div>
           </div>
         </div>
       </div>

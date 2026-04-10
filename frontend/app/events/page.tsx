@@ -5,12 +5,12 @@ import { getEvents } from '@/lib/api';
 import { Event } from '@/lib/types';
 
 const CATEGORY_COLORS: Record<string, string> = {
-  auth: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-  authentication: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-  document: 'text-green-400 bg-green-500/10 border-green-500/20',
-  session: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-  detection: 'text-red-400 bg-red-500/10 border-red-500/20',
-  response: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+  auth: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/20',
+  authentication: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/20',
+  document: 'text-green-700 dark:text-green-400 bg-green-500/10 border-green-500/20',
+  session: 'text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+  detection: 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/20',
+  response: 'text-orange-700 dark:text-orange-400 bg-orange-500/10 border-orange-500/20',
 };
 
 function getCategoryStyle(category: string): string {
@@ -18,21 +18,21 @@ function getCategoryStyle(category: string): string {
   for (const [key, val] of Object.entries(CATEGORY_COLORS)) {
     if (lower.includes(key)) return val;
   }
-  return 'text-gray-400 bg-gray-500/10 border-gray-500/20';
+  return 'text-slate-600 dark:text-gray-400 bg-gray-500/10 border-gray-500/20';
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  success: 'text-green-400',
-  failure: 'text-red-400',
-  failed: 'text-red-400',
-  blocked: 'text-red-400',
-  denied: 'text-red-400',
-  detected: 'text-amber-400',
-  executed: 'text-orange-400',
+  success: 'text-green-700 dark:text-green-400',
+  failure: 'text-red-700 dark:text-red-400',
+  failed: 'text-red-700 dark:text-red-400',
+  blocked: 'text-red-700 dark:text-red-400',
+  denied: 'text-red-700 dark:text-red-400',
+  detected: 'text-amber-700 dark:text-amber-400',
+  executed: 'text-orange-700 dark:text-orange-400',
 };
 
 function getStatusColor(status: string): string {
-  return STATUS_COLORS[status?.toLowerCase()] ?? 'text-gray-400';
+  return STATUS_COLORS[status?.toLowerCase()] ?? 'text-slate-600 dark:text-gray-400';
 }
 
 export default function EventsPage() {
@@ -78,14 +78,14 @@ export default function EventsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Events</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Events</h1>
+          <p className="text-sm text-slate-500 dark:text-gray-500 mt-1">
             Security event log ({events.length} events)
           </p>
         </div>
         <button
           onClick={fetchEvents}
-          className="px-3 py-1.5 text-xs font-mono bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-gray-300 transition-colors"
+          className="px-3 py-1.5 text-xs font-mono bg-slate-200 dark:bg-gray-800 hover:bg-gray-700 border border-slate-300 dark:border-gray-700 rounded text-slate-700 dark:text-gray-300 transition-colors"
         >
           REFRESH
         </button>
@@ -98,27 +98,27 @@ export default function EventsPage() {
           placeholder="Filter by actor_id"
           value={filterActorId}
           onChange={(e) => setFilterActorId(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
+          className="px-3 py-2 bg-white dark:bg-gray-900 border border-slate-300 dark:border-gray-700 rounded text-sm text-slate-800 dark:text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
         />
         <input
           type="text"
           placeholder="Filter by event_type"
           value={filterEventType}
           onChange={(e) => setFilterEventType(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
+          className="px-3 py-2 bg-white dark:bg-gray-900 border border-slate-300 dark:border-gray-700 rounded text-sm text-slate-800 dark:text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-48"
         />
         <input
           type="text"
           placeholder="Filter by correlation_id"
           value={filterCorrelationId}
           onChange={(e) => setFilterCorrelationId(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-64"
+          className="px-3 py-2 bg-white dark:bg-gray-900 border border-slate-300 dark:border-gray-700 rounded text-sm text-slate-800 dark:text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-cyan-500/50 w-full sm:w-64"
         />
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
@@ -126,22 +126,22 @@ export default function EventsPage() {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <div className="text-cyan-400 font-mono text-sm animate-pulse">Loading events...</div>
+          <div className="text-cyan-700 dark:text-cyan-400 font-mono text-sm animate-pulse">Loading events...</div>
         </div>
       )}
 
       {/* Table */}
       {!loading && events.length === 0 && !error && (
-        <div className="text-center py-20 text-gray-500 font-mono text-sm">
+        <div className="text-center py-20 text-slate-500 dark:text-gray-500 font-mono text-sm">
           No events found. Run a scenario to generate events.
         </div>
       )}
 
       {!loading && events.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-gray-800">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-gray-800">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-900 text-gray-500 text-xs font-mono uppercase tracking-wider">
+              <tr className="bg-white dark:bg-gray-900 text-slate-500 dark:text-gray-500 text-xs font-mono uppercase tracking-wider">
                 <th className="text-left px-4 py-3">Timestamp</th>
                 <th className="text-left px-4 py-3">Event Type</th>
                 <th className="text-left px-4 py-3">Actor</th>
@@ -154,9 +154,9 @@ export default function EventsPage() {
               {events.map((event, i) => (
                 <tr
                   key={event.event_id || i}
-                  className="border-t border-gray-800/50 hover:bg-gray-900/50 transition-colors"
+                  className="border-t border-slate-200 dark:border-gray-800/50 hover:bg-gray-900/50 transition-colors"
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-gray-400 whitespace-nowrap">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap">
                     {formatTimestamp(event.timestamp)}
                   </td>
                   <td className="px-4 py-3">
@@ -168,7 +168,7 @@ export default function EventsPage() {
                       {event.event_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-300">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-700 dark:text-gray-300">
                     {event.actor_id}
                   </td>
                   <td className="px-4 py-3">
@@ -176,7 +176,7 @@ export default function EventsPage() {
                       {event.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500 dark:text-gray-500">
                     {event.source_ip ?? '-'}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-cyan-500/70 max-w-[200px] truncate">
