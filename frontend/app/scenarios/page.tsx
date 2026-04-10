@@ -94,7 +94,7 @@ export default function ScenariosPage() {
                         <span className="text-xs font-mono text-green-400 uppercase">Completed</span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-gray-500 text-xs font-mono mb-0.5">CORRELATION ID</p>
                           <p className="font-mono text-cyan-400 text-xs break-all">

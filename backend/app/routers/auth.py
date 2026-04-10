@@ -7,6 +7,8 @@ metadata (username, role, expires_at) for UI state.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -14,6 +16,9 @@ from app.config import settings
 from app.dependencies import auth_service, require_role
 from app.schemas import LoginRequest
 from app.serializers import auth_user_to_dict
+from app.store import STORE
+
+logger = logging.getLogger("aegisrange.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -60,7 +65,15 @@ def platform_login(payload: LoginRequest) -> JSONResponse:
 
 
 @router.post("/logout")
-def platform_logout() -> JSONResponse:
+def platform_logout(request: Request) -> JSONResponse:
+    """Log out by revoking the JWT token ID and clearing the cookie."""
+    # Extract JTI from the cookie before clearing it.
+    cookie_token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+    if cookie_token:
+        jti = auth_service.extract_jti(cookie_token)
+        if jti:
+            STORE.revoke_jti(jti)
+            logger.info("Revoked JTI on logout", extra={"jti": jti})
     response = JSONResponse(content={"status": "logged_out"})
     _clear_auth_cookie(response)
     return response

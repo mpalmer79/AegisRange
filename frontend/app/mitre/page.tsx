@@ -183,7 +183,7 @@ export default function MitrePage() {
           {/* Rule-to-TTP Mapping Table */}
           <div className="mb-8">
             <h2 className="text-lg font-semibold text-gray-200 mb-4">Detection Rule Mappings</h2>
-            <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-800">

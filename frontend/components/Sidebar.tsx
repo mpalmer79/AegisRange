@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useViewport } from '@/lib/responsive';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: DashboardIcon },
@@ -17,12 +18,34 @@ const navItems = [
   { href: '/reports', label: 'Reports', icon: ReportIcon },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { username, role, logout } = useAuth();
+  const { isDesktop } = useViewport();
+
+  // Desktop: always visible. Mobile/tablet: slide-over drawer.
+  const isVisible = isDesktop || open;
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-56 bg-gray-950 border-r border-gray-800 flex flex-col z-30">
+    <>
+      {/* Backdrop for mobile/tablet drawer */}
+      {!isDesktop && open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed left-0 top-0 h-screen w-56 bg-gray-950 border-r border-gray-800 flex flex-col z-40 transition-transform duration-200 ${
+          isVisible ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
       {/* Branding */}
       <div className="p-4 border-b border-gray-800">
         <Link href="/" className="flex items-center gap-2">
@@ -47,6 +70,7 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={!isDesktop ? onClose : undefined}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
@@ -77,6 +101,7 @@ export default function Sidebar() {
         <p className="text-[10px] text-gray-700 font-mono mt-2">v0.6.0</p>
       </div>
     </aside>
+    </>
   );
 }
 

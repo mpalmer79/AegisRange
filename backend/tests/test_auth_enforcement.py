@@ -9,7 +9,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.auth_service import AuthService, _verify_password, _hash_password
+from app.services.auth_service import (
+    AuthService,
+    _verify_password,
+    _hash_password,
+    _auth_service,
+)
+from app.store import STORE
 from tests.auth_helper import get_viewer_token, authenticated_client
 
 
@@ -315,6 +321,105 @@ class TestConfigExternalization(unittest.TestCase):
         # Verify expiry is ~1 hour from now, not 24
         delta = payload.exp - payload.iat
         self.assertLessEqual(delta.total_seconds(), 3601)
+
+
+class TestTokenRevocationOnLogout(unittest.TestCase):
+    """Verify that logging out revokes the token's JTI."""
+
+    def setUp(self) -> None:
+        STORE.reset()
+
+    def test_token_rejected_after_logout(self) -> None:
+        """A token used after logout must return 401."""
+        client = TestClient(app)
+        resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "admin_pass"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        token = resp.cookies.get("aegisrange_token")
+        self.assertIsNotNone(token)
+
+        # Verify the token works before logout
+        resp = client.get(
+            "/auth/me",
+            cookies={"aegisrange_token": token},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        # Logout
+        resp = client.post(
+            "/auth/logout",
+            cookies={"aegisrange_token": token},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        # Token should now be rejected
+        resp = client.get(
+            "/auth/me",
+            cookies={"aegisrange_token": token},
+        )
+        self.assertEqual(resp.status_code, 401)
+
+    def test_revoked_jti_persisted_across_reload(self) -> None:
+        """Revoked JTIs must survive a simulated store reload."""
+        import os
+        import tempfile
+
+        token = _auth_service.create_token("admin", "admin")
+        jti = _auth_service.extract_jti(token)
+        self.assertIsNotNone(jti)
+
+        STORE.revoke_jti(jti)
+        self.assertTrue(STORE.is_jti_revoked(jti))
+
+        # Simulate persistence round-trip using a temp file
+        fd, db_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        try:
+            STORE.enable_persistence(db_path=db_path)
+            STORE.save()
+
+            # Reset in-memory state and reload
+            STORE.revoked_jtis = set()
+            self.assertFalse(STORE.is_jti_revoked(jti))
+
+            STORE._persistence.load()
+            self.assertTrue(
+                STORE.is_jti_revoked(jti),
+                "Revoked JTI should survive persistence reload",
+            )
+        finally:
+            STORE._persistence = None
+            os.unlink(db_path)
+
+    def test_logout_without_cookie_is_safe(self) -> None:
+        """Logout without a cookie should succeed without error."""
+        client = TestClient(app)
+        resp = client.post("/auth/logout")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_logout_with_malformed_cookie_is_safe(self) -> None:
+        """Logout with a malformed cookie should succeed gracefully."""
+        client = TestClient(app)
+        resp = client.post(
+            "/auth/logout",
+            cookies={"aegisrange_token": "not-a-valid-token"},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_bearer_header_also_rejected_after_revocation(self) -> None:
+        """A revoked JTI should also be rejected via Authorization header."""
+        token = _auth_service.create_token("admin", "admin")
+        jti = _auth_service.extract_jti(token)
+        STORE.revoke_jti(jti)
+
+        client = TestClient(app)
+        resp = client.get(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(resp.status_code, 401)
 
 
 if __name__ == "__main__":

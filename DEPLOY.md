@@ -9,6 +9,10 @@ AegisRange consists of two services:
 
 ---
 
+> **Scaling Warning**: The backend must run with a **single Uvicorn worker**. Both the in-memory data store and the auth rate limiter are process-local. Running multiple workers causes silent data divergence and ineffective rate limiting. The Dockerfile enforces `--workers 1`. See [ARCHITECTURE.md — Scaling Constraints](ARCHITECTURE.md) for details on what must change before adding workers.
+
+---
+
 ## Environment Variables
 
 ### Backend
