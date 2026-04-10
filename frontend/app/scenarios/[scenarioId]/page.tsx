@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, notFound } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { runScenario } from '@/lib/api';
 import { SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
 import {
@@ -12,6 +12,7 @@ import {
   getScenarioContent,
   ObjectiveDef,
 } from '@/lib/scenario-content';
+import { usePlayerProgress, Achievement } from '@/lib/player-progress';
 
 /**
  * Scenario drill-down page — Phase 2 gamified mission briefing.
@@ -153,12 +154,45 @@ export default function ScenarioDetailPage() {
   const completedCount = objectiveStatus.filter((o) => o.done).length;
   const allComplete = result != null && completedCount === objectivesForPerspective.length;
 
+  // ---------- career progression (Phase 3) ----------
+  const { recordMission } = usePlayerProgress();
+  const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
+  const recordedRef = useRef<string | null>(null);
+
+  // Fire recordMission() exactly once per completed run. The recordedRef
+  // key combines the run's correlation id + perspective so swapping
+  // perspectives after a run doesn't double-count.
+  useEffect(() => {
+    if (status !== 'complete' || !result) return;
+    const key = `${result.correlation_id}:${perspective}`;
+    if (recordedRef.current === key) return;
+    recordedRef.current = key;
+    const outcome = recordMission({
+      scenarioId: sc.id,
+      scenarioName: sc.name,
+      perspective,
+      difficulty: difficulty.id,
+      xpEarned: earnedXp,
+      xpMax: maxXp,
+      objectivesHit: completedCount,
+      objectivesTotal: objectivesForPerspective.length,
+      durationSeconds: elapsedSec,
+      correlationId: result.correlation_id,
+      incidentId: result.incident_id,
+    });
+    if (outcome.newAchievements.length > 0) {
+      setNewAchievements(outcome.newAchievements);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, result]);
+
   // ---------- actions ----------
   const launch = async () => {
     setStatus('running');
     setErrorMsg(null);
     setResult(null);
     setElapsedSec(0);
+    setNewAchievements([]);
     const started = Date.now();
     setLaunchedAt(started);
     try {
@@ -178,6 +212,8 @@ export default function ScenarioDetailPage() {
     setErrorMsg(null);
     setLaunchedAt(null);
     setElapsedSec(0);
+    setNewAchievements([]);
+    recordedRef.current = null;
   };
 
   const isRed = perspective === 'red';
@@ -567,6 +603,42 @@ export default function ScenarioDetailPage() {
                     ? `All ${perspectiveMeta.role} objectives met in ${formatElapsed(elapsedSec)}.`
                     : `${completedCount} of ${objectivesForPerspective.length} objectives met. Review the debrief below.`}
                 </p>
+
+                <div className="mb-4 rounded-lg border border-cyan-300 dark:border-cyan-500/30 bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-500/10 dark:to-sky-500/10 p-3">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1">
+                    XP Awarded
+                  </p>
+                  <p className="text-xl font-bold text-cyan-700 dark:text-cyan-300 font-[family-name:var(--font-geist-mono)]">
+                    +{earnedXp}
+                    <span className="text-xs font-normal text-slate-500 dark:text-gray-500"> / {maxXp} max</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-gray-500 mt-1">
+                    Added to your{' '}
+                    <Link href="/profile" className="text-cyan-700 dark:text-cyan-300 hover:underline">
+                      career profile
+                    </Link>
+                    .
+                  </p>
+                </div>
+
+                {newAchievements.length > 0 && (
+                  <div className="mb-4 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 p-3 ar-bounce-in">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-2 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2l2.4 7.4H22l-6.2 4.5L18.2 22 12 17.5 5.8 22l2.4-8.1L2 9.4h7.6z" />
+                      </svg>
+                      Achievement{newAchievements.length > 1 ? 's' : ''} Unlocked
+                    </p>
+                    <ul className="space-y-1">
+                      {newAchievements.map((a) => (
+                        <li key={a.id} className="text-xs">
+                          <p className="font-semibold text-amber-700 dark:text-amber-300">{a.name}</p>
+                          <p className="text-[11px] text-slate-600 dark:text-gray-400">{a.description}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <dl className="space-y-2 text-xs font-mono mb-4">
                   <div className="flex justify-between gap-3">

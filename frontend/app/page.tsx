@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getMetrics, getHealth, runScenario, getRiskProfiles } from '@/lib/api';
 import { Metrics, HealthStatus, SCENARIO_DEFINITIONS, ScenarioResult, RiskProfile } from '@/lib/types';
 import ThemeToggle from '@/components/ThemeToggle';
+import PlayerCard from '@/components/PlayerCard';
 
 // Color palette per scenario — each card gets its own accent so the grid stays
 // lively in both light and dark modes. Keep this aligned with the scenario
@@ -158,11 +159,14 @@ export default function DashboardPage() {
     <div className="text-slate-800 dark:text-gray-100">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-6 ar-fade-in">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-            <span className="ar-gradient-text">Dashboard</span>
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-gray-500 mt-1">Security Operations Overview</p>
+        <div className="flex items-start gap-4 flex-wrap">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              <span className="ar-gradient-text">Dashboard</span>
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-gray-500 mt-1">Security Operations Overview</p>
+          </div>
+          <PlayerCard />
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono border ${

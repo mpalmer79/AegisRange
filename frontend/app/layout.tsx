@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 import { ThemeProvider } from "@/lib/theme-context";
+import { PlayerProgressProvider } from "@/lib/player-progress";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -57,7 +58,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} font-[family-name:var(--font-geist-sans)] antialiased`}
       >
         <ThemeProvider>
-          <AppShell>{children}</AppShell>
+          <PlayerProgressProvider>
+            <AppShell>{children}</AppShell>
+          </PlayerProgressProvider>
         </ThemeProvider>
       </body>
     </html>
