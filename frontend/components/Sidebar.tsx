@@ -8,6 +8,7 @@ import { useViewport } from '@/lib/responsive';
 const navItems = [
   { href: '/', label: 'Dashboard', icon: DashboardIcon },
   { href: '/scenarios', label: 'Scenarios', icon: ScenarioIcon },
+  { href: '/ops', label: 'Training Ops', icon: OpsIcon },
   { href: '/profile', label: 'Career', icon: CareerIcon },
   { href: '/events', label: 'Events', icon: EventIcon },
   { href: '/alerts', label: 'Alerts', icon: AlertIcon },
@@ -128,6 +129,15 @@ function CareerIcon({ active }: { active: boolean }) {
   return (
     <svg className={`w-4 h-4 ${active ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111 5.52.442c.499.04.701.663.321.988l-4.204 3.602 1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 19.64a.562.562 0 01-.84-.61l1.285-5.386-4.204-3.602a.562.562 0 01.321-.988l5.52-.442 2.125-5.111z" />
+    </svg>
+  );
+}
+
+function OpsIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={`w-4 h-4 ${active ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
     </svg>
   );
 }
