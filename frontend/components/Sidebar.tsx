@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useViewport } from '@/lib/responsive';
+import { useCommandPalette } from './CommandPalette';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: DashboardIcon },
@@ -29,9 +30,17 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { username, role, logout } = useAuth();
   const { isDesktop } = useViewport();
+  const { openPalette } = useCommandPalette();
 
   // Desktop: always visible. Mobile/tablet: slide-over drawer.
   const isVisible = isDesktop || open;
+
+  // Display Cmd on macOS, Ctrl elsewhere. Computed client-only so
+  // the first SSR render shows the neutral form.
+  const modKey =
+    typeof navigator !== 'undefined' && /Mac|iP(hone|od|ad)/.test(navigator.platform)
+      ? '\u2318'
+      : 'Ctrl';
 
   return (
     <>
@@ -62,6 +71,28 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           </div>
         </Link>
         <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-1 font-mono tracking-wider uppercase">Cyber Simulation Platform</p>
+      </div>
+
+      {/* Command palette trigger */}
+      <div className="px-3 pt-3">
+        <button
+          type="button"
+          onClick={() => {
+            openPalette();
+            if (!isDesktop) onClose();
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-gray-900 hover:bg-slate-100 dark:hover:bg-gray-800 hover:border-cyan-300 dark:hover:border-cyan-500/40 text-slate-500 dark:text-gray-500 transition-colors group"
+          aria-label="Open command palette"
+        >
+          <svg className="w-4 h-4 text-slate-400 dark:text-gray-600 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+          <span className="text-xs font-mono flex-1 text-left">Search</span>
+          <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white dark:bg-gray-950 border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-500">
+            {modKey}K
+          </kbd>
+        </button>
       </div>
 
       {/* Nav Links */}
