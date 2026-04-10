@@ -6,6 +6,7 @@ import { getMetrics, getHealth, runScenario, getRiskProfiles } from '@/lib/api';
 import { Metrics, HealthStatus, SCENARIO_DEFINITIONS, ScenarioResult, RiskProfile } from '@/lib/types';
 import ThemeToggle from '@/components/ThemeToggle';
 import PlayerCard from '@/components/PlayerCard';
+import DailyChallengeCard from '@/components/DailyChallengeCard';
 
 // Color palette per scenario — each card gets its own accent so the grid stays
 // lively in both light and dark modes. Keep this aligned with the scenario
@@ -167,6 +168,7 @@ export default function DashboardPage() {
             <p className="text-sm text-slate-500 dark:text-gray-500 mt-1">Security Operations Overview</p>
           </div>
           <PlayerCard />
+          <DailyChallengeCard />
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono border ${

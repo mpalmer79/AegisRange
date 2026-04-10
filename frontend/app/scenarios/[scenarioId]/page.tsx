@@ -12,8 +12,9 @@ import {
   getScenarioContent,
   ObjectiveDef,
 } from '@/lib/scenario-content';
-import { usePlayerProgress, Achievement, Rank } from '@/lib/player-progress';
+import { usePlayerProgress, Achievement, Rank, personalBestKey } from '@/lib/player-progress';
 import { computeOpProgress, getOpsContainingScenario } from '@/lib/ops-content';
+import { getDailyChallenge, isDailyChallengeMatch } from '@/lib/daily-challenge';
 
 /**
  * Scenario drill-down page — Phase 2 gamified mission briefing.
@@ -149,17 +150,38 @@ export default function ScenarioDetailPage() {
 
   const totalXp = objectivesForPerspective.reduce((acc, o) => acc + o.xp, 0);
   const earnedRawXp = objectiveStatus.reduce((acc, o) => acc + (o.done ? o.xp : 0), 0);
-  const earnedXp = Math.round(earnedRawXp * difficulty.xpMultiplier);
-  const maxXp = Math.round(totalXp * difficulty.xpMultiplier);
-  const xpPct = maxXp > 0 ? Math.min(100, Math.round((earnedXp / maxXp) * 100)) : 0;
-  const completedCount = objectiveStatus.filter((o) => o.done).length;
-  const allComplete = result != null && completedCount === objectivesForPerspective.length;
 
   // ---------- career progression (Phase 3) ----------
   const { recordMission, progress } = usePlayerProgress();
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [rankUp, setRankUp] = useState<Rank | null>(null);
   const recordedRef = useRef<string | null>(null);
+
+  // ---------- Daily Challenge (Phase 5) ----------
+  // Computed in useEffect to avoid SSR/CSR hydration mismatch around
+  // timezone boundaries. First render treats the run as non-daily
+  // (dailyBonus = 1) and is corrected after mount.
+  const [dailyReady, setDailyReady] = useState(false);
+  const [isDailyMatch, setIsDailyMatch] = useState(false);
+  const [dailyBonus, setDailyBonus] = useState(1);
+  useEffect(() => {
+    const match = isDailyChallengeMatch(sc.id, perspective, difficulty.id);
+    setIsDailyMatch(match);
+    setDailyBonus(match ? getDailyChallenge().bonusMultiplier : 1);
+    setDailyReady(true);
+  }, [sc.id, perspective, difficulty.id]);
+
+  const earnedXp = Math.round(earnedRawXp * difficulty.xpMultiplier * dailyBonus);
+  const maxXp = Math.round(totalXp * difficulty.xpMultiplier * dailyBonus);
+  const xpPct = maxXp > 0 ? Math.min(100, Math.round((earnedXp / maxXp) * 100)) : 0;
+  const completedCount = objectiveStatus.filter((o) => o.done).length;
+  const allComplete = result != null && completedCount === objectivesForPerspective.length;
+
+  // ---------- Personal Best (Phase 5) ----------
+  const personalBest = progress.personalBests[personalBestKey(sc.id, perspective)] ?? null;
+  const [newPersonalBest, setNewPersonalBest] = useState(false);
+  const [previousBestXp, setPreviousBestXp] = useState<number | null>(null);
+  const [streakReached, setStreakReached] = useState<number | null>(null);
 
   // ---------- op membership (Phase 4) ----------
   // If this scenario is part of one or more Training Ops, compute each
@@ -196,6 +218,7 @@ export default function ScenarioDetailPage() {
       durationSeconds: elapsedSec,
       correlationId: result.correlation_id,
       incidentId: result.incident_id,
+      isDailyChallenge: isDailyMatch,
     });
     if (outcome.newAchievements.length > 0) {
       setNewAchievements(outcome.newAchievements);
@@ -203,6 +226,9 @@ export default function ScenarioDetailPage() {
     if (outcome.newRank) {
       setRankUp(outcome.newRank);
     }
+    setNewPersonalBest(outcome.newPersonalBest);
+    setPreviousBestXp(outcome.previousBestXp);
+    setStreakReached(outcome.streakReached);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, result]);
 
@@ -214,6 +240,9 @@ export default function ScenarioDetailPage() {
     setElapsedSec(0);
     setNewAchievements([]);
     setRankUp(null);
+    setNewPersonalBest(false);
+    setPreviousBestXp(null);
+    setStreakReached(null);
     const started = Date.now();
     setLaunchedAt(started);
     try {
@@ -235,6 +264,9 @@ export default function ScenarioDetailPage() {
     setElapsedSec(0);
     setNewAchievements([]);
     setRankUp(null);
+    setNewPersonalBest(false);
+    setPreviousBestXp(null);
+    setStreakReached(null);
     recordedRef.current = null;
   };
 
@@ -271,6 +303,37 @@ export default function ScenarioDetailPage() {
           <span className="text-slate-700 dark:text-gray-300">{sc.id.toUpperCase()}</span>
         </nav>
       </div>
+
+      {/* Phase 5 — Daily Challenge banner. Shown when this scenario +
+          perspective + difficulty match today's Daily Challenge.
+          Detection runs in a useEffect to avoid SSR hydration drift. */}
+      {dailyReady && isDailyMatch && (
+        <div className="mb-4 rounded-xl border-2 border-fuchsia-300 dark:border-fuchsia-500/40 bg-gradient-to-r from-fuchsia-50 via-violet-50 to-purple-50 dark:from-fuchsia-500/10 dark:via-violet-500/10 dark:to-purple-500/10 px-4 py-3 ar-fade-in flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-fuchsia-500 via-violet-500 to-purple-600 flex items-center justify-center text-white shadow">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="17" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+                <path d="M9 15l2 2 4-4" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-fuchsia-700 dark:text-fuchsia-300">
+                Today&apos;s Daily Challenge
+              </p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-gray-100 truncate">
+                Bonus XP active · {dailyBonus}&times; multiplier
+              </p>
+            </div>
+          </div>
+          <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30">
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2L3 14h7l-1 8 10-12h-7z" />
+            </svg>
+            {dailyBonus}&times; XP
+          </span>
+        </div>
+      )}
 
       {/* Phase 4 — op membership banner. Shown only when the scenario
           is part of at least one Training Op. */}
@@ -589,7 +652,20 @@ export default function ScenarioDetailPage() {
             {/* XP meter */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-mono text-slate-600 dark:text-gray-400">XP</span>
+                <span className="text-xs font-mono text-slate-600 dark:text-gray-400 flex items-center gap-1.5">
+                  XP
+                  {personalBest && (
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-mono uppercase tracking-wider bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30"
+                      title={`Personal best: ${personalBest.xpEarned} XP at ${personalBest.difficulty}`}
+                    >
+                      <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z" />
+                      </svg>
+                      PB {personalBest.xpEarned}
+                    </span>
+                  )}
+                </span>
                 <span className="text-xs font-mono font-bold text-cyan-700 dark:text-cyan-300">
                   {earnedXp} / {maxXp}
                 </span>
@@ -681,13 +757,23 @@ export default function ScenarioDetailPage() {
                 </p>
 
                 <div className="mb-4 rounded-lg border border-cyan-300 dark:border-cyan-500/30 bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-500/10 dark:to-sky-500/10 p-3">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1">
-                    XP Awarded
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1 flex items-center justify-between gap-2">
+                    <span>XP Awarded</span>
+                    {isDailyMatch && (
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
+                        Daily {dailyBonus}&times;
+                      </span>
+                    )}
                   </p>
                   <p className="text-xl font-bold text-cyan-700 dark:text-cyan-300 font-[family-name:var(--font-geist-mono)]">
                     +{earnedXp}
                     <span className="text-xs font-normal text-slate-500 dark:text-gray-500"> / {maxXp} max</span>
                   </p>
+                  {previousBestXp != null && !newPersonalBest && (
+                    <p className="text-[11px] font-mono text-slate-500 dark:text-gray-500 mt-1">
+                      Previous best: +{previousBestXp} XP
+                    </p>
+                  )}
                   <p className="text-[11px] text-slate-500 dark:text-gray-500 mt-1">
                     Added to your{' '}
                     <Link href="/profile" className="text-cyan-700 dark:text-cyan-300 hover:underline">
@@ -696,6 +782,40 @@ export default function ScenarioDetailPage() {
                     .
                   </p>
                 </div>
+
+                {newPersonalBest && (
+                  <div className="mb-4 rounded-lg border-2 border-amber-400 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-500/10 dark:via-yellow-500/10 dark:to-orange-500/10 p-3 ar-bounce-in">
+                    <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 mb-1 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z" />
+                        <path d="M5 4H3v2a3 3 0 003 3M19 4h2v2a3 3 0 01-3 3" />
+                      </svg>
+                      New Personal Best
+                    </p>
+                    <p className="text-base font-bold text-amber-700 dark:text-amber-300">
+                      +{earnedXp} XP
+                      {previousBestXp != null && (
+                        <span className="ml-2 text-xs font-normal text-slate-500 dark:text-gray-500">
+                          (prev: {previousBestXp})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {streakReached != null && streakReached >= 2 && (
+                  <div className="mb-4 rounded-lg border border-orange-300 dark:border-orange-500/40 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-500/10 dark:to-red-500/10 p-3 ar-fade-in">
+                    <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-orange-700 dark:text-orange-300 mb-1 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M13 2L3 14h7l-1 8 10-12h-7z" />
+                      </svg>
+                      Streak
+                    </p>
+                    <p className="text-base font-bold text-orange-700 dark:text-orange-300">
+                      {streakReached}-day run
+                    </p>
+                  </div>
+                )}
 
                 {rankUp && (
                   <div className="mb-4 rounded-lg border-2 border-fuchsia-300 dark:border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-purple-50 dark:from-fuchsia-500/10 dark:via-violet-500/10 dark:to-purple-500/10 p-3 ar-bounce-in relative overflow-hidden">

@@ -7,7 +7,9 @@ import {
   RANKS,
   usePlayerProgress,
   MissionRecord,
+  PersonalBest,
   Rank,
+  personalBestKey,
 } from '@/lib/player-progress';
 import { SCENARIO_DEFINITIONS } from '@/lib/types';
 import { computeAllOpProgress } from '@/lib/ops-content';
@@ -96,6 +98,14 @@ function AchievementIcon({ icon, earned }: { icon: string; earned: boolean }) {
       return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 2s4 5 4 9a4 4 0 11-8 0c0-2 1-3 2-4-0.5 2 1 3 2 3 0-3-1-5 0-8z" /><path d="M7 16a5 5 0 0010 0" /></svg>;
     case 'radio':
       return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="2" /><path d="M16.2 7.8a6 6 0 010 8.4M7.8 7.8a6 6 0 000 8.4" /><path d="M19 5a10 10 0 010 14M5 5a10 10 0 000 14" /></svg>;
+    case 'calendar':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M9 15l2 2 4-4" /></svg>;
+    case 'bolt':
+      return <svg className={cls} viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h7l-1 8 10-12h-7z" /></svg>;
+    case 'inferno':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3s5 4 5 9a5 5 0 11-10 0c0-2 1-4 2-5 0 2 1 3 3 3-1-3 0-5 0-7z" /><path d="M9 17a3 3 0 006 0" /></svg>;
+    case 'trophy':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z" /><path d="M5 4H3v2a3 3 0 003 3M19 4h2v2a3 3 0 01-3 3" /></svg>;
     default:
       return <svg className={cls} viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6" /></svg>;
   }
@@ -242,7 +252,7 @@ export default function ProfilePage() {
       </section>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 ar-stagger">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8 ar-stagger">
         <div className="rounded-xl border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm dark:shadow-none">
           <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-gray-500">Missions</p>
           <p className="text-2xl font-bold text-slate-800 dark:text-gray-100 mt-1">{missionsCompleted}</p>
@@ -262,6 +272,21 @@ export default function ProfilePage() {
           <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-gray-500">Best Run</p>
           <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-300 mt-1">
             {bestRun ? `${bestRun.xpEarned} XP` : '—'}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm dark:shadow-none">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-gray-500">Streak</p>
+          <p className="text-2xl font-bold text-orange-600 dark:text-orange-300 mt-1 flex items-baseline gap-1">
+            {progress.streak.current}
+            <span className="text-[11px] font-normal text-slate-500 dark:text-gray-500">
+              {progress.streak.best > progress.streak.current ? `best ${progress.streak.best}` : progress.streak.current === 1 ? 'day' : 'days'}
+            </span>
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm dark:shadow-none">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-gray-500">Dailies</p>
+          <p className="text-2xl font-bold text-fuchsia-600 dark:text-fuchsia-300 mt-1">
+            {progress.dailyCompletions.length}
           </p>
         </div>
       </div>
@@ -450,6 +475,81 @@ export default function ProfilePage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* Personal Bests (Phase 5) */}
+      <section className="mb-8">
+        <div className="flex items-end justify-between mb-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-gray-100">Personal Bests</h2>
+            <p className="text-xs text-slate-500 dark:text-gray-500">
+              Your highest XP run on each scenario and perspective. Beat a best to unlock the Personal Best achievement.
+            </p>
+          </div>
+          <p className="text-xs font-mono text-slate-500 dark:text-gray-500">
+            {Object.keys(progress.personalBests).length} tracked · {progress.personalBestBeats} beaten
+          </p>
+        </div>
+        {Object.keys(progress.personalBests).length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 dark:border-gray-700 bg-white/70 dark:bg-gray-900/70 p-6 text-center">
+            <p className="text-sm text-slate-600 dark:text-gray-400">
+              No personal bests yet. Complete a mission to set your first one.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {SCENARIO_DEFINITIONS.flatMap((def) =>
+              (['blue', 'red'] as const).map((perspective) => {
+                const key = personalBestKey(def.id, perspective);
+                const pb: PersonalBest | undefined = progress.personalBests[key];
+                if (!pb) return null;
+                const perspectiveColor =
+                  perspective === 'red'
+                    ? 'text-rose-600 dark:text-rose-300'
+                    : 'text-sky-600 dark:text-sky-300';
+                const perspectiveChip =
+                  perspective === 'red'
+                    ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30'
+                    : 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30';
+                return (
+                  <Link
+                    key={key}
+                    href={`/scenarios/${def.id}`}
+                    className="rounded-xl border-2 border-amber-300 dark:border-amber-500/30 bg-gradient-to-br from-amber-50 to-white dark:from-amber-500/5 dark:to-gray-950 p-4 shadow-sm dark:shadow-none hover:border-amber-500 dark:hover:border-amber-400 transition-all block"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <p className="text-[10px] font-mono uppercase tracking-wider text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z" />
+                          <path d="M5 4H3v2a3 3 0 003 3M19 4h2v2a3 3 0 01-3 3" />
+                        </svg>
+                        Personal Best
+                      </p>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-mono uppercase tracking-wider ${perspectiveChip}`}>
+                        {perspective === 'red' ? 'Red' : 'Blue'}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-gray-100 truncate">
+                      {def.name}
+                    </p>
+                    <div className="mt-2 flex items-baseline justify-between gap-2">
+                      <p className={`text-2xl font-bold font-[family-name:var(--font-geist-mono)] ${perspectiveColor}`}>
+                        {pb.xpEarned}
+                        <span className="text-xs font-normal text-slate-500 dark:text-gray-500"> XP</span>
+                      </p>
+                      <p className="text-[10px] font-mono text-slate-500 dark:text-gray-500 capitalize">
+                        {pb.difficulty}
+                      </p>
+                    </div>
+                    <p className="text-[11px] font-mono text-slate-500 dark:text-gray-500 mt-1">
+                      {pb.objectivesHit}/{pb.objectivesTotal} objectives · {formatDate(pb.recordedAt)}
+                    </p>
+                  </Link>
+                );
+              })
+            )}
+          </div>
+        )}
       </section>
 
       {/* Mission history */}

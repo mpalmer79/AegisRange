@@ -21,6 +21,7 @@ import {
   useState,
 } from 'react';
 import { completedOpIds } from './ops-content';
+import { addDaysToKey, toLocalDateKey } from './daily-challenge';
 
 // ---------- ranks ----------
 
@@ -107,10 +108,43 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'op-nightshade',    name: 'Nightshade Veteran',          description: 'Complete Operation Nightshade.',                       icon: 'moon' },
   { id: 'op-firestarter',   name: 'Firestarter',                 description: 'Complete Operation Firestarter.',                      icon: 'flame' },
   { id: 'op-gridlock',      name: 'Incident Commander',          description: 'Complete Operation Gridlock.',                         icon: 'radio' },
+  { id: 'daily-driver',     name: 'Daily Driver',                description: 'Complete any Daily Challenge.',                        icon: 'calendar' },
+  { id: 'streak-3',         name: 'On a Roll',                   description: 'Play missions three days in a row.',                   icon: 'bolt' },
+  { id: 'streak-7',         name: 'Week Warrior',                description: 'Play missions seven days in a row.',                   icon: 'inferno' },
+  { id: 'new-best',         name: 'Personal Best',               description: 'Beat a personal best on any scenario.',                 icon: 'trophy' },
 ];
 
 export function getAchievement(id: string): Achievement | undefined {
   return ACHIEVEMENTS.find((a) => a.id === id);
+}
+
+// ---------- personal bests + streak (Phase 5) ----------
+
+export interface PersonalBest {
+  scenarioId: string;
+  perspective: 'red' | 'blue';
+  xpEarned: number;
+  xpMax: number;
+  difficulty: 'recruit' | 'analyst' | 'operator';
+  objectivesHit: number;
+  objectivesTotal: number;
+  durationSeconds: number;
+  correlationId: string;
+  recordedAt: string;
+}
+
+export interface StreakState {
+  current: number;
+  best: number;
+  /** Local YYYY-MM-DD of the most recent mission that counted for the streak. */
+  lastPlayedDate: string | null;
+}
+
+export function personalBestKey(
+  scenarioId: string,
+  perspective: 'red' | 'blue'
+): string {
+  return `${scenarioId}:${perspective}`;
 }
 
 // ---------- persisted shape ----------
@@ -119,18 +153,45 @@ export interface PlayerProgress {
   totalXp: number;
   missions: MissionRecord[];
   achievements: string[];
+  /** Phase 5 — best run per (scenarioId, perspective). */
+  personalBests: Record<string, PersonalBest>;
+  /** Phase 5 — lifetime count of times the player has beaten an existing PB. */
+  personalBestBeats: number;
+  /** Phase 5 — consecutive-day play streak. */
+  streak: StreakState;
+  /** Phase 5 — YYYY-MM-DD date keys on which the player cleared a Daily Challenge. */
+  dailyCompletions: string[];
 }
+
+const EMPTY_STREAK: StreakState = {
+  current: 0,
+  best: 0,
+  lastPlayedDate: null,
+};
 
 const EMPTY_PROGRESS: PlayerProgress = {
   totalXp: 0,
   missions: [],
   achievements: [],
+  personalBests: {},
+  personalBestBeats: 0,
+  streak: { ...EMPTY_STREAK },
+  dailyCompletions: [],
 };
 
 const STORAGE_KEY = 'aegisrange-progress-v1';
 const MAX_HISTORY = 50;
 
-function isValidProgress(value: unknown): value is PlayerProgress {
+/**
+ * Validate the minimum v1 shape. Phase 5 fields are filled in by
+ * migrateLoaded() so older saved data continues to work across the
+ * upgrade without forcing a reset.
+ */
+function isValidProgress(value: unknown): value is {
+  totalXp: number;
+  missions: MissionRecord[];
+  achievements: string[];
+} {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (
@@ -140,13 +201,54 @@ function isValidProgress(value: unknown): value is PlayerProgress {
   );
 }
 
+/**
+ * Forward-compat loader: accept any valid v1 shape and augment it
+ * with Phase 5 defaults for missing fields. Already-v2 data passes
+ * through unchanged.
+ */
+function migrateLoaded(raw: unknown): PlayerProgress {
+  if (!isValidProgress(raw)) return EMPTY_PROGRESS;
+  const v = raw as Partial<PlayerProgress> & {
+    totalXp: number;
+    missions: MissionRecord[];
+    achievements: string[];
+  };
+  const personalBests: Record<string, PersonalBest> =
+    v.personalBests && typeof v.personalBests === 'object' && !Array.isArray(v.personalBests)
+      ? (v.personalBests as Record<string, PersonalBest>)
+      : {};
+  const streakCandidate = v.streak as Partial<StreakState> | undefined;
+  const streak: StreakState = streakCandidate && typeof streakCandidate === 'object'
+    ? {
+        current: typeof streakCandidate.current === 'number' ? streakCandidate.current : 0,
+        best: typeof streakCandidate.best === 'number' ? streakCandidate.best : 0,
+        lastPlayedDate:
+          typeof streakCandidate.lastPlayedDate === 'string'
+            ? streakCandidate.lastPlayedDate
+            : null,
+      }
+    : { ...EMPTY_STREAK };
+  return {
+    totalXp: v.totalXp,
+    missions: v.missions,
+    achievements: v.achievements,
+    personalBests,
+    personalBestBeats:
+      typeof v.personalBestBeats === 'number' ? v.personalBestBeats : 0,
+    streak,
+    dailyCompletions: Array.isArray(v.dailyCompletions)
+      ? v.dailyCompletions.filter((d): d is string => typeof d === 'string')
+      : [],
+  };
+}
+
 function loadProgress(): PlayerProgress {
   if (typeof window === 'undefined') return EMPTY_PROGRESS;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY_PROGRESS;
     const parsed = JSON.parse(raw);
-    if (isValidProgress(parsed)) return parsed;
+    return migrateLoaded(parsed);
   } catch {
     // ignore malformed storage
   }
@@ -197,6 +299,12 @@ function earnedAchievementIds(progress: PlayerProgress): string[] {
     earned.push(opId);
   }
 
+  // Phase 5 — Daily Challenge + PB + streak achievements.
+  if (progress.dailyCompletions.length >= 1) earned.push('daily-driver');
+  if (progress.streak.best >= 3) earned.push('streak-3');
+  if (progress.streak.best >= 7) earned.push('streak-7');
+  if (progress.personalBestBeats >= 1) earned.push('new-best');
+
   return earned;
 }
 
@@ -214,11 +322,19 @@ export interface RecordMissionInput {
   durationSeconds: number;
   correlationId: string;
   incidentId: string | null;
+  /** Phase 5 — set when this run matches today's Daily Challenge. */
+  isDailyChallenge?: boolean;
 }
 
 export interface RecordMissionResult {
   newAchievements: Achievement[];
   newRank: Rank | null;
+  /** Phase 5 — true when this run beat a previous PB for (scenario, perspective). */
+  newPersonalBest: boolean;
+  /** Phase 5 — previous PB xpEarned, or null if there was no prior PB. */
+  previousBestXp: number | null;
+  /** Phase 5 — new streak value if the streak advanced today, else null. */
+  streakReached: number | null;
 }
 
 interface PlayerProgressContextValue {
@@ -282,10 +398,80 @@ export function PlayerProgressProvider({ children }: { children: ReactNode }) {
     const nextTotalXp = prev.totalXp + record.xpEarned;
     const prevAchSet = new Set(prev.achievements);
 
+    // --- Phase 5: personal best check ---
+    const pbKey = personalBestKey(record.scenarioId, record.perspective);
+    const existingPb = prev.personalBests[pbKey];
+    const previousBestXp = existingPb ? existingPb.xpEarned : null;
+    let nextPersonalBests = prev.personalBests;
+    let nextPersonalBestBeats = prev.personalBestBeats;
+    let newPersonalBest = false;
+    if (!existingPb || record.xpEarned > existingPb.xpEarned) {
+      nextPersonalBests = {
+        ...prev.personalBests,
+        [pbKey]: {
+          scenarioId: record.scenarioId,
+          perspective: record.perspective,
+          xpEarned: record.xpEarned,
+          xpMax: record.xpMax,
+          difficulty: record.difficulty,
+          objectivesHit: record.objectivesHit,
+          objectivesTotal: record.objectivesTotal,
+          durationSeconds: record.durationSeconds,
+          correlationId: record.correlationId,
+          recordedAt: record.completedAt,
+        },
+      };
+      if (existingPb) {
+        // Only count as a "beat" when there was already a PB to beat —
+        // the first-ever run of a (scenario, perspective) doesn't fire
+        // the new-best achievement.
+        newPersonalBest = true;
+        nextPersonalBestBeats += 1;
+      }
+    }
+
+    // --- Phase 5: streak update (local date) ---
+    const todayKey = toLocalDateKey();
+    let nextStreak: StreakState = prev.streak;
+    let streakReached: number | null = null;
+    if (prev.streak.lastPlayedDate === todayKey) {
+      // Already played today — streak is unchanged.
+    } else if (
+      prev.streak.lastPlayedDate &&
+      addDaysToKey(prev.streak.lastPlayedDate, 1) === todayKey
+    ) {
+      // Consecutive day — increment.
+      const newCurrent = prev.streak.current + 1;
+      nextStreak = {
+        current: newCurrent,
+        best: Math.max(prev.streak.best, newCurrent),
+        lastPlayedDate: todayKey,
+      };
+      streakReached = newCurrent;
+    } else {
+      // First play ever, or broken streak — reset to 1.
+      nextStreak = {
+        current: 1,
+        best: Math.max(prev.streak.best, 1),
+        lastPlayedDate: todayKey,
+      };
+      streakReached = 1;
+    }
+
+    // --- Phase 5: daily challenge completion ---
+    let nextDailyCompletions = prev.dailyCompletions;
+    if (input.isDailyChallenge && !prev.dailyCompletions.includes(todayKey)) {
+      nextDailyCompletions = [...prev.dailyCompletions, todayKey];
+    }
+
     const interim: PlayerProgress = {
       totalXp: nextTotalXp,
       missions: [record, ...prev.missions].slice(0, MAX_HISTORY),
       achievements: prev.achievements,
+      personalBests: nextPersonalBests,
+      personalBestBeats: nextPersonalBestBeats,
+      streak: nextStreak,
+      dailyCompletions: nextDailyCompletions,
     };
     const earnedIds = earnedAchievementIds(interim);
     const newlyEarnedIds = earnedIds.filter((id) => !prevAchSet.has(id));
@@ -306,6 +492,9 @@ export function PlayerProgressProvider({ children }: { children: ReactNode }) {
     return {
       newAchievements,
       newRank: newRank.id !== priorRank.id ? newRank : null,
+      newPersonalBest,
+      previousBestXp,
+      streakReached,
     };
   }, []);
 
