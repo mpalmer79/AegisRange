@@ -22,7 +22,7 @@ function buildTargetUrl(path: string[], request: NextRequest): string {
 function buildUpstreamHeaders(request: NextRequest): Headers {
   const headers = new Headers();
 
-  for (const [key, value] of request.headers.entries()) {
+  request.headers.forEach((value, key) => {
     const lower = key.toLowerCase();
 
     if (
@@ -32,11 +32,11 @@ function buildUpstreamHeaders(request: NextRequest): Headers {
       lower === 'transfer-encoding' ||
       lower === 'content-encoding'
     ) {
-      continue;
+      return;
     }
 
     headers.set(key, value);
-  }
+  });
 
   return headers;
 }
@@ -65,7 +65,7 @@ async function proxy(
 
     const responseHeaders = new Headers();
 
-    for (const [key, value] of upstream.headers.entries()) {
+    upstream.headers.forEach((value, key) => {
       const lower = key.toLowerCase();
 
       if (
@@ -73,11 +73,11 @@ async function proxy(
         lower === 'transfer-encoding' ||
         lower === 'content-encoding'
       ) {
-        continue;
+        return;
       }
 
       responseHeaders.set(key, value);
-    }
+    });
 
     const body = await upstream.arrayBuffer();
 
