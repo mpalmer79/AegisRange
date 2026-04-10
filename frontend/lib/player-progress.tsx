@@ -20,6 +20,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { completedOpIds } from './ops-content';
 
 // ---------- ranks ----------
 
@@ -103,6 +104,9 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'xp-500',           name: 'Seasoned',                    description: 'Reach 500 XP.',                                        icon: 'silver' },
   { id: 'xp-1500',          name: 'Decorated',                   description: 'Reach 1500 XP.',                                       icon: 'gold' },
   { id: 'apt-hunter',       name: 'APT Hunter',                  description: 'Complete the correlated multi-stage scenario.',        icon: 'crosshair' },
+  { id: 'op-nightshade',    name: 'Nightshade Veteran',          description: 'Complete Operation Nightshade.',                       icon: 'moon' },
+  { id: 'op-firestarter',   name: 'Firestarter',                 description: 'Complete Operation Firestarter.',                      icon: 'flame' },
+  { id: 'op-gridlock',      name: 'Incident Commander',          description: 'Complete Operation Gridlock.',                         icon: 'radio' },
 ];
 
 export function getAchievement(id: string): Achievement | undefined {
@@ -187,6 +191,11 @@ function earnedAchievementIds(progress: PlayerProgress): string[] {
   if (progress.totalXp >= 500) earned.push('xp-500');
   if (progress.totalXp >= 1500) earned.push('xp-1500');
   if (hasApt) earned.push('apt-hunter');
+
+  // Phase 4 — Training Ops completion achievements.
+  for (const opId of completedOpIds(missions)) {
+    earned.push(opId);
+  }
 
   return earned;
 }
