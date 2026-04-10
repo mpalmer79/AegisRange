@@ -76,13 +76,17 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
+                // Prevent the mousedown from moving focus away from
+                // the password input — the toggle should flip the
+                // visibility without interrupting typing.
+                onMouseDown={(e) => e.preventDefault()}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 aria-pressed={showPassword}
-                className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-slate-500 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors rounded-r"
+                className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-slate-500 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 focus:text-cyan-600 dark:focus:text-cyan-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 transition-colors rounded-r"
               >
                 {showPassword ? (
                   // eye-off
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" focusable="false" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a19.77 19.77 0 015.06-5.94" />
                     <path d="M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 8 11 8a19.77 19.77 0 01-3.17 4.19" />
                     <path d="M14.12 14.12a3 3 0 01-4.24-4.24" />
@@ -90,7 +94,7 @@ export default function LoginPage() {
                   </svg>
                 ) : (
                   // eye
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" focusable="false" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
