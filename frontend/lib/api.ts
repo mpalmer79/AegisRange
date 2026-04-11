@@ -183,6 +183,34 @@ async function liveOrThrow<T>(fn: () => Promise<T>, mockReason: string): Promise
   return fn();
 }
 
+/**
+ * liveListWithFallback — list-endpoint convenience wrapper around
+ * `live()`. Tries the backend for `path`; falls back to the mock
+ * list when the backend is unreachable, the fetch errors, OR the
+ * backend returns an empty array. An empty live response is
+ * treated as "backend has nothing to show" because a demo UI
+ * rendering an empty table looks broken to a recruiter.
+ *
+ * Endpoints with subtler fallback semantics — conditional empty
+ * checks, response shape validation, or single-entity lookups —
+ * should stay bespoke and use `live()` / `liveOrThrow()` directly.
+ */
+async function liveListWithFallback<T>(
+  path: string,
+  fallback: T[]
+): Promise<T[]> {
+  return live(
+    async () => {
+      const result = await request<T[]>(path);
+      if (!result || result.length === 0) {
+        throw new Error(`empty response from ${path}`);
+      }
+      return result;
+    },
+    fallback
+  );
+}
+
 // ============================================================
 // Health
 // ============================================================
@@ -280,19 +308,8 @@ export async function getEvents(params?: {
   if (params?.event_type) searchParams.set('event_type', params.event_type);
   if (params?.since_minutes) searchParams.set('since_minutes', String(params.since_minutes));
   const query = searchParams.toString();
-  // Fall back to filterEvents(MOCK_EVENTS) so the same query
-  // shape applied to mock data returns a coherent slice of
-  // the narrative instead of an empty feed.
-  return live(
-    async () => {
-      const result = await request<Event[]>(
-        `/events${query ? `?${query}` : ''}`
-      );
-      if (!result || result.length === 0) {
-        throw new Error('empty events response');
-      }
-      return result;
-    },
+  return liveListWithFallback(
+    `/events${query ? `?${query}` : ''}`,
     filterEvents(MOCK_EVENTS, params)
   );
 }
@@ -310,18 +327,8 @@ export async function getAlerts(params?: {
   if (params?.correlation_id) searchParams.set('correlation_id', params.correlation_id);
   if (params?.rule_id) searchParams.set('rule_id', params.rule_id);
   const query = searchParams.toString();
-  // Fall back to filterAlerts(MOCK_ALERTS) so the same query
-  // shape applied to mock data returns the correct subset.
-  return live(
-    async () => {
-      const result = await request<Alert[]>(
-        `/alerts${query ? `?${query}` : ''}`
-      );
-      if (!result || result.length === 0) {
-        throw new Error('empty alerts response');
-      }
-      return result;
-    },
+  return liveListWithFallback(
+    `/alerts${query ? `?${query}` : ''}`,
     filterAlerts(MOCK_ALERTS, params)
   );
 }
@@ -395,19 +402,10 @@ function mutateIncidentNote(
 // Incidents — content in A.3
 // ============================================================
 export async function getIncidents(): Promise<Incident[]> {
-  // Fall back to the mutable mockIncidentsState clone so that
-  // updateIncidentStatus / addIncidentNote mutations applied
-  // earlier in the session remain visible on the list view.
-  return live(
-    async () => {
-      const result = await request<Incident[]>('/incidents');
-      if (!result || result.length === 0) {
-        throw new Error('empty incidents response');
-      }
-      return result;
-    },
-    mockIncidentsState
-  );
+  // Pass mockIncidentsState (the mutable clone) as the fallback
+  // so session mutations from updateIncidentStatus /
+  // addIncidentNote remain visible on the list view.
+  return liveListWithFallback('/incidents', mockIncidentsState);
 }
 
 export async function getIncident(correlationId: string): Promise<Incident> {
@@ -463,20 +461,7 @@ export async function getMetrics(): Promise<Metrics> {
 // Analytics — content in Slice B
 // ============================================================
 export async function getRiskProfiles(): Promise<RiskProfile[]> {
-  // Fall back to MOCK_RISK_PROFILES on unreachable backend, live
-  // errors, or an empty live response. An empty analytics page
-  // would look broken, and the mock covers every primary actor
-  // across the six correlation chains.
-  return live(
-    async () => {
-      const result = await request<RiskProfile[]>('/analytics/risk-profiles');
-      if (!result || result.length === 0) {
-        throw new Error('empty risk profiles response');
-      }
-      return result;
-    },
-    MOCK_RISK_PROFILES
-  );
+  return liveListWithFallback('/analytics/risk-profiles', MOCK_RISK_PROFILES);
 }
 
 export async function getRiskProfile(actorId: string): Promise<RiskProfile> {
@@ -504,39 +489,15 @@ export async function getRiskProfile(actorId: string): Promise<RiskProfile> {
 }
 
 export async function getRuleEffectiveness(): Promise<RuleEffectiveness[]> {
-  // Fall back to MOCK_RULE_EFFECTIVENESS on unreachable backend,
-  // live errors, or an empty live response — an empty list would
-  // render a dashboard that looks broken, and the mock covers every
-  // DET-* rule in the backend ruleset.
-  return live(
-    async () => {
-      const result = await request<RuleEffectiveness[]>(
-        '/analytics/rule-effectiveness'
-      );
-      if (!result || result.length === 0) {
-        throw new Error('empty rule effectiveness response');
-      }
-      return result;
-    },
+  return liveListWithFallback(
+    '/analytics/rule-effectiveness',
     MOCK_RULE_EFFECTIVENESS
   );
 }
 
 export async function getScenarioHistory(): Promise<ScenarioHistoryEntry[]> {
-  // Fall back to MOCK_SCENARIO_HISTORY on unreachable backend,
-  // live errors, or an empty live response. One entry per
-  // correlation chain keeps the history tab aligned with the
-  // incidents drawer.
-  return live(
-    async () => {
-      const result = await request<ScenarioHistoryEntry[]>(
-        '/analytics/scenario-history'
-      );
-      if (!result || result.length === 0) {
-        throw new Error('empty scenario history response');
-      }
-      return result;
-    },
+  return liveListWithFallback(
+    '/analytics/scenario-history',
     MOCK_SCENARIO_HISTORY
   );
 }
@@ -640,16 +601,7 @@ function computeScenarioTTPs(scenarioId: string): MitreTechnique[] {
 }
 
 export async function getMitreMappings(): Promise<TTPMapping[]> {
-  return live(
-    async () => {
-      const result = await request<TTPMapping[]>('/mitre/mappings');
-      if (!result || result.length === 0) {
-        throw new Error('empty mitre mappings response');
-      }
-      return result;
-    },
-    MOCK_TTP_MAPPINGS
-  );
+  return liveListWithFallback('/mitre/mappings', MOCK_TTP_MAPPINGS);
 }
 
 export async function getMitreMapping(ruleId: string): Promise<TTPMapping> {
@@ -671,34 +623,12 @@ export async function getMitreMapping(ruleId: string): Promise<TTPMapping> {
 }
 
 export async function getMitreCoverageMatrix(): Promise<MitreCoverageEntry[]> {
-  // Fall back to MOCK_MITRE_COVERAGE on unreachable backend,
-  // live errors, or an empty live response — the matrix view
-  // needs at least one row to render the tactic/technique grid.
-  return live(
-    async () => {
-      const result = await request<MitreCoverageEntry[]>('/mitre/coverage');
-      if (!result || result.length === 0) {
-        throw new Error('empty mitre coverage response');
-      }
-      return result;
-    },
-    MOCK_MITRE_COVERAGE
-  );
+  return liveListWithFallback('/mitre/coverage', MOCK_MITRE_COVERAGE);
 }
 
 export async function getMitreTacticCoverage(): Promise<TacticCoverage[]> {
-  // Fall back to MOCK_TACTIC_COVERAGE on unreachable backend,
-  // live errors, or an empty live response.
-  return live(
-    async () => {
-      const result = await request<TacticCoverage[]>(
-        '/mitre/tactics/coverage'
-      );
-      if (!result || result.length === 0) {
-        throw new Error('empty mitre tactic coverage response');
-      }
-      return result;
-    },
+  return liveListWithFallback(
+    '/mitre/tactics/coverage',
     MOCK_TACTIC_COVERAGE
   );
 }
@@ -706,16 +636,8 @@ export async function getMitreTacticCoverage(): Promise<TacticCoverage[]> {
 export async function getMitreScenarioTTPs(
   scenarioId: string
 ): Promise<MitreTechnique[]> {
-  return live(
-    async () => {
-      const result = await request<MitreTechnique[]>(
-        `/mitre/scenarios/${scenarioId}/ttps`
-      );
-      if (!result || result.length === 0) {
-        throw new Error('empty mitre scenario ttps response');
-      }
-      return result;
-    },
+  return liveListWithFallback(
+    `/mitre/scenarios/${scenarioId}/ttps`,
     computeScenarioTTPs(scenarioId)
   );
 }
@@ -744,40 +666,14 @@ export async function getKillChainAnalysis(
 }
 
 export async function getAllKillChainAnalyses(): Promise<KillChainAnalysis[]> {
-  // Fall back to MOCK_KILL_CHAIN_ANALYSES on unreachable backend,
-  // live errors, or an empty live response. One analysis per
-  // incident keeps the kill chain drawer aligned with
-  // MOCK_INCIDENTS and MOCK_SCENARIO_HISTORY.
-  return live(
-    async () => {
-      const result = await request<KillChainAnalysis[]>('/killchain');
-      if (!result || result.length === 0) {
-        throw new Error('empty kill chain response');
-      }
-      return result;
-    },
-    MOCK_KILL_CHAIN_ANALYSES
-  );
+  return liveListWithFallback('/killchain', MOCK_KILL_CHAIN_ANALYSES);
 }
 
 // ============================================================
 // Campaigns — content in Slice C
 // ============================================================
 export async function getCampaigns(): Promise<Campaign[]> {
-  // Fall back to MOCK_CAMPAIGNS on unreachable backend, live
-  // errors, or an empty live response. Two campaigns cluster
-  // four of the six MOCK_INCIDENTS by shared TTPs or
-  // actor-class — see mock-data.ts for the linking logic.
-  return live(
-    async () => {
-      const result = await request<Campaign[]>('/campaigns');
-      if (!result || result.length === 0) {
-        throw new Error('empty campaigns response');
-      }
-      return result;
-    },
-    MOCK_CAMPAIGNS
-  );
+  return liveListWithFallback('/campaigns', MOCK_CAMPAIGNS);
 }
 
 export async function getCampaign(campaignId: string): Promise<Campaign> {
@@ -858,19 +754,7 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 }
 
 export async function getPlatformUsers(): Promise<PlatformUser[]> {
-  // Fall back to MOCK_PLATFORM_USERS on unreachable backend,
-  // live errors, or an empty response — the admin user roster
-  // view needs at least one entry to render usefully.
-  return live(
-    async () => {
-      const result = await request<PlatformUser[]>('/auth/users');
-      if (!result || result.length === 0) {
-        throw new Error('empty platform users response');
-      }
-      return result;
-    },
-    MOCK_PLATFORM_USERS
-  );
+  return liveListWithFallback('/auth/users', MOCK_PLATFORM_USERS);
 }
 
 // ============================================================
