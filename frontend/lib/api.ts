@@ -36,6 +36,7 @@ import {
   LoginResponse,
   DocumentRequest,
   IncidentStatus,
+  IncidentResponse,
   RiskProfile,
   RuleEffectiveness,
   ScenarioHistoryEntry,
@@ -66,6 +67,7 @@ import {
   MOCK_MITRE_COVERAGE,
   MOCK_MITRE_TECHNIQUES,
   MOCK_PLATFORM_USERS,
+  MOCK_RESPONSES,
   MOCK_RISK_PROFILES,
   MOCK_RULE_EFFECTIVENESS,
   MOCK_SCENARIO_HISTORY,
@@ -541,6 +543,33 @@ export async function getIncidentNotes(correlationId: string): Promise<IncidentN
     },
     mockNotes
   );
+}
+
+// ============================================================
+// Responses — first-class response records
+// ============================================================
+export async function getResponses(): Promise<IncidentResponse[]> {
+  return liveListWithFallback('/responses', MOCK_RESPONSES);
+}
+
+export async function getResponse(
+  responseId: string
+): Promise<IncidentResponse> {
+  const mockResponse = MOCK_RESPONSES.find(
+    (response) => response.response_id === responseId
+  );
+  if (await probeBackend()) {
+    try {
+      return await request<IncidentResponse>(`/responses/${responseId}`);
+    } catch {
+      // Backend reachable but lookup failed — fall through to
+      // the mock so the demo still renders.
+    }
+  }
+  if (!mockResponse) {
+    throw new Error(`unknown response_id: ${responseId}`);
+  }
+  return mockResponse;
 }
 
 // ============================================================
