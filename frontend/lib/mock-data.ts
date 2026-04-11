@@ -112,11 +112,15 @@ export const MOCK_METRICS: Metrics = {
   },
 
   alerts_by_severity: {
-    critical: 12,
-    high: 34,
-    medium: 61,
-    low: 28,
-    informational: 7,
+    // Reflects the actual MOCK_ALERTS distribution after the
+    // noise alerts factory: 9 chain alerts + 133 noise alerts
+    // = 142 total. The current backend ruleset doesn't emit
+    // low/informational severities so those buckets are zero.
+    critical: 16,
+    high: 74,
+    medium: 52,
+    low: 0,
+    informational: 0,
   },
 
   incidents_by_status: {
@@ -1128,7 +1132,7 @@ function generateBaselineNoise(): Event[] {
 // the alerts table reads identically in live and mock modes.
 // ------------------------------------------------------------
 
-export const MOCK_ALERTS: Alert[] = [
+const INLINE_ALERTS: Alert[] = [
   // Chain 1 — AUTH_BRUTE
   {
     alert_id: 'alert-0001',
@@ -1323,6 +1327,168 @@ export const MOCK_ALERTS: Alert[] = [
     },
   },
 ];
+
+export const MOCK_ALERTS: Alert[] = [
+  ...INLINE_ALERTS,
+  ...generateBaselineAlerts(),
+];
+
+// ------------------------------------------------------------
+// Baseline alerts factory
+//
+// Reaches MOCK_METRICS.total_alerts = 142 via 133 deterministic
+// noise alerts added on top of the 9 hand-crafted chain alerts.
+// Every noise alert points at a real DET-* rule from the backend
+// ruleset with severity/confidence matching the rule definition
+// (no synthetic low/informational alerts — the current backend
+// rules don't produce those tiers).
+//
+// Distribution (tuned to produce a realistic rule-effectiveness
+// histogram with DET-AUTH-001 loudest and DET-POL-009 quietest):
+//
+//   rule_id          severity   noise  chain  total  actors
+//   ──────────────────────────────────────────────────────────
+//   DET-AUTH-001     medium       40     1     41     11
+//   DET-AUTH-002     high         25     1     26     11
+//   DET-SESSION-003  high         15     1     16     10
+//   DET-DOC-004      high         18     1     19     10
+//   DET-DOC-005      high          0     0      0      0  (dormant)
+//   DET-DOC-006      critical     10     1     11     10
+//   DET-SVC-007      high         12     1     13      6
+//   DET-ART-008      medium       10     1     11     10
+//   DET-POL-009      critical      3     1      4      4
+//   DET-CORR-010     critical      0     1      1      1  (composite)
+//   ──────────────────────────────────────────────────────────
+//   totals                       133     9    142
+//
+// Severity totals with the 9 chain alerts (3 crit / 4 high /
+// 2 medium) added:
+//
+//   critical    16   (13 noise + 3 chain)
+//   high        74   (70 noise + 4 chain)
+//   medium      52   (50 noise + 2 chain)
+//   low          0
+//   informational 0
+//   total      142
+//
+// alert ids use the `alert-nNNNN` prefix so they never collide
+// with hand-crafted `alert-NNNN` ids.
+// ------------------------------------------------------------
+
+interface NoiseAlertSpec {
+  rule_id: string;
+  rule_name: string;
+  severity: Alert['severity'];
+  confidence: string;
+  count: number;
+  actor_pool: 'users' | 'services';
+  summary_template: string;
+}
+
+const NOISE_ALERT_SPECS: NoiseAlertSpec[] = [
+  {
+    rule_id: 'DET-AUTH-001',
+    rule_name: 'Repeated Authentication Failure Burst',
+    severity: 'medium',
+    confidence: 'medium',
+    count: 40,
+    actor_pool: 'users',
+    summary_template: 'Repeated authentication failures detected for {{actor}}.',
+  },
+  {
+    rule_id: 'DET-AUTH-002',
+    rule_name: 'Suspicious Success After Failure Sequence',
+    severity: 'high',
+    confidence: 'high',
+    count: 25,
+    actor_pool: 'users',
+    summary_template: 'Successful authentication for {{actor}} following failure burst.',
+  },
+  {
+    rule_id: 'DET-SESSION-003',
+    rule_name: 'Token Reuse From Conflicting Origins',
+    severity: 'high',
+    confidence: 'high',
+    count: 15,
+    actor_pool: 'users',
+    summary_template: 'Session for {{actor}} observed from two distinct source IPs.',
+  },
+  {
+    rule_id: 'DET-DOC-004',
+    rule_name: 'Restricted Document Access Outside Role Scope',
+    severity: 'high',
+    confidence: 'high',
+    count: 18,
+    actor_pool: 'users',
+    summary_template: 'Access attempt to restricted document denied for {{actor}}.',
+  },
+  {
+    rule_id: 'DET-DOC-006',
+    rule_name: 'Read-To-Download Staging Pattern',
+    severity: 'critical',
+    confidence: 'high',
+    count: 10,
+    actor_pool: 'users',
+    summary_template: '{{actor}} exhibited read-to-download staging pattern.',
+  },
+  {
+    rule_id: 'DET-SVC-007',
+    rule_name: 'Unauthorized Service Identity Route Access',
+    severity: 'high',
+    confidence: 'medium',
+    count: 12,
+    actor_pool: 'services',
+    summary_template: '{{actor}} made unauthorized route attempts.',
+  },
+  {
+    rule_id: 'DET-ART-008',
+    rule_name: 'Artifact Validation Failure Pattern',
+    severity: 'medium',
+    confidence: 'medium',
+    count: 10,
+    actor_pool: 'users',
+    summary_template: 'Artifact validation failures observed from {{actor}}.',
+  },
+  {
+    rule_id: 'DET-POL-009',
+    rule_name: 'Privileged Policy Change With Elevated Risk Context',
+    severity: 'critical',
+    confidence: 'high',
+    count: 3,
+    actor_pool: 'users',
+    summary_template: 'Privileged policy change by {{actor}} under elevated risk.',
+  },
+];
+
+function generateBaselineAlerts(): Alert[] {
+  const alerts: Alert[] = [];
+  let seq = 0;
+  const total = NOISE_ALERT_SPECS.reduce((sum, s) => sum + s.count, 0);
+
+  for (const spec of NOISE_ALERT_SPECS) {
+    const pool: ReadonlyArray<{ id: string }> =
+      spec.actor_pool === 'users' ? NOISE_USERS : NOISE_SERVICES;
+    for (let i = 0; i < spec.count; i += 1) {
+      const actor = pool[i % pool.length];
+      alerts.push({
+        alert_id: `alert-n${String(seq).padStart(4, '0')}`,
+        created_at: minutesAgo(spreadOffset(seq, total)),
+        rule_id: spec.rule_id,
+        rule_name: spec.rule_name,
+        severity: spec.severity,
+        confidence: spec.confidence,
+        actor_id: actor.id,
+        correlation_id: `corr-noise-${String(seq).padStart(4, '0')}`,
+        contributing_event_ids: [],
+        summary: spec.summary_template.replace('{{actor}}', actor.id),
+        payload: { source: 'baseline_noise' },
+      });
+      seq += 1;
+    }
+  }
+
+  return alerts;
+}
 
 // ------------------------------------------------------------
 // Incidents
@@ -2678,33 +2844,36 @@ export const MOCK_RISK_PROFILES: RiskProfile[] = [
 // ------------------------------------------------------------
 
 export const MOCK_RULE_EFFECTIVENESS: RuleEffectiveness[] = [
+  // trigger_count is (chain + noise); actors_affected is the
+  // distinct actor count across both sources. See the baseline
+  // alerts factory comment above for the full derivation.
   {
     rule_id: 'DET-AUTH-001',
     rule_name: 'Repeated Authentication Failure Burst',
-    trigger_count: 1,
+    trigger_count: 41,
     severity: 'medium',
-    actors_affected: 1,
+    actors_affected: 11,
   },
   {
     rule_id: 'DET-AUTH-002',
     rule_name: 'Suspicious Success After Failure Sequence',
-    trigger_count: 1,
+    trigger_count: 26,
     severity: 'high',
-    actors_affected: 1,
+    actors_affected: 11,
   },
   {
     rule_id: 'DET-SESSION-003',
     rule_name: 'Token Reuse From Conflicting Origins',
-    trigger_count: 1,
+    trigger_count: 16,
     severity: 'high',
-    actors_affected: 1,
+    actors_affected: 10,
   },
   {
     rule_id: 'DET-DOC-004',
     rule_name: 'Restricted Document Access Outside Role Scope',
-    trigger_count: 1,
+    trigger_count: 19,
     severity: 'high',
-    actors_affected: 1,
+    actors_affected: 10,
   },
   {
     rule_id: 'DET-DOC-005',
@@ -2716,30 +2885,30 @@ export const MOCK_RULE_EFFECTIVENESS: RuleEffectiveness[] = [
   {
     rule_id: 'DET-DOC-006',
     rule_name: 'Read-To-Download Staging Pattern',
-    trigger_count: 1,
+    trigger_count: 11,
     severity: 'critical',
-    actors_affected: 1,
+    actors_affected: 10,
   },
   {
     rule_id: 'DET-SVC-007',
     rule_name: 'Unauthorized Service Identity Route Access',
-    trigger_count: 1,
+    trigger_count: 13,
     severity: 'high',
-    actors_affected: 1,
+    actors_affected: 6,
   },
   {
     rule_id: 'DET-ART-008',
     rule_name: 'Artifact Validation Failure Pattern',
-    trigger_count: 1,
+    trigger_count: 11,
     severity: 'medium',
-    actors_affected: 1,
+    actors_affected: 10,
   },
   {
     rule_id: 'DET-POL-009',
     rule_name: 'Privileged Policy Change With Elevated Risk Context',
-    trigger_count: 1,
+    trigger_count: 4,
     severity: 'critical',
-    actors_affected: 1,
+    actors_affected: 4,
   },
   {
     rule_id: 'DET-CORR-010',
