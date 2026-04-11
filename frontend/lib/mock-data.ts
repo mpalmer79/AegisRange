@@ -176,7 +176,7 @@ export const CORRELATION_IDS = {
 // these ids, so nothing dangles.
 // ------------------------------------------------------------
 
-export const MOCK_EVENTS: Event[] = [
+const INLINE_EVENTS: Event[] = [
   // ── Chain 1 — AUTH_BRUTE ────────────────────────────────
   // wade.hollis (contractor) hammered from a Tor exit. Six
   // failures inside three minutes followed by a successful
@@ -872,6 +872,250 @@ export const MOCK_EVENTS: Event[] = [
     severity: 'informational',
   },
 ];
+
+export const MOCK_EVENTS: Event[] = [
+  ...INLINE_EVENTS,
+  ...generateBaselineNoise(),
+];
+
+// ------------------------------------------------------------
+// Baseline noise factory
+//
+// Hand-crafting ~800 routine SOC events would bloat this file
+// into the tens of thousands of lines with no review benefit —
+// each event is identical to the next except for an id and a
+// timestamp. Instead, we generate the bulk noise deterministically
+// from a small set of templates at module-load time. Every
+// invocation produces byte-identical output, so the demo stays
+// stable across reloads (same event ids, same timestamps, same
+// ordering) and downstream derivations (filterEvents, metrics
+// category counts, exercise report totals) line up exactly.
+//
+// Category targets match MOCK_METRICS.events_by_category minus
+// the events already contributed by the narrative chains and the
+// inline noise above:
+//
+//   category        chain  inline  generated  total (target)
+//   ─────────────────────────────────────────────────────────
+//   authentication     7      3        302      312 (312)
+//   session            4      2        152      158 (158)
+//   document           7      1        193      201 (201)
+//   service            7      0         80       87  (87)
+//   network            5      0         84       89  (89)
+//   ─────────────────────────────────────────────────────────
+//   totals            30      6        811      847 (847)
+//
+// Generated event ids use the `evt-nNNNN` prefix so they never
+// collide with hand-crafted ids (`evt-NNNN`).
+// ------------------------------------------------------------
+
+interface NoiseUser {
+  id: string;
+  role: string;
+  ip: string;
+  ua: string;
+}
+
+const NOISE_USERS: NoiseUser[] = [
+  { id: 'operator-soc-01', role: 'operator', ip: '10.20.6.10', ua: 'Mozilla/5.0 (Windows)' },
+  { id: 'operator-soc-02', role: 'operator', ip: '10.20.6.11', ua: 'Mozilla/5.0 (Windows)' },
+  { id: 'alex.nguyen', role: 'engineer', ip: '10.20.4.21', ua: 'Mozilla/5.0 (Macintosh)' },
+  { id: 'eli.kwon', role: 'engineer', ip: '10.20.4.33', ua: 'Mozilla/5.0 (Macintosh)' },
+  { id: 'li.wei', role: 'engineer', ip: '10.20.4.71', ua: 'Mozilla/5.0 (Windows)' },
+  { id: 'priya.shah', role: 'analyst', ip: '10.20.5.42', ua: 'Mozilla/5.0 (Macintosh)' },
+  { id: 'mira.delacroix', role: 'analyst', ip: '10.20.5.14', ua: 'Mozilla/5.0 (Linux)' },
+  { id: 'dana.obi', role: 'analyst', ip: '10.20.5.55', ua: 'Mozilla/5.0 (Windows)' },
+  { id: 'robin.chen', role: 'platform-admin', ip: '10.20.6.21', ua: 'Mozilla/5.0 (Linux)' },
+  { id: 'jessie.park', role: 'contractor', ip: '10.20.7.12', ua: 'Mozilla/5.0 (Linux)' },
+];
+
+const NOISE_DOCS = [
+  'doc-runbook-01',
+  'doc-runbook-02',
+  'doc-policy-11',
+  'doc-policy-12',
+  'doc-internal-21',
+  'doc-internal-22',
+  'doc-metrics-31',
+  'doc-metrics-32',
+  'doc-handbook-41',
+  'doc-handbook-42',
+  'doc-postmortem-51',
+  'doc-postmortem-52',
+];
+
+interface NoiseService {
+  id: string;
+  ip: string;
+}
+
+const NOISE_SERVICES: NoiseService[] = [
+  { id: 'svc-api-gateway', ip: '10.30.1.1' },
+  { id: 'svc-cache-redis', ip: '10.30.1.2' },
+  { id: 'svc-metrics-collector', ip: '10.30.1.3' },
+  { id: 'svc-log-forwarder', ip: '10.30.1.4' },
+  { id: 'svc-telemetry-ingest', ip: '10.30.1.5' },
+];
+
+/** Spread `count` events linearly across a 30-min-to-~71-hr window. */
+function spreadOffset(i: number, count: number): number {
+  const MIN = 30;
+  const MAX = 4300;
+  if (count <= 1) return MAX;
+  return Math.floor(MIN + ((MAX - MIN) * (count - 1 - i)) / (count - 1));
+}
+
+function generateBaselineNoise(): Event[] {
+  const events: Event[] = [];
+  let seq = 0;
+
+  function push(partial: Omit<Event, 'event_id'>): void {
+    events.push({
+      event_id: `evt-n${String(seq).padStart(4, '0')}`,
+      ...partial,
+    });
+    seq += 1;
+  }
+
+  // ---- Authentication noise (302 events) ----
+  // Mix ~80% login.success, ~10% benign login.failure, ~10% mfa
+  // so the feed reads like real SOC traffic rather than a single
+  // event type repeated 302 times.
+  const AUTH_COUNT = 302;
+  const authTypes = [
+    'authentication.login.success',
+    'authentication.login.success',
+    'authentication.login.success',
+    'authentication.login.success',
+    'authentication.login.success',
+    'authentication.login.success',
+    'authentication.login.success',
+    'authentication.login.success',
+    'authentication.login.failure',
+    'authentication.mfa.success',
+  ];
+  for (let i = 0; i < AUTH_COUNT; i += 1) {
+    const actor = NOISE_USERS[i % NOISE_USERS.length];
+    const eventType = authTypes[i % authTypes.length];
+    const isFailure = eventType === 'authentication.login.failure';
+    push({
+      timestamp: minutesAgo(spreadOffset(i, AUTH_COUNT)),
+      event_type: eventType,
+      category: 'authentication',
+      actor_id: actor.id,
+      actor_type: 'user',
+      actor_role: actor.role,
+      source_ip: actor.ip,
+      status: isFailure ? 'failure' : 'success',
+      status_code: isFailure ? '401' : '200',
+      request_id: `req-nauth${i}`,
+      user_agent: actor.ua,
+      severity: isFailure ? 'low' : 'informational',
+      ...(isFailure && { error_message: 'invalid_credentials' }),
+    });
+  }
+
+  // ---- Session noise (152 events) ----
+  const SESSION_COUNT = 152;
+  const sessionTypes = [
+    'session.token.issued',
+    'authorization.check.success',
+    'authorization.check.success',
+    'session.token.refreshed',
+  ];
+  for (let i = 0; i < SESSION_COUNT; i += 1) {
+    const actor = NOISE_USERS[i % NOISE_USERS.length];
+    push({
+      timestamp: minutesAgo(spreadOffset(i, SESSION_COUNT)),
+      event_type: sessionTypes[i % sessionTypes.length],
+      category: 'session',
+      actor_id: actor.id,
+      actor_type: 'user',
+      actor_role: actor.role,
+      source_ip: actor.ip,
+      status: 'success',
+      status_code: '200',
+      request_id: `req-nsess${i}`,
+      session_id: `sess-n-${actor.id}-${Math.floor(i / 4)}`,
+      user_agent: actor.ua,
+      severity: 'informational',
+    });
+  }
+
+  // ---- Document noise (193 events) ----
+  const DOC_COUNT = 193;
+  const docTypes = [
+    'document.read.success',
+    'document.read.success',
+    'document.read.success',
+    'document.list.success',
+  ];
+  for (let i = 0; i < DOC_COUNT; i += 1) {
+    const actor = NOISE_USERS[i % NOISE_USERS.length];
+    push({
+      timestamp: minutesAgo(spreadOffset(i, DOC_COUNT)),
+      event_type: docTypes[i % docTypes.length],
+      category: 'document',
+      actor_id: actor.id,
+      actor_type: 'user',
+      actor_role: actor.role,
+      source_ip: actor.ip,
+      target_type: 'document',
+      target_id: NOISE_DOCS[i % NOISE_DOCS.length],
+      status: 'success',
+      status_code: '200',
+      request_id: `req-ndoc${i}`,
+      session_id: `sess-n-${actor.id}-doc`,
+      severity: 'informational',
+    });
+  }
+
+  // ---- Service noise (80 events) ----
+  const SVC_COUNT = 80;
+  const svcTypes = [
+    'service.health.check',
+    'authorization.check.success',
+    'service.config.reload',
+  ];
+  for (let i = 0; i < SVC_COUNT; i += 1) {
+    const svc = NOISE_SERVICES[i % NOISE_SERVICES.length];
+    push({
+      timestamp: minutesAgo(spreadOffset(i, SVC_COUNT)),
+      event_type: svcTypes[i % svcTypes.length],
+      category: 'service',
+      actor_id: svc.id,
+      actor_type: 'service',
+      source_ip: svc.ip,
+      status: 'success',
+      status_code: '200',
+      request_id: `req-nsvc${i}`,
+      severity: 'informational',
+    });
+  }
+
+  // ---- Network noise (84 events) ----
+  const NET_COUNT = 84;
+  const netTypes = [
+    'network.flow.observed',
+    'firewall.rule.evaluated',
+    'network.policy.audit',
+  ];
+  for (let i = 0; i < NET_COUNT; i += 1) {
+    push({
+      timestamp: minutesAgo(spreadOffset(i, NET_COUNT)),
+      event_type: netTypes[i % netTypes.length],
+      category: 'network',
+      actor_id: 'firewall-edge-01',
+      actor_type: 'service',
+      source_ip: '10.20.1.1',
+      status: 'observed',
+      request_id: `req-nnet${i}`,
+      severity: 'informational',
+    });
+  }
+
+  return events;
+}
 
 // ------------------------------------------------------------
 // Alerts
