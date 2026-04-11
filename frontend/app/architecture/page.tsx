@@ -190,7 +190,9 @@ export default function ArchitecturePage() {
           <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
             Design principles
           </p>
-          <h2 className="mt-2 text-2xl font-bold">Why the system is structured this way</h2>
+          <h2 className="mt-2 text-2xl font-bold">
+            Why the system is structured this way
+          </h2>
 
           <div className="mt-5 space-y-4">
             {principles.map((item) => (
@@ -213,7 +215,9 @@ export default function ArchitecturePage() {
           <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
             Service boundaries
           </p>
-          <h2 className="mt-2 text-2xl font-bold">Core backend responsibilities</h2>
+          <h2 className="mt-2 text-2xl font-bold">
+            Core backend responsibilities
+          </h2>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {services.map((service) => (
@@ -234,3 +238,85 @@ export default function ArchitecturePage() {
               complexity.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-2">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm dark:border-emerald-500/20 dark:bg-emerald-500/10">
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">
+            Current guarantees
+          </p>
+          <h2 className="mt-2 text-2xl font-bold text-emerald-900 dark:text-emerald-200">
+            What the system can credibly claim
+          </h2>
+
+          <ul className="mt-5 space-y-3">
+            {guarantees.map((item) => (
+              <li
+                key={item}
+                className="rounded-xl border border-emerald-200 bg-white/80 px-4 py-3 text-sm leading-6 text-emerald-900 dark:border-emerald-500/20 dark:bg-gray-900/70 dark:text-emerald-100"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm dark:border-amber-500/20 dark:bg-amber-500/10">
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">
+            Known constraints
+          </p>
+          <h2 className="mt-2 text-2xl font-bold text-amber-900 dark:text-amber-200">
+            What the system does not pretend to be
+          </h2>
+
+          <ul className="mt-5 space-y-3">
+            {constraints.map((item) => (
+              <li
+                key={item}
+                className="rounded-xl border border-amber-200 bg-white/80 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-500/20 dark:bg-gray-900/70 dark:text-amber-100"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
+          Evolution path
+        </p>
+        <h2 className="mt-2 text-2xl font-bold">
+          How this architecture matures
+        </h2>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+            <h3 className="text-sm font-semibold">Near term</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-400">
+              Expose more reasoning in the UI, strengthen observability, and
+              make persistence and deployment truths more visible.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+            <h3 className="text-sm font-semibold">Mid term</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-400">
+              Externalize shared state, replace process-local coordination where
+              needed, and move toward a stronger shared durable store.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+            <h3 className="text-sm font-semibold">Long term</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-gray-400">
+              Introduce asynchronous components and selective decomposition only
+              where scale or isolation actually justify the added complexity.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
