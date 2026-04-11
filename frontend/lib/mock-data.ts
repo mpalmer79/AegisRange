@@ -878,11 +878,6 @@ const INLINE_EVENTS: Event[] = [
   },
 ];
 
-export const MOCK_EVENTS: Event[] = [
-  ...INLINE_EVENTS,
-  ...generateBaselineNoise(),
-];
-
 // ------------------------------------------------------------
 // Baseline noise factory
 //
@@ -1122,6 +1117,17 @@ function generateBaselineNoise(): Event[] {
   return events;
 }
 
+// MOCK_EVENTS export must follow the factory definitions above:
+// the noise factory references const NOISE_USERS / NOISE_DOCS /
+// NOISE_SERVICES which are not hoisted, so calling it from a
+// const init declared earlier in the module would hit a
+// Temporal Dead Zone at runtime (caught by next build, missed
+// by tsc which doesn't track init-order TDZ).
+export const MOCK_EVENTS: Event[] = [
+  ...INLINE_EVENTS,
+  ...generateBaselineNoise(),
+];
+
 // ------------------------------------------------------------
 // Alerts
 //
@@ -1328,11 +1334,6 @@ const INLINE_ALERTS: Alert[] = [
   },
 ];
 
-export const MOCK_ALERTS: Alert[] = [
-  ...INLINE_ALERTS,
-  ...generateBaselineAlerts(),
-];
-
 // ------------------------------------------------------------
 // Baseline alerts factory
 //
@@ -1489,6 +1490,15 @@ function generateBaselineAlerts(): Alert[] {
 
   return alerts;
 }
+
+// MOCK_ALERTS export must follow the factory definitions above
+// for the same TDZ reason as MOCK_EVENTS — generateBaselineAlerts
+// reads the const NOISE_ALERT_SPECS / NOISE_USERS / NOISE_SERVICES
+// which are not hoisted.
+export const MOCK_ALERTS: Alert[] = [
+  ...INLINE_ALERTS,
+  ...generateBaselineAlerts(),
+];
 
 // ------------------------------------------------------------
 // Incidents
