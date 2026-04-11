@@ -23,6 +23,7 @@ import type {
   Incident,
   Metrics,
   RiskProfile,
+  RuleEffectiveness,
 } from './types';
 
 // ------------------------------------------------------------
@@ -1687,6 +1688,111 @@ export const MOCK_RISK_PROFILES: RiskProfile[] = [
       },
     ],
     last_updated: minutesAgo(120),
+  },
+];
+
+// ------------------------------------------------------------
+// Rule effectiveness
+//
+// One entry per detection rule defined in the backend
+// (backend/app/services/detection_service.py). Both
+// trigger_count and actors_affected are derived directly
+// from MOCK_ALERTS — no invented numbers. In the current
+// narrative each firing rule produces exactly one alert for
+// one actor, so trigger_count === actors_affected === 1 for
+// every rule that appears in MOCK_ALERTS.
+//
+// DET-DOC-005 ("Abnormal Bulk Document Access") intentionally
+// has zero triggers: it exists in the backend ruleset but the
+// doc-exfil chain only reads three payloads, below the
+// 20-read threshold the rule enforces. Showing it at 0/0 is
+// honest — recruiters see a dormant rule alongside the ones
+// that actually fired.
+//
+//   rule_id         severity   trigger_count  actors_affected  source
+//   ─────────────────────────────────────────────────────────────
+//   DET-AUTH-001    medium             1            1          alert-0001
+//   DET-AUTH-002    high               1            1          alert-0002
+//   DET-SESSION-003 high               1            1          alert-0003
+//   DET-DOC-004     high               1            1          alert-0004
+//   DET-DOC-005     high               0            0          (dormant)
+//   DET-DOC-006     critical           1            1          alert-0005
+//   DET-SVC-007     high               1            1          alert-0006
+//   DET-ART-008     medium             1            1          alert-0007
+//   DET-POL-009     critical           1            1          alert-0008
+//   DET-CORR-010    critical           1            1          alert-0009
+// ------------------------------------------------------------
+
+export const MOCK_RULE_EFFECTIVENESS: RuleEffectiveness[] = [
+  {
+    rule_id: 'DET-AUTH-001',
+    rule_name: 'Repeated Authentication Failure Burst',
+    trigger_count: 1,
+    severity: 'medium',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-AUTH-002',
+    rule_name: 'Suspicious Success After Failure Sequence',
+    trigger_count: 1,
+    severity: 'high',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-SESSION-003',
+    rule_name: 'Token Reuse From Conflicting Origins',
+    trigger_count: 1,
+    severity: 'high',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-DOC-004',
+    rule_name: 'Restricted Document Access Outside Role Scope',
+    trigger_count: 1,
+    severity: 'high',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-DOC-005',
+    rule_name: 'Abnormal Bulk Document Access',
+    trigger_count: 0,
+    severity: 'high',
+    actors_affected: 0,
+  },
+  {
+    rule_id: 'DET-DOC-006',
+    rule_name: 'Read-To-Download Staging Pattern',
+    trigger_count: 1,
+    severity: 'critical',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-SVC-007',
+    rule_name: 'Unauthorized Service Identity Route Access',
+    trigger_count: 1,
+    severity: 'high',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-ART-008',
+    rule_name: 'Artifact Validation Failure Pattern',
+    trigger_count: 1,
+    severity: 'medium',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-POL-009',
+    rule_name: 'Privileged Policy Change With Elevated Risk Context',
+    trigger_count: 1,
+    severity: 'critical',
+    actors_affected: 1,
+  },
+  {
+    rule_id: 'DET-CORR-010',
+    rule_name: 'Multi-Signal Compromise Sequence',
+    trigger_count: 1,
+    severity: 'critical',
+    actors_affected: 1,
   },
 ];
 
