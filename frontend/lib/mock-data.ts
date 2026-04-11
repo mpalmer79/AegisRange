@@ -20,6 +20,7 @@ import type {
   Alert,
   Campaign,
   Event,
+  ExerciseReport,
   HealthStatus,
   Incident,
   KillChainAnalysis,
@@ -2689,6 +2690,110 @@ export const MOCK_CAMPAIGNS: Campaign[] = [
       'Non-human and privileged identities (svc-sat-telemetry, robin.chen) performed unauthorized operations against infrastructure controls within a 12-hour window. No shared MITRE techniques; correlated by actor-class and target surface. Likely independent incidents worth tracking together as a privilege-abuse cluster.',
   },
 ];
+
+// ------------------------------------------------------------
+// Exercise report
+//
+// Single rolled-up report covering the 72-hour demo window.
+// Every numeric field is derived from another mock constant so
+// a recruiter checking the report tab against the metrics,
+// analytics, or MITRE tabs sees the same numbers everywhere:
+//
+//   field                          source
+//   ───────────────────────────────────────────────────────
+//   summary.total_*                MOCK_METRICS
+//   summary.scenarios_executed     MOCK_SCENARIO_HISTORY.length
+//   scenario_results               MOCK_SCENARIO_HISTORY
+//   detection_coverage.rules_total MOCK_RULE_EFFECTIVENESS.length
+//   detection_coverage.rules_triggered  # of entries with trigger_count > 0
+//   detection_coverage.rules_list  MOCK_RULE_EFFECTIVENESS
+//   response_effectiveness         sum of responses_generated in history
+//   risk_summary                   top actor + count from MOCK_RISK_PROFILES
+//   mitre_coverage.tactics         MOCK_TACTIC_COVERAGE (all 8 present)
+//   mitre_coverage.techniques      MOCK_MITRE_COVERAGE where covered (dedup)
+//   mitre_coverage.coverage_%      mean of MOCK_TACTIC_COVERAGE percentages
+//
+// Because ExerciseReport.scenario_results and
+// detection_coverage.rules_list are typed
+// `Record<string, unknown>[]`, the concrete interfaces are
+// cast via `unknown` — structurally compatible but TS can't
+// infer the index signature from a named interface.
+// ------------------------------------------------------------
+
+export const MOCK_EXERCISE_REPORT: ExerciseReport = {
+  report_id: 'report-72hr-001',
+  title: 'Vanta Orbital 72-Hour SOC Exercise',
+  generated_at: REFERENCE_NOW_ISO,
+  exercise_window: {
+    start: daysAgo(3),
+    end: REFERENCE_NOW_ISO,
+  },
+  summary: {
+    total_events: MOCK_METRICS.total_events,
+    total_alerts: MOCK_METRICS.total_alerts,
+    total_incidents: MOCK_METRICS.total_incidents,
+    total_responses: MOCK_METRICS.total_responses,
+    scenarios_executed: 6,
+  },
+  scenario_results: MOCK_SCENARIO_HISTORY as unknown as Record<
+    string,
+    unknown
+  >[],
+  detection_coverage: {
+    rules_total: 10,
+    rules_triggered: 9,
+    rules_list: MOCK_RULE_EFFECTIVENESS as unknown as Record<
+      string,
+      unknown
+    >[],
+  },
+  response_effectiveness: {
+    responses_executed: 3,
+    containment_rate: 0.33,
+    mean_time_to_contain_minutes: 180,
+    playbooks_invoked: [
+      'session_revoke',
+      'download_restriction',
+      'service_disable',
+    ],
+  },
+  risk_summary: {
+    highest_risk_actor: 'priya.shah',
+    highest_peak_score: 75,
+    actors_with_elevated_risk: 4,
+    contained_actors: 2,
+  },
+  recommendations: [
+    'Deploy a WAF-layer rule for T1190 (Exploit Public-Facing Application) to close the current TA0001 Initial Access coverage gap.',
+    'Extend T1078 (Valid Accounts) detection to the Persistence (TA0003) and Defense Evasion (TA0005) tactics — the technique is currently mapped only under Initial Access.',
+    'Review DET-DOC-005 (Abnormal Bulk Document Access) threshold — the rule is dormant despite observed bulk-read activity in the DOC_EXFIL chain.',
+    'Investigate the CAM-0001 cluster: priya.shah and mira.delacroix both exfiltrated via T1041 within a 28-hour window.',
+    'Tighten platform-admin change control following inc-0005 (policy-firewall-egress) — response still open at report generation.',
+  ],
+  mitre_coverage: {
+    tactics_covered: [
+      'TA0001',
+      'TA0003',
+      'TA0005',
+      'TA0006',
+      'TA0007',
+      'TA0008',
+      'TA0009',
+      'TA0010',
+    ],
+    techniques_covered: [
+      'T1041',
+      'T1046',
+      'T1078',
+      'T1110',
+      'T1213',
+      'T1550',
+      'T1554',
+      'T1562',
+    ],
+    coverage_percentage: 83,
+  },
+};
 
 // ------------------------------------------------------------
 // Filter helpers

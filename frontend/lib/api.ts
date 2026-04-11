@@ -55,6 +55,7 @@ import {
 import {
   MOCK_ALERTS,
   MOCK_CAMPAIGNS,
+  MOCK_EXERCISE_REPORT,
   MOCK_HEALTH,
   MOCK_INCIDENTS,
   MOCK_KILL_CHAIN_ANALYSES,
@@ -758,6 +759,15 @@ export async function getCampaign(campaignId: string): Promise<Campaign> {
 // Exercise Reports — content in Slice C
 // ============================================================
 export async function generateReport(title?: string): Promise<ExerciseReport> {
+  // Fall back to MOCK_EXERCISE_REPORT on unreachable backend or
+  // live errors. If a title was supplied and we're using the
+  // mock, surface it in the returned report so the UI's custom
+  // title still renders. MOCK_EXERCISE_REPORT derives every
+  // numeric field from other mock constants (MOCK_METRICS,
+  // MOCK_SCENARIO_HISTORY, MOCK_RULE_EFFECTIVENESS,
+  // MOCK_RISK_PROFILES, MOCK_TACTIC_COVERAGE) so recruiters
+  // see consistent numbers across the report, metrics, and
+  // MITRE tabs.
   const body = title ? { title } : {};
   return live(
     () =>
@@ -765,25 +775,7 @@ export async function generateReport(title?: string): Promise<ExerciseReport> {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    {
-      report_id: 'demo-report',
-      title: title ?? 'Demo Exercise Report',
-      generated_at: REFERENCE_NOW_ISO,
-      exercise_window: { start: REFERENCE_NOW_ISO, end: REFERENCE_NOW_ISO },
-      summary: {
-        total_events: 0,
-        total_alerts: 0,
-        total_incidents: 0,
-        total_responses: 0,
-        scenarios_executed: 0,
-      },
-      scenario_results: [],
-      detection_coverage: { rules_total: 0, rules_triggered: 0, rules_list: [] },
-      response_effectiveness: {},
-      risk_summary: {},
-      recommendations: [],
-      mitre_coverage: { tactics_covered: [], techniques_covered: [], coverage_percentage: 0 },
-    }
+    title ? { ...MOCK_EXERCISE_REPORT, title } : MOCK_EXERCISE_REPORT
   );
 }
 
