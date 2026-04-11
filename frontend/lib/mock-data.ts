@@ -1510,7 +1510,7 @@ function generateBaselineAlerts(): Alert[] {
 //   inc-0006  MULTI_STAGE     open           (T-2h, still firing)
 // ------------------------------------------------------------
 
-export const MOCK_INCIDENTS: Incident[] = [
+const INLINE_INCIDENTS: Incident[] = [
   // ── Incident 1 — AUTH_BRUTE (contained) ───────────────────
   {
     incident_id: 'inc-0001',
@@ -2521,7 +2521,7 @@ export const MOCK_INCIDENTS: Incident[] = [
 // (resp-0010/11) = 5 executed in the 72-hour exercise window.
 // ------------------------------------------------------------
 
-export const MOCK_RESPONSES: IncidentResponse[] = [
+const INLINE_RESPONSES: IncidentResponse[] = [
   {
     response_id: 'resp-0001',
     incident_id: 'inc-0001',
@@ -2660,6 +2660,280 @@ export const MOCK_RESPONSES: IncidentResponse[] = [
     playbook_id: 'pb-session-revoke-v1',
   },
 ];
+
+// ------------------------------------------------------------
+// Baseline responses factory
+//
+// Reaches MOCK_METRICS.total_responses = 58 via 48 deterministic
+// noise responses added on top of the 10 hand-crafted inline
+// responses. Each noise response represents a follow-up playbook
+// step (verification, re-check, further containment) attached
+// to an existing incident.
+//
+// Distribution is per-incident so every incident gets at least
+// one visible response in its detail pane. Counts are tuned so
+// contained/resolved/closed incidents accumulate more follow-up
+// actions than open/investigating ones:
+//
+//   incident   status         inline  noise  total
+//   ────────────────────────────────────────────────
+//   inc-0001   contained        1       5      6
+//   inc-0002   investigating    0       2      2
+//   inc-0003   investigating    1       2      3
+//   inc-0004   contained        1       4      5
+//   inc-0005   open             0       1      1
+//   inc-0006   open             0       1      1
+//   inc-0007   resolved         1       4      5
+//   inc-0008   resolved         1       4      5
+//   inc-0009   resolved         1       4      5
+//   inc-0010   closed           1       3      4
+//   inc-0011   closed           1       3      4
+//   inc-0012   contained        1       4      5
+//   inc-0013   contained        1       4      5
+//   inc-0014   investigating    0       2      2
+//   inc-0015   investigating    0       2      2
+//   inc-0016   open             0       3      3
+//   ────────────────────────────────────────────────
+//   totals                     10      48     58
+//
+// Each spec drives its own timestamp cluster near the parent
+// incident's activity window so chain/background responses
+// stay temporally aligned with their incidents. Noise responses
+// for out-of-window incidents (inc-0007..inc-0011) use base
+// minutes > 4320 so they don't leak into the 72-hour exercise
+// rollup.
+//
+// Response ids use the `resp-nNNNN` prefix. MOCK_INCIDENTS below
+// is rebuilt from INLINE_INCIDENTS with each incident's
+// response_ids extended by the noise responses targeting it —
+// the incident detail page (which reads incident.response_ids)
+// shows a non-trivial response list for every incident.
+// ------------------------------------------------------------
+
+interface NoiseResponseSpec {
+  incident_id: string;
+  correlation_id: string;
+  response_type: IncidentResponse['response_type'];
+  target: string;
+  base_minutes_ago: number;
+  spacing_minutes: number;
+  count: number;
+}
+
+const NOISE_RESPONSE_SPECS: NoiseResponseSpec[] = [
+  // ---- Chain incidents ----
+  {
+    incident_id: 'inc-0001',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    response_type: 'session_revoke',
+    target: 'sess-wh-tor-aa11',
+    base_minutes_ago: 3950,
+    spacing_minutes: 20,
+    count: 5,
+  },
+  {
+    incident_id: 'inc-0002',
+    correlation_id: CORRELATION_IDS.SESSION_HIJACK,
+    response_type: 'session_revoke',
+    target: 'sess-an-corp-7c10',
+    base_minutes_ago: 2860,
+    spacing_minutes: 30,
+    count: 2,
+  },
+  {
+    incident_id: 'inc-0003',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    response_type: 'download_restriction',
+    target: 'priya.shah',
+    base_minutes_ago: 1790,
+    spacing_minutes: 20,
+    count: 2,
+  },
+  {
+    incident_id: 'inc-0004',
+    correlation_id: CORRELATION_IDS.SVC_ABUSE,
+    response_type: 'service_disable',
+    target: 'svc-sat-telemetry',
+    base_minutes_ago: 1190,
+    spacing_minutes: 15,
+    count: 4,
+  },
+  {
+    incident_id: 'inc-0005',
+    correlation_id: CORRELATION_IDS.POLICY_CHANGE,
+    response_type: 'policy_rollback',
+    target: 'policy-firewall-egress',
+    base_minutes_ago: 480,
+    spacing_minutes: 30,
+    count: 1,
+  },
+  {
+    incident_id: 'inc-0006',
+    correlation_id: CORRELATION_IDS.MULTI_STAGE,
+    response_type: 'session_revoke',
+    target: 'mira.delacroix',
+    base_minutes_ago: 110,
+    spacing_minutes: 20,
+    count: 1,
+  },
+  // ---- Background incidents, in-window (inc-0012..0016) ----
+  // Placed here so the generator's natural ordering alternates
+  // between in-window and out-of-window response clusters.
+  {
+    incident_id: 'inc-0012',
+    correlation_id: 'corr-bg-auth-012',
+    response_type: 'ip_block',
+    target: 'external-residential-proxy-cidr-2',
+    base_minutes_ago: 3500,
+    spacing_minutes: 30,
+    count: 4,
+  },
+  {
+    incident_id: 'inc-0013',
+    correlation_id: 'corr-bg-sess-013',
+    response_type: 'session_revoke',
+    target: 'sess-bg-op01-7713',
+    base_minutes_ago: 2950,
+    spacing_minutes: 15,
+    count: 4,
+  },
+  {
+    incident_id: 'inc-0014',
+    correlation_id: 'corr-bg-svc-014',
+    response_type: 'service_disable',
+    target: 'svc-telemetry-ingest',
+    base_minutes_ago: 820,
+    spacing_minutes: 30,
+    count: 2,
+  },
+  {
+    incident_id: 'inc-0015',
+    correlation_id: 'corr-bg-sess-015',
+    response_type: 'access_revoke',
+    target: 'robin.chen',
+    base_minutes_ago: 700,
+    spacing_minutes: 30,
+    count: 2,
+  },
+  {
+    incident_id: 'inc-0016',
+    correlation_id: 'corr-bg-doc-016',
+    response_type: 'download_restriction',
+    target: 'aggregate',
+    base_minutes_ago: 220,
+    spacing_minutes: 20,
+    count: 3,
+  },
+  // ---- Background incidents, out-of-window (inc-0007..0011) ----
+  // base_minutes_ago > 4320 keeps these historical follow-ups
+  // outside the 72-hour exercise rollup.
+  {
+    incident_id: 'inc-0007',
+    correlation_id: 'corr-bg-auth-007',
+    response_type: 'false_positive_resolution',
+    target: 'cron-jobs-scheduler',
+    base_minutes_ago: 6900,
+    spacing_minutes: 60,
+    count: 4,
+  },
+  {
+    incident_id: 'inc-0008',
+    correlation_id: 'corr-bg-auth-008',
+    response_type: 'access_revoke',
+    target: 'jessie.park',
+    base_minutes_ago: 5500,
+    spacing_minutes: 60,
+    count: 4,
+  },
+  {
+    incident_id: 'inc-0009',
+    correlation_id: 'corr-bg-auth-009',
+    response_type: 'ip_block',
+    target: 'external-residential-proxy-cidr',
+    base_minutes_ago: 5000,
+    spacing_minutes: 60,
+    count: 4,
+  },
+  {
+    incident_id: 'inc-0010',
+    correlation_id: 'corr-bg-net-010',
+    response_type: 'false_positive_resolution',
+    target: 'cert-rotator-01',
+    base_minutes_ago: 9800,
+    spacing_minutes: 90,
+    count: 3,
+  },
+  {
+    incident_id: 'inc-0011',
+    correlation_id: 'corr-bg-doc-011',
+    response_type: 'false_positive_resolution',
+    target: 'backup-agent-02',
+    base_minutes_ago: 8400,
+    spacing_minutes: 90,
+    count: 3,
+  },
+];
+
+function generateBaselineResponses(): IncidentResponse[] {
+  const responses: IncidentResponse[] = [];
+  let seq = 0;
+  const operators = ['operator-soc-01', 'operator-soc-02'];
+  const statusCycle: Array<IncidentResponse['status']> = [
+    'executed',
+    'verified',
+    'verified',
+    'executed',
+  ];
+
+  for (const spec of NOISE_RESPONSE_SPECS) {
+    for (let i = 0; i < spec.count; i += 1) {
+      const ts = minutesAgo(spec.base_minutes_ago + i * spec.spacing_minutes);
+      responses.push({
+        response_id: `resp-n${String(seq).padStart(4, '0')}`,
+        incident_id: spec.incident_id,
+        correlation_id: spec.correlation_id,
+        response_type: spec.response_type,
+        status: statusCycle[seq % statusCycle.length],
+        triggered_at: ts,
+        executed_at: ts,
+        operator: operators[seq % operators.length],
+        target: spec.target,
+        summary: `Follow-up ${spec.response_type.replace(/_/g, ' ')} action for ${spec.incident_id}.`,
+      });
+      seq += 1;
+    }
+  }
+
+  return responses;
+}
+
+export const MOCK_RESPONSES: IncidentResponse[] = [
+  ...INLINE_RESPONSES,
+  ...generateBaselineResponses(),
+];
+
+// MOCK_INCIDENTS is rebuilt from INLINE_INCIDENTS with each
+// incident's response_ids array extended by the noise response
+// ids targeting that incident. Doing it here (rather than
+// editing every INLINE_INCIDENTS entry by hand) keeps the
+// incident definitions readable and lets a single factory spec
+// drive both MOCK_RESPONSES and the incident forward-links.
+export const MOCK_INCIDENTS: Incident[] = (() => {
+  const noiseByIncidentId = new Map<string, string[]>();
+  for (const response of MOCK_RESPONSES) {
+    if (!response.response_id.startsWith('resp-n')) continue;
+    const existing = noiseByIncidentId.get(response.incident_id) ?? [];
+    existing.push(response.response_id);
+    noiseByIncidentId.set(response.incident_id, existing);
+  }
+  return INLINE_INCIDENTS.map((incident) => ({
+    ...incident,
+    response_ids: [
+      ...incident.response_ids,
+      ...(noiseByIncidentId.get(incident.incident_id) ?? []),
+    ],
+  }));
+})();
 
 // ------------------------------------------------------------
 // Risk profiles
@@ -3862,10 +4136,13 @@ export const MOCK_EXERCISE_REPORT: ExerciseReport = {
   },
   response_effectiveness: {
     // In-window responses (triggered within the 72-hour exercise
-    // window). Chain: resp-0001/0003/0004. Background: resp-0010
-    // (ip_block inc-0012) and resp-0011 (session_revoke inc-0013).
-    responses_executed: 5,
-    responses_total: 10,
+    // window). 5 from the inline chain/background responses
+    // (resp-0001/0003/0004 chain + resp-0010/0011 background)
+    // plus 34 noise responses from the factory whose
+    // base_minutes_ago falls inside the window (all noise specs
+    // for inc-0001..0006 and inc-0012..0016).
+    responses_executed: 39,
+    responses_total: 58,
     // 4 contained incidents (inc-0001, inc-0004 chain; inc-0012,
     // inc-0013 background) out of 11 in-window incidents.
     containment_rate: 0.36,
@@ -3875,6 +4152,7 @@ export const MOCK_EXERCISE_REPORT: ExerciseReport = {
       'pb-download-restrict-v1',
       'pb-service-disable-v1',
       'pb-edge-ip-block-v1',
+      'pb-offboard-sweep-v1',
     ],
   },
   risk_summary: {
