@@ -253,6 +253,20 @@ export async function readDocument(documentId: string, body: DocumentRequest): P
     { status: 'demo' }
   );
 }
+// ============================================================
+// Scenarios
+//
+// Live only. No mock fallback.
+// ============================================================
+export async function runScenario(scenarioId: string): Promise<ScenarioResult> {
+  return liveOrThrow(
+    () =>
+      request<ScenarioResult>(`/scenarios/${scenarioId}`, {
+        method: 'POST',
+      }),
+    'scenario execution requires a live authenticated backend'
+  );
+}
 
 export async function downloadDocument(documentId: string, body: DocumentRequest): Promise<unknown> {
   return live(
@@ -265,35 +279,7 @@ export async function downloadDocument(documentId: string, body: DocumentRequest
   );
 }
 
-// ============================================================
-// Scenarios — mock fallback is stubbed until Slice B
-// ============================================================
-export async function runScenario(scenarioId: string): Promise<ScenarioResult> {
-  return live(
-    () =>
-      request<ScenarioResult>(`/scenarios/${scenarioId}`, {
-        method: 'POST',
-      }),
-    {
-      scenario_id: scenarioId,
-      correlation_id: `demo-${scenarioId}-${Date.now().toString(36)}`,
-      events_total: 0,
-      events_generated: 0,
-      alerts_total: 0,
-      alerts_generated: 0,
-      responses_total: 0,
-      responses_generated: 0,
-      incident_id: null,
-      step_up_required: false,
-      revoked_sessions: [],
-      download_restricted_actors: [],
-      disabled_services: [],
-      quarantined_artifacts: [],
-      policy_change_restricted_actors: [],
-      operated_by: 'demo-operator',
-    }
-  );
-}
+
 
 // ============================================================
 // Events — content in A.2
