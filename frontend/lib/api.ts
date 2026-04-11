@@ -298,22 +298,46 @@ export async function runScenario(scenarioId: string): Promise<ScenarioResult> {
 // ============================================================
 // Events — content in A.2
 // ============================================================
+const DEFAULT_FEED_LIMIT = 200;
+
+/** Sort-in-place-safe descending timestamp sort for feed fallbacks. */
+function sortByTimestampDesc<T extends { timestamp?: string; created_at?: string }>(
+  items: T[],
+  key: 'timestamp' | 'created_at'
+): T[] {
+  return [...items].sort((a, b) => {
+    const av = (a[key] ?? '') as string;
+    const bv = (b[key] ?? '') as string;
+    return bv.localeCompare(av);
+  });
+}
+
 export async function getEvents(params?: {
   actor_id?: string;
   correlation_id?: string;
   event_type?: string;
   since_minutes?: number;
+  limit?: number;
+  offset?: number;
 }): Promise<Event[]> {
   const searchParams = new URLSearchParams();
   if (params?.actor_id) searchParams.set('actor_id', params.actor_id);
   if (params?.correlation_id) searchParams.set('correlation_id', params.correlation_id);
   if (params?.event_type) searchParams.set('event_type', params.event_type);
   if (params?.since_minutes) searchParams.set('since_minutes', String(params.since_minutes));
+  const limit = params?.limit ?? DEFAULT_FEED_LIMIT;
+  const offset = params?.offset ?? 0;
+  searchParams.set('limit', String(limit));
+  searchParams.set('offset', String(offset));
   const query = searchParams.toString();
-  return liveListWithFallback(
-    `/events${query ? `?${query}` : ''}`,
-    filterEvents(MOCK_EVENTS, params)
+  // Mock fallback matches live semantics: apply filter, sort
+  // newest-first, then slice to the requested window.
+  const filtered = filterEvents(MOCK_EVENTS, params);
+  const fallback = sortByTimestampDesc(filtered, 'timestamp').slice(
+    offset,
+    offset + limit
   );
+  return liveListWithFallback(`/events?${query}`, fallback);
 }
 
 // ============================================================
@@ -323,16 +347,24 @@ export async function getAlerts(params?: {
   actor_id?: string;
   correlation_id?: string;
   rule_id?: string;
+  limit?: number;
+  offset?: number;
 }): Promise<Alert[]> {
   const searchParams = new URLSearchParams();
   if (params?.actor_id) searchParams.set('actor_id', params.actor_id);
   if (params?.correlation_id) searchParams.set('correlation_id', params.correlation_id);
   if (params?.rule_id) searchParams.set('rule_id', params.rule_id);
+  const limit = params?.limit ?? DEFAULT_FEED_LIMIT;
+  const offset = params?.offset ?? 0;
+  searchParams.set('limit', String(limit));
+  searchParams.set('offset', String(offset));
   const query = searchParams.toString();
-  return liveListWithFallback(
-    `/alerts${query ? `?${query}` : ''}`,
-    filterAlerts(MOCK_ALERTS, params)
+  const filtered = filterAlerts(MOCK_ALERTS, params);
+  const fallback = sortByTimestampDesc(filtered, 'created_at').slice(
+    offset,
+    offset + limit
   );
+  return liveListWithFallback(`/alerts?${query}`, fallback);
 }
 
 // ============================================================
