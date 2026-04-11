@@ -56,6 +56,7 @@ import {
   MOCK_HEALTH,
   MOCK_INCIDENTS,
   MOCK_METRICS,
+  MOCK_RULE_EFFECTIVENESS,
   REFERENCE_NOW_ISO,
 } from './mock-data';
 
@@ -420,7 +421,22 @@ export async function getRiskProfile(actorId: string): Promise<RiskProfile> {
 }
 
 export async function getRuleEffectiveness(): Promise<RuleEffectiveness[]> {
-  return live(() => request<RuleEffectiveness[]>('/analytics/rule-effectiveness'), []);
+  // Fall back to MOCK_RULE_EFFECTIVENESS on unreachable backend,
+  // live errors, or an empty live response — an empty list would
+  // render a dashboard that looks broken, and the mock covers every
+  // DET-* rule in the backend ruleset.
+  return live(
+    async () => {
+      const result = await request<RuleEffectiveness[]>(
+        '/analytics/rule-effectiveness'
+      );
+      if (!result || result.length === 0) {
+        throw new Error('empty rule effectiveness response');
+      }
+      return result;
+    },
+    MOCK_RULE_EFFECTIVENESS
+  );
 }
 
 export async function getScenarioHistory(): Promise<ScenarioHistoryEntry[]> {
