@@ -22,6 +22,7 @@ import type {
   HealthStatus,
   Incident,
   Metrics,
+  RiskProfile,
 } from './types';
 
 // ------------------------------------------------------------
@@ -1536,6 +1537,156 @@ export const MOCK_INCIDENTS: Incident[] = [
     updated_at: minutesAgo(120),
     closed_at: null,
     notes: [],
+  },
+];
+
+// ------------------------------------------------------------
+// Risk profiles
+//
+// One profile per primary actor across the six correlation
+// chains. Each score_history entry is keyed off a DET-* rule
+// that actually fires in MOCK_ALERTS for that actor, with a
+// delta sized to the rule's severity/confidence pair so the
+// math is internally consistent:
+//
+//   Rule             Severity   Confidence   Delta
+//   ─────────────────────────────────────────────
+//   DET-AUTH-001     medium     medium         15
+//   DET-AUTH-002     high       high           30
+//   DET-SESSION-003  high       high           35
+//   DET-DOC-004      high       high           30
+//   DET-DOC-006      critical   high           45
+//   DET-SVC-007      high       medium         25
+//   DET-ART-008      medium     medium         15
+//   DET-POL-009      critical   high           50
+//   DET-CORR-010     critical   high           55
+//
+// Contained chains (AUTH_BRUTE, SVC_ABUSE) show a current_score
+// lower than peak_score to reflect post-containment decay —
+// the response playbooks revoked the session / disabled the
+// account, so live risk is no longer actively accumulating.
+// Active investigations and open incidents keep current == peak.
+// ------------------------------------------------------------
+
+export const MOCK_RISK_PROFILES: RiskProfile[] = [
+  // Chain 1 — AUTH_BRUTE (contained, session revoked)
+  {
+    actor_id: 'wade.hollis',
+    current_score: 20,
+    peak_score: 45,
+    contributing_rules: ['DET-AUTH-001', 'DET-AUTH-002'],
+    score_history: [
+      {
+        timestamp: minutesAgo(3960),
+        rule_id: 'DET-AUTH-001',
+        delta: 15,
+        new_score: 15,
+      },
+      {
+        timestamp: minutesAgo(3959),
+        rule_id: 'DET-AUTH-002',
+        delta: 30,
+        new_score: 45,
+      },
+    ],
+    last_updated: minutesAgo(3959),
+  },
+
+  // Chain 2 — SESSION_HIJACK (investigating)
+  {
+    actor_id: 'alex.nguyen',
+    current_score: 35,
+    peak_score: 35,
+    contributing_rules: ['DET-SESSION-003'],
+    score_history: [
+      {
+        timestamp: minutesAgo(2864),
+        rule_id: 'DET-SESSION-003',
+        delta: 35,
+        new_score: 35,
+      },
+    ],
+    last_updated: minutesAgo(2864),
+  },
+
+  // Chain 3 — DOC_EXFIL (investigating, downloads blocked)
+  {
+    actor_id: 'priya.shah',
+    current_score: 75,
+    peak_score: 75,
+    contributing_rules: ['DET-DOC-004', 'DET-DOC-006'],
+    score_history: [
+      {
+        timestamp: minutesAgo(1810),
+        rule_id: 'DET-DOC-004',
+        delta: 30,
+        new_score: 30,
+      },
+      {
+        timestamp: minutesAgo(1800),
+        rule_id: 'DET-DOC-006',
+        delta: 45,
+        new_score: 75,
+      },
+    ],
+    last_updated: minutesAgo(1800),
+  },
+
+  // Chain 4 — SVC_ABUSE (contained, service disabled)
+  {
+    actor_id: 'svc-sat-telemetry',
+    current_score: 10,
+    peak_score: 25,
+    contributing_rules: ['DET-SVC-007'],
+    score_history: [
+      {
+        timestamp: minutesAgo(1203),
+        rule_id: 'DET-SVC-007',
+        delta: 25,
+        new_score: 25,
+      },
+    ],
+    last_updated: minutesAgo(1203),
+  },
+
+  // Chain 5 — POLICY_CHANGE (open, awaiting triage)
+  {
+    actor_id: 'robin.chen',
+    current_score: 65,
+    peak_score: 65,
+    contributing_rules: ['DET-ART-008', 'DET-POL-009'],
+    score_history: [
+      {
+        timestamp: minutesAgo(500),
+        rule_id: 'DET-ART-008',
+        delta: 15,
+        new_score: 15,
+      },
+      {
+        timestamp: minutesAgo(485),
+        rule_id: 'DET-POL-009',
+        delta: 50,
+        new_score: 65,
+      },
+    ],
+    last_updated: minutesAgo(485),
+  },
+
+  // Chain 6 — MULTI_STAGE (open, still firing)
+  {
+    actor_id: 'mira.delacroix',
+    current_score: 55,
+    peak_score: 55,
+    contributing_rules: ['DET-CORR-010'],
+    score_history: [
+      {
+        timestamp: minutesAgo(120),
+        rule_id: 'DET-CORR-010',
+        delta: 55,
+        new_score: 55,
+      },
+    ],
+    last_updated: minutesAgo(120),
   },
 ];
 
