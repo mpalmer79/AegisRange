@@ -22,11 +22,13 @@ import type {
   HealthStatus,
   Incident,
   Metrics,
+  MitreCoverageEntry,
   MitreTactic,
   MitreTechnique,
   RiskProfile,
   RuleEffectiveness,
   ScenarioHistoryEntry,
+  TacticCoverage,
   TTPMapping,
 } from './types';
 
@@ -2201,6 +2203,208 @@ export const MOCK_TTP_MAPPINGS: TTPMapping[] = [
       'command_and_control',
       'actions_on_objectives',
     ],
+  },
+];
+
+// ------------------------------------------------------------
+// MITRE coverage matrix
+//
+// One entry per (tactic, technique) pair that exists in the
+// current technique catalog. `rule_ids` lists every DET-* rule
+// in MOCK_TTP_MAPPINGS whose tactic/technique sets intersect
+// the pair. `scenario_ids` lists every scenario in
+// MOCK_SCENARIO_HISTORY whose correlation chain contains at
+// least one firing alert for those rules. `covered` is simply
+// `rule_ids.length > 0` — a pair is "covered" if any rule
+// maps to it, regardless of whether that rule has fired yet.
+//
+// Three pairs are intentionally uncovered so the matrix has
+// gaps to render:
+//   (TA0003, T1078)  catalog gap  no rule maps T1078 → Persistence
+//   (TA0005, T1078)  catalog gap  no rule maps T1078 → Defense Evasion
+//   (TA0001, T1190)  no rule at all — realistic WAF-layer gap
+//
+// T1213 is covered by DET-DOC-004 (which fires) and
+// DET-DOC-005 (dormant); the scenario list only contains
+// scn-doc-004 since DET-DOC-005 has no firing alerts.
+// ------------------------------------------------------------
+
+export const MOCK_MITRE_COVERAGE: MitreCoverageEntry[] = [
+  {
+    tactic_id: 'TA0001',
+    technique_id: 'T1078',
+    technique_name: 'Valid Accounts',
+    rule_ids: ['DET-AUTH-002', 'DET-CORR-010'],
+    scenario_ids: ['scn-auth-001', 'scn-corr-006'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0001',
+    technique_id: 'T1190',
+    technique_name: 'Exploit Public-Facing Application',
+    rule_ids: [],
+    scenario_ids: [],
+    covered: false,
+  },
+  {
+    tactic_id: 'TA0003',
+    technique_id: 'T1078',
+    technique_name: 'Valid Accounts',
+    rule_ids: [],
+    scenario_ids: [],
+    covered: false,
+  },
+  {
+    tactic_id: 'TA0003',
+    technique_id: 'T1554',
+    technique_name: 'Compromise Host Software Binary',
+    rule_ids: ['DET-ART-008'],
+    scenario_ids: ['scn-pol-007'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0005',
+    technique_id: 'T1078',
+    technique_name: 'Valid Accounts',
+    rule_ids: [],
+    scenario_ids: [],
+    covered: false,
+  },
+  {
+    tactic_id: 'TA0005',
+    technique_id: 'T1550',
+    technique_name: 'Use Alternate Authentication Material',
+    rule_ids: ['DET-SESSION-003'],
+    scenario_ids: ['scn-session-002'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0005',
+    technique_id: 'T1562',
+    technique_name: 'Impair Defenses',
+    rule_ids: ['DET-POL-009'],
+    scenario_ids: ['scn-pol-007'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0006',
+    technique_id: 'T1110',
+    technique_name: 'Brute Force',
+    rule_ids: ['DET-AUTH-001'],
+    scenario_ids: ['scn-auth-001'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0007',
+    technique_id: 'T1046',
+    technique_name: 'Network Service Discovery',
+    rule_ids: ['DET-SVC-007'],
+    scenario_ids: ['scn-svc-005'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0008',
+    technique_id: 'T1550',
+    technique_name: 'Use Alternate Authentication Material',
+    rule_ids: ['DET-SESSION-003', 'DET-CORR-010'],
+    scenario_ids: ['scn-session-002', 'scn-corr-006'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0009',
+    technique_id: 'T1213',
+    technique_name: 'Data from Information Repositories',
+    rule_ids: ['DET-DOC-004', 'DET-DOC-005'],
+    scenario_ids: ['scn-doc-004'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0010',
+    technique_id: 'T1041',
+    technique_name: 'Exfiltration Over C2 Channel',
+    rule_ids: ['DET-DOC-006', 'DET-CORR-010'],
+    scenario_ids: ['scn-doc-004', 'scn-corr-006'],
+    covered: true,
+  },
+];
+
+// ------------------------------------------------------------
+// Tactic coverage rollup
+//
+// Aggregates MOCK_MITRE_COVERAGE by tactic. `total_techniques`
+// counts every (tactic, technique) pair for that tactic;
+// `covered_techniques` counts the subset where `covered === true`.
+// Percentage is the integer floor of the ratio × 100, matching
+// how the backend analytics rollup rounds.
+//
+//   tactic            covered / total   percentage
+//   ─────────────────────────────────────────────
+//   TA0001 Initial Access     1 / 2         50
+//   TA0003 Persistence        1 / 2         50
+//   TA0005 Defense Evasion    2 / 3         66
+//   TA0006 Credential Access  1 / 1        100
+//   TA0007 Discovery          1 / 1        100
+//   TA0008 Lateral Movement   1 / 1        100
+//   TA0009 Collection         1 / 1        100
+//   TA0010 Exfiltration       1 / 1        100
+// ------------------------------------------------------------
+
+export const MOCK_TACTIC_COVERAGE: TacticCoverage[] = [
+  {
+    tactic_id: 'TA0001',
+    tactic_name: 'Initial Access',
+    covered_techniques: 1,
+    total_techniques: 2,
+    percentage: 50,
+  },
+  {
+    tactic_id: 'TA0003',
+    tactic_name: 'Persistence',
+    covered_techniques: 1,
+    total_techniques: 2,
+    percentage: 50,
+  },
+  {
+    tactic_id: 'TA0005',
+    tactic_name: 'Defense Evasion',
+    covered_techniques: 2,
+    total_techniques: 3,
+    percentage: 66,
+  },
+  {
+    tactic_id: 'TA0006',
+    tactic_name: 'Credential Access',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0007',
+    tactic_name: 'Discovery',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0008',
+    tactic_name: 'Lateral Movement',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0009',
+    tactic_name: 'Collection',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0010',
+    tactic_name: 'Exfiltration',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
   },
 ];
 

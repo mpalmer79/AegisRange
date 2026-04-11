@@ -57,10 +57,12 @@ import {
   MOCK_HEALTH,
   MOCK_INCIDENTS,
   MOCK_METRICS,
+  MOCK_MITRE_COVERAGE,
   MOCK_MITRE_TECHNIQUES,
   MOCK_RISK_PROFILES,
   MOCK_RULE_EFFECTIVENESS,
   MOCK_SCENARIO_HISTORY,
+  MOCK_TACTIC_COVERAGE,
   MOCK_TTP_MAPPINGS,
   REFERENCE_NOW_ISO,
 } from './mock-data';
@@ -623,11 +625,36 @@ export async function getMitreMapping(ruleId: string): Promise<TTPMapping> {
 }
 
 export async function getMitreCoverageMatrix(): Promise<MitreCoverageEntry[]> {
-  return live(() => request<MitreCoverageEntry[]>('/mitre/coverage'), []);
+  // Fall back to MOCK_MITRE_COVERAGE on unreachable backend,
+  // live errors, or an empty live response — the matrix view
+  // needs at least one row to render the tactic/technique grid.
+  return live(
+    async () => {
+      const result = await request<MitreCoverageEntry[]>('/mitre/coverage');
+      if (!result || result.length === 0) {
+        throw new Error('empty mitre coverage response');
+      }
+      return result;
+    },
+    MOCK_MITRE_COVERAGE
+  );
 }
 
 export async function getMitreTacticCoverage(): Promise<TacticCoverage[]> {
-  return live(() => request<TacticCoverage[]>('/mitre/tactics/coverage'), []);
+  // Fall back to MOCK_TACTIC_COVERAGE on unreachable backend,
+  // live errors, or an empty live response.
+  return live(
+    async () => {
+      const result = await request<TacticCoverage[]>(
+        '/mitre/tactics/coverage'
+      );
+      if (!result || result.length === 0) {
+        throw new Error('empty mitre tactic coverage response');
+      }
+      return result;
+    },
+    MOCK_TACTIC_COVERAGE
+  );
 }
 
 export async function getMitreScenarioTTPs(
