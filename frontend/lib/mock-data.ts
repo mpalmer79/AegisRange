@@ -21,6 +21,8 @@ import type {
   Event,
   HealthStatus,
   Incident,
+  KillChainAnalysis,
+  KillChainStage,
   Metrics,
   MitreCoverageEntry,
   MitreTactic,
@@ -2405,6 +2407,223 @@ export const MOCK_TACTIC_COVERAGE: TacticCoverage[] = [
     covered_techniques: 1,
     total_techniques: 1,
     percentage: 100,
+  },
+];
+
+// ------------------------------------------------------------
+// Kill chain analyses
+//
+// One analysis per MOCK_INCIDENT, using the Lockheed Martin
+// seven-stage Cyber Kill Chain. For each chain, the detected
+// stages are the union of `kill_chain_phases` from every
+// DET-* rule in MOCK_TTP_MAPPINGS that fires for that
+// correlation id in MOCK_ALERTS. `detection_rule_ids` lists
+// exactly the firing rules whose phase list contains that
+// stage, and `first_seen` points at the earliest event in
+// the chain that maps to the stage.
+//
+// `progression_percentage` is the integer floor of
+// (detected_stages / 7) * 100 — matching how the backend
+// rollup rounds — so the numbers always lie in {14, 28, 42,
+// 57, 71, 85, 100} for demo chains.
+// ------------------------------------------------------------
+
+const KILL_CHAIN_STAGE_TEMPLATES: Array<
+  Pick<KillChainStage, 'name' | 'display_name' | 'description' | 'order'>
+> = [
+  {
+    name: 'reconnaissance',
+    display_name: 'Reconnaissance',
+    description: 'Adversary gathers information about the target environment.',
+    order: 1,
+  },
+  {
+    name: 'weaponization',
+    display_name: 'Weaponization',
+    description: 'Adversary crafts a deliverable payload.',
+    order: 2,
+  },
+  {
+    name: 'delivery',
+    display_name: 'Delivery',
+    description: 'Adversary transmits the payload to the target.',
+    order: 3,
+  },
+  {
+    name: 'exploitation',
+    display_name: 'Exploitation',
+    description: 'Adversary triggers code execution or credential reuse.',
+    order: 4,
+  },
+  {
+    name: 'installation',
+    display_name: 'Installation',
+    description: 'Adversary establishes a persistence mechanism.',
+    order: 5,
+  },
+  {
+    name: 'command_and_control',
+    display_name: 'Command and Control',
+    description: 'Adversary establishes a control channel over the compromised system.',
+    order: 6,
+  },
+  {
+    name: 'actions_on_objectives',
+    display_name: 'Actions on Objectives',
+    description: 'Adversary executes the goal of the intrusion.',
+    order: 7,
+  },
+];
+
+function buildStages(
+  detections: Record<string, { rule_ids: string[]; first_seen: string }>
+): KillChainStage[] {
+  return KILL_CHAIN_STAGE_TEMPLATES.map((template) => {
+    const hit = detections[template.name];
+    return {
+      ...template,
+      detected: hit !== undefined,
+      detection_rule_ids: hit?.rule_ids ?? [],
+      first_seen: hit?.first_seen ?? null,
+    };
+  });
+}
+
+export const MOCK_KILL_CHAIN_ANALYSES: KillChainAnalysis[] = [
+  // Chain 1 — AUTH_BRUTE (wade.hollis)
+  // DET-AUTH-001 → delivery, DET-AUTH-002 → exploitation
+  {
+    incident_id: 'inc-0001',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    actor_id: 'wade.hollis',
+    stages: buildStages({
+      delivery: {
+        rule_ids: ['DET-AUTH-001'],
+        first_seen: minutesAgo(3962),
+      },
+      exploitation: {
+        rule_ids: ['DET-AUTH-002'],
+        first_seen: minutesAgo(3959),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'exploitation',
+    first_activity: minutesAgo(3962),
+    last_activity: minutesAgo(3959),
+  },
+
+  // Chain 2 — SESSION_HIJACK (alex.nguyen)
+  // DET-SESSION-003 → exploitation + command_and_control
+  {
+    incident_id: 'inc-0002',
+    correlation_id: CORRELATION_IDS.SESSION_HIJACK,
+    actor_id: 'alex.nguyen',
+    stages: buildStages({
+      exploitation: {
+        rule_ids: ['DET-SESSION-003'],
+        first_seen: minutesAgo(2870),
+      },
+      command_and_control: {
+        rule_ids: ['DET-SESSION-003'],
+        first_seen: minutesAgo(2865),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'command_and_control',
+    first_activity: minutesAgo(2880),
+    last_activity: minutesAgo(2864),
+  },
+
+  // Chain 3 — DOC_EXFIL (priya.shah)
+  // DET-DOC-004 + DET-DOC-006 → actions_on_objectives
+  {
+    incident_id: 'inc-0003',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    actor_id: 'priya.shah',
+    stages: buildStages({
+      actions_on_objectives: {
+        rule_ids: ['DET-DOC-004', 'DET-DOC-006'],
+        first_seen: minutesAgo(1810),
+      },
+    }),
+    progression_percentage: 14,
+    highest_stage: 'actions_on_objectives',
+    first_activity: minutesAgo(1810),
+    last_activity: minutesAgo(1800),
+  },
+
+  // Chain 4 — SVC_ABUSE (svc-sat-telemetry)
+  // DET-SVC-007 → reconnaissance + delivery
+  {
+    incident_id: 'inc-0004',
+    correlation_id: CORRELATION_IDS.SVC_ABUSE,
+    actor_id: 'svc-sat-telemetry',
+    stages: buildStages({
+      reconnaissance: {
+        rule_ids: ['DET-SVC-007'],
+        first_seen: minutesAgo(1205),
+      },
+      delivery: {
+        rule_ids: ['DET-SVC-007'],
+        first_seen: minutesAgo(1205),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'delivery',
+    first_activity: minutesAgo(1205),
+    last_activity: minutesAgo(1200),
+  },
+
+  // Chain 5 — POLICY_CHANGE (robin.chen)
+  // DET-ART-008 → installation, DET-POL-009 → actions_on_objectives
+  {
+    incident_id: 'inc-0005',
+    correlation_id: CORRELATION_IDS.POLICY_CHANGE,
+    actor_id: 'robin.chen',
+    stages: buildStages({
+      installation: {
+        rule_ids: ['DET-ART-008'],
+        first_seen: minutesAgo(510),
+      },
+      actions_on_objectives: {
+        rule_ids: ['DET-POL-009'],
+        first_seen: minutesAgo(485),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'actions_on_objectives',
+    first_activity: minutesAgo(510),
+    last_activity: minutesAgo(485),
+  },
+
+  // Chain 6 — MULTI_STAGE (mira.delacroix)
+  // DET-CORR-010 composite rule — covers 4 stages
+  {
+    incident_id: 'inc-0006',
+    correlation_id: CORRELATION_IDS.MULTI_STAGE,
+    actor_id: 'mira.delacroix',
+    stages: buildStages({
+      delivery: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(165),
+      },
+      exploitation: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(150),
+      },
+      command_and_control: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(135),
+      },
+      actions_on_objectives: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(120),
+      },
+    }),
+    progression_percentage: 57,
+    highest_stage: 'actions_on_objectives',
+    first_activity: minutesAgo(165),
+    last_activity: minutesAgo(120),
   },
 ];
 

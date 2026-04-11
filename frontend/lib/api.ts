@@ -56,6 +56,7 @@ import {
   MOCK_ALERTS,
   MOCK_HEALTH,
   MOCK_INCIDENTS,
+  MOCK_KILL_CHAIN_ANALYSES,
   MOCK_METRICS,
   MOCK_MITRE_COVERAGE,
   MOCK_MITRE_TECHNIQUES,
@@ -677,15 +678,41 @@ export async function getMitreScenarioTTPs(
 // ============================================================
 // Kill Chain — content in Slice C
 // ============================================================
-export async function getKillChainAnalysis(correlationId: string): Promise<KillChainAnalysis> {
-  return liveOrThrow(
-    () => request<KillChainAnalysis>(`/killchain/${correlationId}`),
-    'kill chain mock populated in Slice C'
+export async function getKillChainAnalysis(
+  correlationId: string
+): Promise<KillChainAnalysis> {
+  const mockAnalysis = MOCK_KILL_CHAIN_ANALYSES.find(
+    (analysis) => analysis.correlation_id === correlationId
   );
+  if (await probeBackend()) {
+    try {
+      return await request<KillChainAnalysis>(`/killchain/${correlationId}`);
+    } catch {
+      // Backend reachable but lookup failed — fall through to
+      // the mock so the demo still renders.
+    }
+  }
+  if (!mockAnalysis) {
+    throw new Error(`unknown correlation_id: ${correlationId}`);
+  }
+  return mockAnalysis;
 }
 
 export async function getAllKillChainAnalyses(): Promise<KillChainAnalysis[]> {
-  return live(() => request<KillChainAnalysis[]>('/killchain'), []);
+  // Fall back to MOCK_KILL_CHAIN_ANALYSES on unreachable backend,
+  // live errors, or an empty live response. One analysis per
+  // incident keeps the kill chain drawer aligned with
+  // MOCK_INCIDENTS and MOCK_SCENARIO_HISTORY.
+  return live(
+    async () => {
+      const result = await request<KillChainAnalysis[]>('/killchain');
+      if (!result || result.length === 0) {
+        throw new Error('empty kill chain response');
+      }
+      return result;
+    },
+    MOCK_KILL_CHAIN_ANALYSES
+  );
 }
 
 // ============================================================
