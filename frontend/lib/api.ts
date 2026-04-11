@@ -53,8 +53,11 @@ import {
   PlatformUser,
 } from './types';
 import {
+  filterAlerts,
+  filterEvents,
   MOCK_ALERTS,
   MOCK_CAMPAIGNS,
+  MOCK_EVENTS,
   MOCK_EXERCISE_REPORT,
   MOCK_HEALTH,
   MOCK_INCIDENTS,
@@ -62,6 +65,7 @@ import {
   MOCK_METRICS,
   MOCK_MITRE_COVERAGE,
   MOCK_MITRE_TECHNIQUES,
+  MOCK_PLATFORM_USERS,
   MOCK_RISK_PROFILES,
   MOCK_RULE_EFFECTIVENESS,
   MOCK_SCENARIO_HISTORY,
@@ -276,7 +280,21 @@ export async function getEvents(params?: {
   if (params?.event_type) searchParams.set('event_type', params.event_type);
   if (params?.since_minutes) searchParams.set('since_minutes', String(params.since_minutes));
   const query = searchParams.toString();
-  return live(() => request<Event[]>(`/events${query ? `?${query}` : ''}`), []);
+  // Fall back to filterEvents(MOCK_EVENTS) so the same query
+  // shape applied to mock data returns a coherent slice of
+  // the narrative instead of an empty feed.
+  return live(
+    async () => {
+      const result = await request<Event[]>(
+        `/events${query ? `?${query}` : ''}`
+      );
+      if (!result || result.length === 0) {
+        throw new Error('empty events response');
+      }
+      return result;
+    },
+    filterEvents(MOCK_EVENTS, params)
+  );
 }
 
 // ============================================================
@@ -292,7 +310,20 @@ export async function getAlerts(params?: {
   if (params?.correlation_id) searchParams.set('correlation_id', params.correlation_id);
   if (params?.rule_id) searchParams.set('rule_id', params.rule_id);
   const query = searchParams.toString();
-  return live(() => request<Alert[]>(`/alerts${query ? `?${query}` : ''}`), []);
+  // Fall back to filterAlerts(MOCK_ALERTS) so the same query
+  // shape applied to mock data returns the correct subset.
+  return live(
+    async () => {
+      const result = await request<Alert[]>(
+        `/alerts${query ? `?${query}` : ''}`
+      );
+      if (!result || result.length === 0) {
+        throw new Error('empty alerts response');
+      }
+      return result;
+    },
+    filterAlerts(MOCK_ALERTS, params)
+  );
 }
 
 // ============================================================
@@ -364,7 +395,19 @@ function mutateIncidentNote(
 // Incidents — content in A.3
 // ============================================================
 export async function getIncidents(): Promise<Incident[]> {
-  return live(() => request<Incident[]>('/incidents'), []);
+  // Fall back to the mutable mockIncidentsState clone so that
+  // updateIncidentStatus / addIncidentNote mutations applied
+  // earlier in the session remain visible on the list view.
+  return live(
+    async () => {
+      const result = await request<Incident[]>('/incidents');
+      if (!result || result.length === 0) {
+        throw new Error('empty incidents response');
+      }
+      return result;
+    },
+    mockIncidentsState
+  );
 }
 
 export async function getIncident(correlationId: string): Promise<Incident> {
@@ -815,7 +858,19 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 }
 
 export async function getPlatformUsers(): Promise<PlatformUser[]> {
-  return live(() => request<PlatformUser[]>('/auth/users'), []);
+  // Fall back to MOCK_PLATFORM_USERS on unreachable backend,
+  // live errors, or an empty response — the admin user roster
+  // view needs at least one entry to render usefully.
+  return live(
+    async () => {
+      const result = await request<PlatformUser[]>('/auth/users');
+      if (!result || result.length === 0) {
+        throw new Error('empty platform users response');
+      }
+      return result;
+    },
+    MOCK_PLATFORM_USERS
+  );
 }
 
 // ============================================================

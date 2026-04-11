@@ -29,6 +29,7 @@ import type {
   MitreCoverageEntry,
   MitreTactic,
   MitreTechnique,
+  PlatformUser,
   RiskProfile,
   RuleEffectiveness,
   ScenarioHistoryEntry,
@@ -2794,6 +2795,73 @@ export const MOCK_EXERCISE_REPORT: ExerciseReport = {
     coverage_percentage: 83,
   },
 };
+
+// ------------------------------------------------------------
+// Platform users
+//
+// Human accounts that appear in the SOC narrative. The
+// service identity svc-sat-telemetry from Chain 4 is omitted
+// intentionally — it shows up in the identities tab but not
+// in the human-user roster. Seven entries keep the admin
+// users view populated without implying the tenant is larger
+// than the narrative supports.
+//
+// created_at timestamps are spread from ~45 days to ~2 years
+// ago so the roster reads like an organically grown SOC team
+// rather than everyone being provisioned at the same moment.
+// ------------------------------------------------------------
+
+export const MOCK_PLATFORM_USERS: PlatformUser[] = [
+  {
+    user_id: 'usr-0001',
+    username: 'robin.chen',
+    role: 'platform-admin',
+    display_name: 'Robin Chen',
+    created_at: daysAgo(730),
+  },
+  {
+    user_id: 'usr-0002',
+    username: 'operator-soc-01',
+    role: 'operator',
+    display_name: 'SOC Operator 01',
+    created_at: daysAgo(620),
+  },
+  {
+    user_id: 'usr-0003',
+    username: 'operator-soc-02',
+    role: 'operator',
+    display_name: 'SOC Operator 02',
+    created_at: daysAgo(560),
+  },
+  {
+    user_id: 'usr-0004',
+    username: 'alex.nguyen',
+    role: 'engineer',
+    display_name: 'Alex Nguyen',
+    created_at: daysAgo(480),
+  },
+  {
+    user_id: 'usr-0005',
+    username: 'priya.shah',
+    role: 'analyst',
+    display_name: 'Priya Shah',
+    created_at: daysAgo(380),
+  },
+  {
+    user_id: 'usr-0006',
+    username: 'mira.delacroix',
+    role: 'analyst',
+    display_name: 'Mira Delacroix',
+    created_at: daysAgo(210),
+  },
+  {
+    user_id: 'usr-0007',
+    username: 'wade.hollis',
+    role: 'contractor',
+    display_name: 'Wade Hollis',
+    created_at: daysAgo(45),
+  },
+];
 
 // ------------------------------------------------------------
 // Filter helpers
