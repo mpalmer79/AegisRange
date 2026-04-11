@@ -24,6 +24,7 @@ import type {
   Metrics,
   RiskProfile,
   RuleEffectiveness,
+  ScenarioHistoryEntry,
 } from './types';
 
 // ------------------------------------------------------------
@@ -1793,6 +1794,170 @@ export const MOCK_RULE_EFFECTIVENESS: RuleEffectiveness[] = [
     trigger_count: 1,
     severity: 'critical',
     actors_affected: 1,
+  },
+];
+
+// ------------------------------------------------------------
+// Scenario history
+//
+// One historical run per correlation chain. Each entry is a
+// past execution of a scenario (or an invented policy-change
+// exercise for POLICY_CHANGE, which has no matching entry in
+// SCENARIO_DEFINITIONS). The counts below are derived directly
+// from MOCK_EVENTS and MOCK_ALERTS so a recruiter comparing
+// tabs sees consistent numbers:
+//
+//   chain          events  alerts  incident   scenario_id     status
+//   ─────────────────────────────────────────────────────────────────
+//   AUTH_BRUTE        7      2     inc-0001   scn-auth-001    contained
+//   SESSION_HIJACK    4      1     inc-0002   scn-session-002 investigating
+//   DOC_EXFIL         7      2     inc-0003   scn-doc-004     investigating
+//   SVC_ABUSE         4      1     inc-0004   scn-svc-005     contained
+//   POLICY_CHANGE     4      2     inc-0005   scn-pol-007     open
+//   MULTI_STAGE       4      1     inc-0006   scn-corr-006    open
+//
+// `executed_at` is set to each chain's first event timestamp
+// so the history tab reads in the same order as the incidents
+// drawer. State arrays (revoked_sessions, disabled_services,
+// etc.) mirror the `affected_*` fields on the matching
+// MOCK_INCIDENT — contained chains populate them, active
+// investigations leave them empty.
+//
+// scn-doc-003 ("Unauthorized Document Access") is intentionally
+// absent: it's defined but has no historical run in the
+// current 72-hour window. Recruiters see it as a runnable
+// scenario in the scenarios tab without a history row.
+// ------------------------------------------------------------
+
+export const MOCK_SCENARIO_HISTORY: ScenarioHistoryEntry[] = [
+  // Chain 1 — AUTH_BRUTE (contained, session revoked)
+  {
+    scenario_id: 'scn-auth-001',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    events_total: 7,
+    events_generated: 7,
+    alerts_total: 2,
+    alerts_generated: 2,
+    responses_total: 1,
+    responses_generated: 1,
+    incident_id: 'inc-0001',
+    step_up_required: true,
+    revoked_sessions: ['sess-wh-tor-aa11'],
+    download_restricted_actors: [],
+    disabled_services: [],
+    quarantined_artifacts: [],
+    policy_change_restricted_actors: [],
+    operated_by: 'operator-soc-01',
+    executed_at: minutesAgo(3962),
+  },
+
+  // Chain 2 — SESSION_HIJACK (investigating)
+  {
+    scenario_id: 'scn-session-002',
+    correlation_id: CORRELATION_IDS.SESSION_HIJACK,
+    events_total: 4,
+    events_generated: 4,
+    alerts_total: 1,
+    alerts_generated: 1,
+    responses_total: 0,
+    responses_generated: 0,
+    incident_id: 'inc-0002',
+    step_up_required: true,
+    revoked_sessions: [],
+    download_restricted_actors: [],
+    disabled_services: [],
+    quarantined_artifacts: [],
+    policy_change_restricted_actors: [],
+    operated_by: 'operator-soc-02',
+    executed_at: minutesAgo(2880),
+  },
+
+  // Chain 3 — DOC_EXFIL (investigating, downloads restricted)
+  {
+    scenario_id: 'scn-doc-004',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    events_total: 7,
+    events_generated: 7,
+    alerts_total: 2,
+    alerts_generated: 2,
+    responses_total: 1,
+    responses_generated: 1,
+    incident_id: 'inc-0003',
+    step_up_required: true,
+    revoked_sessions: [],
+    download_restricted_actors: ['priya.shah'],
+    disabled_services: [],
+    quarantined_artifacts: [],
+    policy_change_restricted_actors: [],
+    operated_by: 'operator-soc-01',
+    executed_at: minutesAgo(1810),
+  },
+
+  // Chain 4 — SVC_ABUSE (contained, service disabled)
+  {
+    scenario_id: 'scn-svc-005',
+    correlation_id: CORRELATION_IDS.SVC_ABUSE,
+    events_total: 4,
+    events_generated: 4,
+    alerts_total: 1,
+    alerts_generated: 1,
+    responses_total: 1,
+    responses_generated: 1,
+    incident_id: 'inc-0004',
+    step_up_required: false,
+    revoked_sessions: [],
+    download_restricted_actors: [],
+    disabled_services: ['svc-sat-telemetry'],
+    quarantined_artifacts: [],
+    policy_change_restricted_actors: [],
+    operated_by: 'operator-soc-02',
+    executed_at: minutesAgo(1205),
+  },
+
+  // Chain 5 — POLICY_CHANGE (open, awaiting triage)
+  {
+    scenario_id: 'scn-pol-007',
+    correlation_id: CORRELATION_IDS.POLICY_CHANGE,
+    events_total: 4,
+    events_generated: 4,
+    alerts_total: 2,
+    alerts_generated: 2,
+    responses_total: 0,
+    responses_generated: 0,
+    incident_id: 'inc-0005',
+    step_up_required: true,
+    revoked_sessions: [],
+    download_restricted_actors: [],
+    disabled_services: [],
+    quarantined_artifacts: [
+      'artifact-firmware-04',
+      'artifact-firmware-05',
+      'artifact-firmware-06',
+    ],
+    policy_change_restricted_actors: [],
+    operated_by: 'operator-soc-01',
+    executed_at: minutesAgo(510),
+  },
+
+  // Chain 6 — MULTI_STAGE (open, still firing)
+  {
+    scenario_id: 'scn-corr-006',
+    correlation_id: CORRELATION_IDS.MULTI_STAGE,
+    events_total: 4,
+    events_generated: 4,
+    alerts_total: 1,
+    alerts_generated: 1,
+    responses_total: 0,
+    responses_generated: 0,
+    incident_id: 'inc-0006',
+    step_up_required: true,
+    revoked_sessions: [],
+    download_restricted_actors: [],
+    disabled_services: [],
+    quarantined_artifacts: [],
+    policy_change_restricted_actors: [],
+    operated_by: 'operator-soc-02',
+    executed_at: minutesAgo(165),
   },
 ];
 

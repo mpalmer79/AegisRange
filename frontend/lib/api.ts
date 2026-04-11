@@ -56,7 +56,9 @@ import {
   MOCK_HEALTH,
   MOCK_INCIDENTS,
   MOCK_METRICS,
+  MOCK_RISK_PROFILES,
   MOCK_RULE_EFFECTIVENESS,
+  MOCK_SCENARIO_HISTORY,
   REFERENCE_NOW_ISO,
 } from './mock-data';
 
@@ -410,14 +412,44 @@ export async function getMetrics(): Promise<Metrics> {
 // Analytics — content in Slice B
 // ============================================================
 export async function getRiskProfiles(): Promise<RiskProfile[]> {
-  return live(() => request<RiskProfile[]>('/analytics/risk-profiles'), []);
+  // Fall back to MOCK_RISK_PROFILES on unreachable backend, live
+  // errors, or an empty live response. An empty analytics page
+  // would look broken, and the mock covers every primary actor
+  // across the six correlation chains.
+  return live(
+    async () => {
+      const result = await request<RiskProfile[]>('/analytics/risk-profiles');
+      if (!result || result.length === 0) {
+        throw new Error('empty risk profiles response');
+      }
+      return result;
+    },
+    MOCK_RISK_PROFILES
+  );
 }
 
 export async function getRiskProfile(actorId: string): Promise<RiskProfile> {
-  return liveOrThrow(
-    () => request<RiskProfile>(`/analytics/risk-profiles/${actorId}`),
-    'risk profile mock populated in Slice B'
+  // Look up the matching mock profile up front so we can fall
+  // back to it on an unreachable backend or a live error. If
+  // neither live nor mock has the actor, throw so the UI can
+  // render its not-found state.
+  const mockProfile = MOCK_RISK_PROFILES.find(
+    (profile) => profile.actor_id === actorId
   );
+  if (await probeBackend()) {
+    try {
+      return await request<RiskProfile>(
+        `/analytics/risk-profiles/${actorId}`
+      );
+    } catch {
+      // Backend reachable but lookup failed — fall through to
+      // the mock so the demo still renders.
+    }
+  }
+  if (!mockProfile) {
+    throw new Error(`unknown actor_id: ${actorId}`);
+  }
+  return mockProfile;
 }
 
 export async function getRuleEffectiveness(): Promise<RuleEffectiveness[]> {
@@ -440,7 +472,22 @@ export async function getRuleEffectiveness(): Promise<RuleEffectiveness[]> {
 }
 
 export async function getScenarioHistory(): Promise<ScenarioHistoryEntry[]> {
-  return live(() => request<ScenarioHistoryEntry[]>('/analytics/scenario-history'), []);
+  // Fall back to MOCK_SCENARIO_HISTORY on unreachable backend,
+  // live errors, or an empty live response. One entry per
+  // correlation chain keeps the history tab aligned with the
+  // incidents drawer.
+  return live(
+    async () => {
+      const result = await request<ScenarioHistoryEntry[]>(
+        '/analytics/scenario-history'
+      );
+      if (!result || result.length === 0) {
+        throw new Error('empty scenario history response');
+      }
+      return result;
+    },
+    MOCK_SCENARIO_HISTORY
+  );
 }
 
 // ============================================================
