@@ -179,6 +179,38 @@ export interface IncidentNote {
   created_at: string;
 }
 
+export type IncidentResponseType =
+  | 'session_revoke'
+  | 'download_restriction'
+  | 'service_disable'
+  | 'artifact_quarantine'
+  | 'policy_rollback'
+  | 'ip_block'
+  | 'access_revoke'
+  | 'false_positive_resolution';
+
+export type IncidentResponseStatus =
+  | 'pending'
+  | 'executed'
+  | 'verified'
+  | 'failed';
+
+// Named IncidentResponse (not Response) to avoid shadowing the
+// DOM-global Response type used by fetch() in api.ts.
+export interface IncidentResponse {
+  response_id: string;
+  incident_id: string;
+  correlation_id: string;
+  response_type: IncidentResponseType;
+  status: IncidentResponseStatus;
+  triggered_at: string;
+  executed_at: string | null;
+  operator: string;
+  target: string;
+  summary: string;
+  playbook_id?: string;
+}
+
 export interface EventExport {
   export_timestamp: string;
   total_events: number;

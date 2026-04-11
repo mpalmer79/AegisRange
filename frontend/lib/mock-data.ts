@@ -23,6 +23,7 @@ import type {
   ExerciseReport,
   HealthStatus,
   Incident,
+  IncidentResponse,
   KillChainAnalysis,
   KillChainStage,
   Metrics,
@@ -2323,6 +2324,178 @@ export const MOCK_INCIDENTS: Incident[] = [
 ];
 
 // ------------------------------------------------------------
+// Incident responses
+//
+// First-class records for every response_id referenced by an
+// incident above. Previously responses were implicit — just a
+// string id on the incident and a count in scenario history.
+// Promoting them to full objects lets the responses view render
+// real playbook data and keeps the count consistent with
+// MOCK_EXERCISE_REPORT.response_effectiveness.
+//
+//   response_id  incident   type                          in-window?
+//   ─────────────────────────────────────────────────────────────────
+//   resp-0001    inc-0001   session_revoke                yes (~66h)
+//   resp-0003    inc-0003   download_restriction          yes (~30h)
+//   resp-0004    inc-0004   service_disable               yes (~20h)
+//   resp-0005    inc-0007   false_positive_resolution     no (4d)
+//   resp-0006    inc-0008   access_revoke                 no (3d)
+//   resp-0007    inc-0009   ip_block                      no (2d edge)
+//   resp-0008    inc-0010   false_positive_resolution     no (6d)
+//   resp-0009    inc-0011   false_positive_resolution     no (5d)
+//   resp-0010    inc-0012   ip_block                      yes (~48h)
+//   resp-0011    inc-0013   session_revoke                yes (~49h)
+//
+// resp-0002 is intentionally absent — inc-0002 (SESSION_HIJACK)
+// is still investigating and has no response yet, matching its
+// empty response_ids array.
+//
+// In-window count drives MOCK_EXERCISE_REPORT.response_effectiveness:
+// chain responses (resp-0001/3/4) + in-window background responses
+// (resp-0010/11) = 5 executed in the 72-hour exercise window.
+// ------------------------------------------------------------
+
+export const MOCK_RESPONSES: IncidentResponse[] = [
+  {
+    response_id: 'resp-0001',
+    incident_id: 'inc-0001',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    response_type: 'session_revoke',
+    status: 'verified',
+    triggered_at: minutesAgo(3955),
+    executed_at: minutesAgo(3955),
+    operator: 'operator-soc-01',
+    target: 'sess-wh-tor-aa11',
+    summary:
+      'Revoked wade.hollis session after Tor-origin brute force success; actor locked out pending review.',
+    playbook_id: 'pb-session-revoke-v1',
+  },
+  {
+    response_id: 'resp-0003',
+    incident_id: 'inc-0003',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    response_type: 'download_restriction',
+    status: 'executed',
+    triggered_at: minutesAgo(1795),
+    executed_at: minutesAgo(1795),
+    operator: 'operator-soc-01',
+    target: 'priya.shah',
+    summary:
+      'Applied download restriction on priya.shah pending investigation of read-to-download staging pattern.',
+    playbook_id: 'pb-download-restrict-v1',
+  },
+  {
+    response_id: 'resp-0004',
+    incident_id: 'inc-0004',
+    correlation_id: CORRELATION_IDS.SVC_ABUSE,
+    response_type: 'service_disable',
+    status: 'verified',
+    triggered_at: minutesAgo(1195),
+    executed_at: minutesAgo(1195),
+    operator: 'operator-soc-02',
+    target: 'svc-sat-telemetry',
+    summary:
+      'Disabled svc-sat-telemetry after 4 unauthorized admin-route probes within 90 seconds.',
+    playbook_id: 'pb-service-disable-v1',
+  },
+  {
+    response_id: 'resp-0005',
+    incident_id: 'inc-0007',
+    correlation_id: 'corr-bg-auth-007',
+    response_type: 'false_positive_resolution',
+    status: 'executed',
+    triggered_at: daysAgo(4),
+    executed_at: daysAgo(4),
+    operator: 'operator-soc-02',
+    target: 'cron-jobs-scheduler',
+    summary:
+      'Marked DET-AUTH-001 alert as false positive after identifying secret-rotation backoff loop; added rate-limit exemption.',
+  },
+  {
+    response_id: 'resp-0006',
+    incident_id: 'inc-0008',
+    correlation_id: 'corr-bg-auth-008',
+    response_type: 'access_revoke',
+    status: 'verified',
+    triggered_at: daysAgo(3),
+    executed_at: daysAgo(3),
+    operator: 'operator-soc-01',
+    target: 'jessie.park',
+    summary:
+      'Revoked contractor access and reconciled identity records against HR offboarding list.',
+    playbook_id: 'pb-offboard-sweep-v1',
+  },
+  {
+    response_id: 'resp-0007',
+    incident_id: 'inc-0009',
+    correlation_id: 'corr-bg-auth-009',
+    response_type: 'ip_block',
+    status: 'verified',
+    triggered_at: daysAgo(2),
+    executed_at: daysAgo(2),
+    operator: 'operator-soc-02',
+    target: 'external-residential-proxy-cidr',
+    summary:
+      'Blocked residential proxy range at the identity edge firewall after sustained failure pattern.',
+    playbook_id: 'pb-edge-ip-block-v1',
+  },
+  {
+    response_id: 'resp-0008',
+    incident_id: 'inc-0010',
+    correlation_id: 'corr-bg-net-010',
+    response_type: 'false_positive_resolution',
+    status: 'executed',
+    triggered_at: daysAgo(6),
+    executed_at: daysAgo(6),
+    operator: 'operator-soc-01',
+    target: 'cert-rotator-01',
+    summary:
+      'Cleared after matching the certificate rotation schedule; added maintenance window allowlist.',
+  },
+  {
+    response_id: 'resp-0009',
+    incident_id: 'inc-0011',
+    correlation_id: 'corr-bg-doc-011',
+    response_type: 'false_positive_resolution',
+    status: 'executed',
+    triggered_at: daysAgo(5),
+    executed_at: daysAgo(5),
+    operator: 'operator-soc-02',
+    target: 'backup-agent-02',
+    summary:
+      'Adjusted DET-DOC-005 threshold and allowlisted backup-agent-02 for the nightly scan window.',
+  },
+  {
+    response_id: 'resp-0010',
+    incident_id: 'inc-0012',
+    correlation_id: 'corr-bg-auth-012',
+    response_type: 'ip_block',
+    status: 'verified',
+    triggered_at: hoursAgo(49),
+    executed_at: hoursAgo(48),
+    operator: 'operator-soc-01',
+    target: 'external-residential-proxy-cidr-2',
+    summary:
+      'Blocked source CIDR at the identity edge after 40+ failed logins from a residential proxy range.',
+    playbook_id: 'pb-edge-ip-block-v1',
+  },
+  {
+    response_id: 'resp-0011',
+    incident_id: 'inc-0013',
+    correlation_id: 'corr-bg-sess-013',
+    response_type: 'session_revoke',
+    status: 'verified',
+    triggered_at: hoursAgo(49),
+    executed_at: hoursAgo(49),
+    operator: 'operator-soc-02',
+    target: 'sess-bg-op01-7713',
+    summary:
+      'Revoked operator session as a precaution; re-issued within two minutes after device verification.',
+    playbook_id: 'pb-session-revoke-v1',
+  },
+];
+
+// ------------------------------------------------------------
 // Risk profiles
 //
 // One profile per primary actor across the six correlation
@@ -3519,13 +3692,20 @@ export const MOCK_EXERCISE_REPORT: ExerciseReport = {
     >[],
   },
   response_effectiveness: {
-    responses_executed: 3,
-    containment_rate: 0.33,
-    mean_time_to_contain_minutes: 180,
+    // In-window responses (triggered within the 72-hour exercise
+    // window). Chain: resp-0001/0003/0004. Background: resp-0010
+    // (ip_block inc-0012) and resp-0011 (session_revoke inc-0013).
+    responses_executed: 5,
+    responses_total: 10,
+    // 4 contained incidents (inc-0001, inc-0004 chain; inc-0012,
+    // inc-0013 background) out of 11 in-window incidents.
+    containment_rate: 0.36,
+    mean_time_to_contain_minutes: 165,
     playbooks_invoked: [
-      'session_revoke',
-      'download_restriction',
-      'service_disable',
+      'pb-session-revoke-v1',
+      'pb-download-restrict-v1',
+      'pb-service-disable-v1',
+      'pb-edge-ip-block-v1',
     ],
   },
   risk_summary: {
