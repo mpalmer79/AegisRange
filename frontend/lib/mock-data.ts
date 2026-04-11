@@ -18,7 +18,9 @@
 
 import type {
   Alert,
+  Campaign,
   Event,
+  ExerciseReport,
   HealthStatus,
   Incident,
   KillChainAnalysis,
@@ -27,6 +29,7 @@ import type {
   MitreCoverageEntry,
   MitreTactic,
   MitreTechnique,
+  PlatformUser,
   RiskProfile,
   RuleEffectiveness,
   ScenarioHistoryEntry,
@@ -2624,6 +2627,239 @@ export const MOCK_KILL_CHAIN_ANALYSES: KillChainAnalysis[] = [
     highest_stage: 'actions_on_objectives',
     first_activity: minutesAgo(165),
     last_activity: minutesAgo(120),
+  },
+];
+
+// ------------------------------------------------------------
+// Campaigns
+//
+// Two campaigns cluster the six correlation chains by shared
+// indicators. Four of six incidents are linked; AUTH_BRUTE and
+// SESSION_HIJACK stand alone as isolated attacks that don't
+// fit a broader pattern in this 72-hour window.
+//
+//   id        name                                 incidents
+//   ──────────────────────────────────────────────────────────
+//   CAM-0001  Insider Analyst Exfiltration Ring    DOC_EXFIL, MULTI_STAGE
+//   CAM-0002  Privileged Infrastructure Tampering  SVC_ABUSE, POLICY_CHANGE
+//
+// CAM-0001 has a strong technique overlap (both chains share
+// T1041 Exfiltration Over C2 Channel) and actor-role affinity
+// (both primary actors are analysts). Confidence: high.
+//
+// CAM-0002 has NO shared MITRE techniques — the link is
+// thematic: both chains involve non-standard-user identities
+// (a service account and a platform admin) making
+// unauthorized privileged operations against infrastructure
+// controls. Confidence: medium. The summary documents the
+// weaker link honestly so analysts don't overfit.
+// ------------------------------------------------------------
+
+export const MOCK_CAMPAIGNS: Campaign[] = [
+  {
+    campaign_id: 'CAM-0001',
+    campaign_name: 'Insider Analyst Exfiltration Ring',
+    campaign_type: 'insider_threat',
+    incident_correlation_ids: [
+      CORRELATION_IDS.DOC_EXFIL,
+      CORRELATION_IDS.MULTI_STAGE,
+    ],
+    shared_actors: [],
+    shared_ttps: ['T1041'],
+    severity: 'critical',
+    confidence: 'high',
+    first_seen: minutesAgo(1810),
+    last_seen: minutesAgo(120),
+    summary:
+      'Two analysts (priya.shah, mira.delacroix) exfiltrated restricted documents via Exfiltration Over C2 Channel (T1041) within a 28-hour window. The pattern suggests either coordinated action or copycat behavior following the first contained attempt — both actors share analyst role and overlapping document scope.',
+  },
+  {
+    campaign_id: 'CAM-0002',
+    campaign_name: 'Privileged Infrastructure Tampering',
+    campaign_type: 'privilege_abuse',
+    incident_correlation_ids: [
+      CORRELATION_IDS.SVC_ABUSE,
+      CORRELATION_IDS.POLICY_CHANGE,
+    ],
+    shared_actors: [],
+    shared_ttps: [],
+    severity: 'critical',
+    confidence: 'medium',
+    first_seen: minutesAgo(1205),
+    last_seen: minutesAgo(485),
+    summary:
+      'Non-human and privileged identities (svc-sat-telemetry, robin.chen) performed unauthorized operations against infrastructure controls within a 12-hour window. No shared MITRE techniques; correlated by actor-class and target surface. Likely independent incidents worth tracking together as a privilege-abuse cluster.',
+  },
+];
+
+// ------------------------------------------------------------
+// Exercise report
+//
+// Single rolled-up report covering the 72-hour demo window.
+// Every numeric field is derived from another mock constant so
+// a recruiter checking the report tab against the metrics,
+// analytics, or MITRE tabs sees the same numbers everywhere:
+//
+//   field                          source
+//   ───────────────────────────────────────────────────────
+//   summary.total_*                MOCK_METRICS
+//   summary.scenarios_executed     MOCK_SCENARIO_HISTORY.length
+//   scenario_results               MOCK_SCENARIO_HISTORY
+//   detection_coverage.rules_total MOCK_RULE_EFFECTIVENESS.length
+//   detection_coverage.rules_triggered  # of entries with trigger_count > 0
+//   detection_coverage.rules_list  MOCK_RULE_EFFECTIVENESS
+//   response_effectiveness         sum of responses_generated in history
+//   risk_summary                   top actor + count from MOCK_RISK_PROFILES
+//   mitre_coverage.tactics         MOCK_TACTIC_COVERAGE (all 8 present)
+//   mitre_coverage.techniques      MOCK_MITRE_COVERAGE where covered (dedup)
+//   mitre_coverage.coverage_%      mean of MOCK_TACTIC_COVERAGE percentages
+//
+// Because ExerciseReport.scenario_results and
+// detection_coverage.rules_list are typed
+// `Record<string, unknown>[]`, the concrete interfaces are
+// cast via `unknown` — structurally compatible but TS can't
+// infer the index signature from a named interface.
+// ------------------------------------------------------------
+
+export const MOCK_EXERCISE_REPORT: ExerciseReport = {
+  report_id: 'report-72hr-001',
+  title: 'Vanta Orbital 72-Hour SOC Exercise',
+  generated_at: REFERENCE_NOW_ISO,
+  exercise_window: {
+    start: daysAgo(3),
+    end: REFERENCE_NOW_ISO,
+  },
+  summary: {
+    total_events: MOCK_METRICS.total_events,
+    total_alerts: MOCK_METRICS.total_alerts,
+    total_incidents: MOCK_METRICS.total_incidents,
+    total_responses: MOCK_METRICS.total_responses,
+    scenarios_executed: 6,
+  },
+  scenario_results: MOCK_SCENARIO_HISTORY as unknown as Record<
+    string,
+    unknown
+  >[],
+  detection_coverage: {
+    rules_total: 10,
+    rules_triggered: 9,
+    rules_list: MOCK_RULE_EFFECTIVENESS as unknown as Record<
+      string,
+      unknown
+    >[],
+  },
+  response_effectiveness: {
+    responses_executed: 3,
+    containment_rate: 0.33,
+    mean_time_to_contain_minutes: 180,
+    playbooks_invoked: [
+      'session_revoke',
+      'download_restriction',
+      'service_disable',
+    ],
+  },
+  risk_summary: {
+    highest_risk_actor: 'priya.shah',
+    highest_peak_score: 75,
+    actors_with_elevated_risk: 4,
+    contained_actors: 2,
+  },
+  recommendations: [
+    'Deploy a WAF-layer rule for T1190 (Exploit Public-Facing Application) to close the current TA0001 Initial Access coverage gap.',
+    'Extend T1078 (Valid Accounts) detection to the Persistence (TA0003) and Defense Evasion (TA0005) tactics — the technique is currently mapped only under Initial Access.',
+    'Review DET-DOC-005 (Abnormal Bulk Document Access) threshold — the rule is dormant despite observed bulk-read activity in the DOC_EXFIL chain.',
+    'Investigate the CAM-0001 cluster: priya.shah and mira.delacroix both exfiltrated via T1041 within a 28-hour window.',
+    'Tighten platform-admin change control following inc-0005 (policy-firewall-egress) — response still open at report generation.',
+  ],
+  mitre_coverage: {
+    tactics_covered: [
+      'TA0001',
+      'TA0003',
+      'TA0005',
+      'TA0006',
+      'TA0007',
+      'TA0008',
+      'TA0009',
+      'TA0010',
+    ],
+    techniques_covered: [
+      'T1041',
+      'T1046',
+      'T1078',
+      'T1110',
+      'T1213',
+      'T1550',
+      'T1554',
+      'T1562',
+    ],
+    coverage_percentage: 83,
+  },
+};
+
+// ------------------------------------------------------------
+// Platform users
+//
+// Human accounts that appear in the SOC narrative. The
+// service identity svc-sat-telemetry from Chain 4 is omitted
+// intentionally — it shows up in the identities tab but not
+// in the human-user roster. Seven entries keep the admin
+// users view populated without implying the tenant is larger
+// than the narrative supports.
+//
+// created_at timestamps are spread from ~45 days to ~2 years
+// ago so the roster reads like an organically grown SOC team
+// rather than everyone being provisioned at the same moment.
+// ------------------------------------------------------------
+
+export const MOCK_PLATFORM_USERS: PlatformUser[] = [
+  {
+    user_id: 'usr-0001',
+    username: 'robin.chen',
+    role: 'platform-admin',
+    display_name: 'Robin Chen',
+    created_at: daysAgo(730),
+  },
+  {
+    user_id: 'usr-0002',
+    username: 'operator-soc-01',
+    role: 'operator',
+    display_name: 'SOC Operator 01',
+    created_at: daysAgo(620),
+  },
+  {
+    user_id: 'usr-0003',
+    username: 'operator-soc-02',
+    role: 'operator',
+    display_name: 'SOC Operator 02',
+    created_at: daysAgo(560),
+  },
+  {
+    user_id: 'usr-0004',
+    username: 'alex.nguyen',
+    role: 'engineer',
+    display_name: 'Alex Nguyen',
+    created_at: daysAgo(480),
+  },
+  {
+    user_id: 'usr-0005',
+    username: 'priya.shah',
+    role: 'analyst',
+    display_name: 'Priya Shah',
+    created_at: daysAgo(380),
+  },
+  {
+    user_id: 'usr-0006',
+    username: 'mira.delacroix',
+    role: 'analyst',
+    display_name: 'Mira Delacroix',
+    created_at: daysAgo(210),
+  },
+  {
+    user_id: 'usr-0007',
+    username: 'wade.hollis',
+    role: 'contractor',
+    display_name: 'Wade Hollis',
+    created_at: daysAgo(45),
   },
 ];
 
