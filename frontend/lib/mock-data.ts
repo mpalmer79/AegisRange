@@ -21,10 +21,17 @@ import type {
   Event,
   HealthStatus,
   Incident,
+  KillChainAnalysis,
+  KillChainStage,
   Metrics,
+  MitreCoverageEntry,
+  MitreTactic,
+  MitreTechnique,
   RiskProfile,
   RuleEffectiveness,
   ScenarioHistoryEntry,
+  TacticCoverage,
+  TTPMapping,
 } from './types';
 
 // ------------------------------------------------------------
@@ -1958,6 +1965,665 @@ export const MOCK_SCENARIO_HISTORY: ScenarioHistoryEntry[] = [
     policy_change_restricted_actors: [],
     operated_by: 'operator-soc-02',
     executed_at: minutesAgo(165),
+  },
+];
+
+// ------------------------------------------------------------
+// MITRE ATT&CK — tactics
+//
+// Subset of the real MITRE ATT&CK Enterprise tactic catalog
+// covering the domains AegisRange's detection rules touch.
+// Ids, names, and descriptions match attack.mitre.org so the
+// coverage matrix reads truthfully in the demo.
+// ------------------------------------------------------------
+
+export const MOCK_MITRE_TACTICS: MitreTactic[] = [
+  {
+    id: 'TA0001',
+    name: 'Initial Access',
+    description:
+      'Techniques used to gain an initial foothold within a network.',
+    url: 'https://attack.mitre.org/tactics/TA0001/',
+  },
+  {
+    id: 'TA0003',
+    name: 'Persistence',
+    description:
+      'Techniques used to maintain access across restarts and credential rotation.',
+    url: 'https://attack.mitre.org/tactics/TA0003/',
+  },
+  {
+    id: 'TA0005',
+    name: 'Defense Evasion',
+    description:
+      'Techniques used to avoid detection throughout the compromise.',
+    url: 'https://attack.mitre.org/tactics/TA0005/',
+  },
+  {
+    id: 'TA0006',
+    name: 'Credential Access',
+    description:
+      'Techniques used to steal credentials such as passwords and keys.',
+    url: 'https://attack.mitre.org/tactics/TA0006/',
+  },
+  {
+    id: 'TA0007',
+    name: 'Discovery',
+    description:
+      'Techniques used to learn about the internal environment.',
+    url: 'https://attack.mitre.org/tactics/TA0007/',
+  },
+  {
+    id: 'TA0008',
+    name: 'Lateral Movement',
+    description:
+      'Techniques used to enter and control remote systems on a network.',
+    url: 'https://attack.mitre.org/tactics/TA0008/',
+  },
+  {
+    id: 'TA0009',
+    name: 'Collection',
+    description:
+      'Techniques used to gather information relevant to the adversary objective.',
+    url: 'https://attack.mitre.org/tactics/TA0009/',
+  },
+  {
+    id: 'TA0010',
+    name: 'Exfiltration',
+    description:
+      'Techniques used to steal data from the target network.',
+    url: 'https://attack.mitre.org/tactics/TA0010/',
+  },
+];
+
+// ------------------------------------------------------------
+// MITRE ATT&CK — techniques
+//
+// Nine techniques drawn from the real ATT&CK Enterprise catalog.
+// Eight are covered by at least one firing detection rule in
+// MOCK_ALERTS. T1190 ("Exploit Public-Facing Application") is
+// intentionally included as an *uncovered* technique so the
+// coverage matrix has a gap to render — it's a realistic blind
+// spot for a SOC that hasn't yet deployed a WAF-layer rule.
+// ------------------------------------------------------------
+
+export const MOCK_MITRE_TECHNIQUES: MitreTechnique[] = [
+  {
+    id: 'T1041',
+    name: 'Exfiltration Over C2 Channel',
+    description:
+      'Adversaries steal data by exfiltrating it over an existing command-and-control channel.',
+    tactic_ids: ['TA0010'],
+    url: 'https://attack.mitre.org/techniques/T1041/',
+  },
+  {
+    id: 'T1046',
+    name: 'Network Service Discovery',
+    description:
+      'Adversaries attempt to list services running on remote hosts and networks.',
+    tactic_ids: ['TA0007'],
+    url: 'https://attack.mitre.org/techniques/T1046/',
+  },
+  {
+    id: 'T1078',
+    name: 'Valid Accounts',
+    description:
+      'Adversaries abuse legitimate credentials to bypass access controls.',
+    tactic_ids: ['TA0001', 'TA0003', 'TA0005'],
+    url: 'https://attack.mitre.org/techniques/T1078/',
+  },
+  {
+    id: 'T1110',
+    name: 'Brute Force',
+    description:
+      'Adversaries attempt repeated authentication to guess passwords.',
+    tactic_ids: ['TA0006'],
+    url: 'https://attack.mitre.org/techniques/T1110/',
+  },
+  {
+    id: 'T1190',
+    name: 'Exploit Public-Facing Application',
+    description:
+      'Adversaries exploit weaknesses in internet-facing software.',
+    tactic_ids: ['TA0001'],
+    url: 'https://attack.mitre.org/techniques/T1190/',
+  },
+  {
+    id: 'T1213',
+    name: 'Data from Information Repositories',
+    description:
+      'Adversaries leverage information repositories to collect sensitive data.',
+    tactic_ids: ['TA0009'],
+    url: 'https://attack.mitre.org/techniques/T1213/',
+  },
+  {
+    id: 'T1550',
+    name: 'Use Alternate Authentication Material',
+    description:
+      'Adversaries use stolen tokens or session material to bypass authentication.',
+    tactic_ids: ['TA0005', 'TA0008'],
+    url: 'https://attack.mitre.org/techniques/T1550/',
+  },
+  {
+    id: 'T1554',
+    name: 'Compromise Host Software Binary',
+    description:
+      'Adversaries modify host software binaries to gain persistent access.',
+    tactic_ids: ['TA0003'],
+    url: 'https://attack.mitre.org/techniques/T1554/',
+  },
+  {
+    id: 'T1562',
+    name: 'Impair Defenses',
+    description:
+      'Adversaries maliciously modify defensive components to evade detection.',
+    tactic_ids: ['TA0005'],
+    url: 'https://attack.mitre.org/techniques/T1562/',
+  },
+];
+
+// ------------------------------------------------------------
+// TTP mappings
+//
+// One mapping per DET-* rule in the backend ruleset. Each rule
+// lists the MITRE techniques and tactics it surfaces plus the
+// Lockheed Martin kill-chain phases the activity touches. The
+// technique_ids and tactic_ids here are the single source of
+// truth for the coverage matrix (C.2) and kill chain analyses
+// (C.3) — if a rule's mapping changes, downstream derivations
+// pick it up automatically.
+//
+// DET-DOC-005 ("Abnormal Bulk Document Access") still gets a
+// mapping even though it doesn't fire in MOCK_ALERTS — the
+// catalog entry exists in the backend, and C.2 uses it to
+// light up T1213 coverage via the sibling DET-DOC-004 rule
+// that does fire.
+// ------------------------------------------------------------
+
+export const MOCK_TTP_MAPPINGS: TTPMapping[] = [
+  {
+    rule_id: 'DET-AUTH-001',
+    technique_ids: ['T1110'],
+    tactic_ids: ['TA0006'],
+    kill_chain_phases: ['delivery'],
+  },
+  {
+    rule_id: 'DET-AUTH-002',
+    technique_ids: ['T1078'],
+    tactic_ids: ['TA0001'],
+    kill_chain_phases: ['exploitation'],
+  },
+  {
+    rule_id: 'DET-SESSION-003',
+    technique_ids: ['T1550'],
+    tactic_ids: ['TA0005', 'TA0008'],
+    kill_chain_phases: ['exploitation', 'command_and_control'],
+  },
+  {
+    rule_id: 'DET-DOC-004',
+    technique_ids: ['T1213'],
+    tactic_ids: ['TA0009'],
+    kill_chain_phases: ['actions_on_objectives'],
+  },
+  {
+    rule_id: 'DET-DOC-005',
+    technique_ids: ['T1213'],
+    tactic_ids: ['TA0009'],
+    kill_chain_phases: ['actions_on_objectives'],
+  },
+  {
+    rule_id: 'DET-DOC-006',
+    technique_ids: ['T1041'],
+    tactic_ids: ['TA0010'],
+    kill_chain_phases: ['actions_on_objectives'],
+  },
+  {
+    rule_id: 'DET-SVC-007',
+    technique_ids: ['T1046'],
+    tactic_ids: ['TA0007'],
+    kill_chain_phases: ['reconnaissance', 'delivery'],
+  },
+  {
+    rule_id: 'DET-ART-008',
+    technique_ids: ['T1554'],
+    tactic_ids: ['TA0003'],
+    kill_chain_phases: ['installation'],
+  },
+  {
+    rule_id: 'DET-POL-009',
+    technique_ids: ['T1562'],
+    tactic_ids: ['TA0005'],
+    kill_chain_phases: ['actions_on_objectives'],
+  },
+  {
+    rule_id: 'DET-CORR-010',
+    technique_ids: ['T1041', 'T1078', 'T1550'],
+    tactic_ids: ['TA0001', 'TA0008', 'TA0010'],
+    kill_chain_phases: [
+      'delivery',
+      'exploitation',
+      'command_and_control',
+      'actions_on_objectives',
+    ],
+  },
+];
+
+// ------------------------------------------------------------
+// MITRE coverage matrix
+//
+// One entry per (tactic, technique) pair that exists in the
+// current technique catalog. `rule_ids` lists every DET-* rule
+// in MOCK_TTP_MAPPINGS whose tactic/technique sets intersect
+// the pair. `scenario_ids` lists every scenario in
+// MOCK_SCENARIO_HISTORY whose correlation chain contains at
+// least one firing alert for those rules. `covered` is simply
+// `rule_ids.length > 0` — a pair is "covered" if any rule
+// maps to it, regardless of whether that rule has fired yet.
+//
+// Three pairs are intentionally uncovered so the matrix has
+// gaps to render:
+//   (TA0003, T1078)  catalog gap  no rule maps T1078 → Persistence
+//   (TA0005, T1078)  catalog gap  no rule maps T1078 → Defense Evasion
+//   (TA0001, T1190)  no rule at all — realistic WAF-layer gap
+//
+// T1213 is covered by DET-DOC-004 (which fires) and
+// DET-DOC-005 (dormant); the scenario list only contains
+// scn-doc-004 since DET-DOC-005 has no firing alerts.
+// ------------------------------------------------------------
+
+export const MOCK_MITRE_COVERAGE: MitreCoverageEntry[] = [
+  {
+    tactic_id: 'TA0001',
+    technique_id: 'T1078',
+    technique_name: 'Valid Accounts',
+    rule_ids: ['DET-AUTH-002', 'DET-CORR-010'],
+    scenario_ids: ['scn-auth-001', 'scn-corr-006'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0001',
+    technique_id: 'T1190',
+    technique_name: 'Exploit Public-Facing Application',
+    rule_ids: [],
+    scenario_ids: [],
+    covered: false,
+  },
+  {
+    tactic_id: 'TA0003',
+    technique_id: 'T1078',
+    technique_name: 'Valid Accounts',
+    rule_ids: [],
+    scenario_ids: [],
+    covered: false,
+  },
+  {
+    tactic_id: 'TA0003',
+    technique_id: 'T1554',
+    technique_name: 'Compromise Host Software Binary',
+    rule_ids: ['DET-ART-008'],
+    scenario_ids: ['scn-pol-007'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0005',
+    technique_id: 'T1078',
+    technique_name: 'Valid Accounts',
+    rule_ids: [],
+    scenario_ids: [],
+    covered: false,
+  },
+  {
+    tactic_id: 'TA0005',
+    technique_id: 'T1550',
+    technique_name: 'Use Alternate Authentication Material',
+    rule_ids: ['DET-SESSION-003'],
+    scenario_ids: ['scn-session-002'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0005',
+    technique_id: 'T1562',
+    technique_name: 'Impair Defenses',
+    rule_ids: ['DET-POL-009'],
+    scenario_ids: ['scn-pol-007'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0006',
+    technique_id: 'T1110',
+    technique_name: 'Brute Force',
+    rule_ids: ['DET-AUTH-001'],
+    scenario_ids: ['scn-auth-001'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0007',
+    technique_id: 'T1046',
+    technique_name: 'Network Service Discovery',
+    rule_ids: ['DET-SVC-007'],
+    scenario_ids: ['scn-svc-005'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0008',
+    technique_id: 'T1550',
+    technique_name: 'Use Alternate Authentication Material',
+    rule_ids: ['DET-SESSION-003', 'DET-CORR-010'],
+    scenario_ids: ['scn-session-002', 'scn-corr-006'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0009',
+    technique_id: 'T1213',
+    technique_name: 'Data from Information Repositories',
+    rule_ids: ['DET-DOC-004', 'DET-DOC-005'],
+    scenario_ids: ['scn-doc-004'],
+    covered: true,
+  },
+  {
+    tactic_id: 'TA0010',
+    technique_id: 'T1041',
+    technique_name: 'Exfiltration Over C2 Channel',
+    rule_ids: ['DET-DOC-006', 'DET-CORR-010'],
+    scenario_ids: ['scn-doc-004', 'scn-corr-006'],
+    covered: true,
+  },
+];
+
+// ------------------------------------------------------------
+// Tactic coverage rollup
+//
+// Aggregates MOCK_MITRE_COVERAGE by tactic. `total_techniques`
+// counts every (tactic, technique) pair for that tactic;
+// `covered_techniques` counts the subset where `covered === true`.
+// Percentage is the integer floor of the ratio × 100, matching
+// how the backend analytics rollup rounds.
+//
+//   tactic            covered / total   percentage
+//   ─────────────────────────────────────────────
+//   TA0001 Initial Access     1 / 2         50
+//   TA0003 Persistence        1 / 2         50
+//   TA0005 Defense Evasion    2 / 3         66
+//   TA0006 Credential Access  1 / 1        100
+//   TA0007 Discovery          1 / 1        100
+//   TA0008 Lateral Movement   1 / 1        100
+//   TA0009 Collection         1 / 1        100
+//   TA0010 Exfiltration       1 / 1        100
+// ------------------------------------------------------------
+
+export const MOCK_TACTIC_COVERAGE: TacticCoverage[] = [
+  {
+    tactic_id: 'TA0001',
+    tactic_name: 'Initial Access',
+    covered_techniques: 1,
+    total_techniques: 2,
+    percentage: 50,
+  },
+  {
+    tactic_id: 'TA0003',
+    tactic_name: 'Persistence',
+    covered_techniques: 1,
+    total_techniques: 2,
+    percentage: 50,
+  },
+  {
+    tactic_id: 'TA0005',
+    tactic_name: 'Defense Evasion',
+    covered_techniques: 2,
+    total_techniques: 3,
+    percentage: 66,
+  },
+  {
+    tactic_id: 'TA0006',
+    tactic_name: 'Credential Access',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0007',
+    tactic_name: 'Discovery',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0008',
+    tactic_name: 'Lateral Movement',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0009',
+    tactic_name: 'Collection',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+  {
+    tactic_id: 'TA0010',
+    tactic_name: 'Exfiltration',
+    covered_techniques: 1,
+    total_techniques: 1,
+    percentage: 100,
+  },
+];
+
+// ------------------------------------------------------------
+// Kill chain analyses
+//
+// One analysis per MOCK_INCIDENT, using the Lockheed Martin
+// seven-stage Cyber Kill Chain. For each chain, the detected
+// stages are the union of `kill_chain_phases` from every
+// DET-* rule in MOCK_TTP_MAPPINGS that fires for that
+// correlation id in MOCK_ALERTS. `detection_rule_ids` lists
+// exactly the firing rules whose phase list contains that
+// stage, and `first_seen` points at the earliest event in
+// the chain that maps to the stage.
+//
+// `progression_percentage` is the integer floor of
+// (detected_stages / 7) * 100 — matching how the backend
+// rollup rounds — so the numbers always lie in {14, 28, 42,
+// 57, 71, 85, 100} for demo chains.
+// ------------------------------------------------------------
+
+const KILL_CHAIN_STAGE_TEMPLATES: Array<
+  Pick<KillChainStage, 'name' | 'display_name' | 'description' | 'order'>
+> = [
+  {
+    name: 'reconnaissance',
+    display_name: 'Reconnaissance',
+    description: 'Adversary gathers information about the target environment.',
+    order: 1,
+  },
+  {
+    name: 'weaponization',
+    display_name: 'Weaponization',
+    description: 'Adversary crafts a deliverable payload.',
+    order: 2,
+  },
+  {
+    name: 'delivery',
+    display_name: 'Delivery',
+    description: 'Adversary transmits the payload to the target.',
+    order: 3,
+  },
+  {
+    name: 'exploitation',
+    display_name: 'Exploitation',
+    description: 'Adversary triggers code execution or credential reuse.',
+    order: 4,
+  },
+  {
+    name: 'installation',
+    display_name: 'Installation',
+    description: 'Adversary establishes a persistence mechanism.',
+    order: 5,
+  },
+  {
+    name: 'command_and_control',
+    display_name: 'Command and Control',
+    description: 'Adversary establishes a control channel over the compromised system.',
+    order: 6,
+  },
+  {
+    name: 'actions_on_objectives',
+    display_name: 'Actions on Objectives',
+    description: 'Adversary executes the goal of the intrusion.',
+    order: 7,
+  },
+];
+
+function buildStages(
+  detections: Record<string, { rule_ids: string[]; first_seen: string }>
+): KillChainStage[] {
+  return KILL_CHAIN_STAGE_TEMPLATES.map((template) => {
+    const hit = detections[template.name];
+    return {
+      ...template,
+      detected: hit !== undefined,
+      detection_rule_ids: hit?.rule_ids ?? [],
+      first_seen: hit?.first_seen ?? null,
+    };
+  });
+}
+
+export const MOCK_KILL_CHAIN_ANALYSES: KillChainAnalysis[] = [
+  // Chain 1 — AUTH_BRUTE (wade.hollis)
+  // DET-AUTH-001 → delivery, DET-AUTH-002 → exploitation
+  {
+    incident_id: 'inc-0001',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    actor_id: 'wade.hollis',
+    stages: buildStages({
+      delivery: {
+        rule_ids: ['DET-AUTH-001'],
+        first_seen: minutesAgo(3962),
+      },
+      exploitation: {
+        rule_ids: ['DET-AUTH-002'],
+        first_seen: minutesAgo(3959),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'exploitation',
+    first_activity: minutesAgo(3962),
+    last_activity: minutesAgo(3959),
+  },
+
+  // Chain 2 — SESSION_HIJACK (alex.nguyen)
+  // DET-SESSION-003 → exploitation + command_and_control
+  {
+    incident_id: 'inc-0002',
+    correlation_id: CORRELATION_IDS.SESSION_HIJACK,
+    actor_id: 'alex.nguyen',
+    stages: buildStages({
+      exploitation: {
+        rule_ids: ['DET-SESSION-003'],
+        first_seen: minutesAgo(2870),
+      },
+      command_and_control: {
+        rule_ids: ['DET-SESSION-003'],
+        first_seen: minutesAgo(2865),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'command_and_control',
+    first_activity: minutesAgo(2880),
+    last_activity: minutesAgo(2864),
+  },
+
+  // Chain 3 — DOC_EXFIL (priya.shah)
+  // DET-DOC-004 + DET-DOC-006 → actions_on_objectives
+  {
+    incident_id: 'inc-0003',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    actor_id: 'priya.shah',
+    stages: buildStages({
+      actions_on_objectives: {
+        rule_ids: ['DET-DOC-004', 'DET-DOC-006'],
+        first_seen: minutesAgo(1810),
+      },
+    }),
+    progression_percentage: 14,
+    highest_stage: 'actions_on_objectives',
+    first_activity: minutesAgo(1810),
+    last_activity: minutesAgo(1800),
+  },
+
+  // Chain 4 — SVC_ABUSE (svc-sat-telemetry)
+  // DET-SVC-007 → reconnaissance + delivery
+  {
+    incident_id: 'inc-0004',
+    correlation_id: CORRELATION_IDS.SVC_ABUSE,
+    actor_id: 'svc-sat-telemetry',
+    stages: buildStages({
+      reconnaissance: {
+        rule_ids: ['DET-SVC-007'],
+        first_seen: minutesAgo(1205),
+      },
+      delivery: {
+        rule_ids: ['DET-SVC-007'],
+        first_seen: minutesAgo(1205),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'delivery',
+    first_activity: minutesAgo(1205),
+    last_activity: minutesAgo(1200),
+  },
+
+  // Chain 5 — POLICY_CHANGE (robin.chen)
+  // DET-ART-008 → installation, DET-POL-009 → actions_on_objectives
+  {
+    incident_id: 'inc-0005',
+    correlation_id: CORRELATION_IDS.POLICY_CHANGE,
+    actor_id: 'robin.chen',
+    stages: buildStages({
+      installation: {
+        rule_ids: ['DET-ART-008'],
+        first_seen: minutesAgo(510),
+      },
+      actions_on_objectives: {
+        rule_ids: ['DET-POL-009'],
+        first_seen: minutesAgo(485),
+      },
+    }),
+    progression_percentage: 28,
+    highest_stage: 'actions_on_objectives',
+    first_activity: minutesAgo(510),
+    last_activity: minutesAgo(485),
+  },
+
+  // Chain 6 — MULTI_STAGE (mira.delacroix)
+  // DET-CORR-010 composite rule — covers 4 stages
+  {
+    incident_id: 'inc-0006',
+    correlation_id: CORRELATION_IDS.MULTI_STAGE,
+    actor_id: 'mira.delacroix',
+    stages: buildStages({
+      delivery: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(165),
+      },
+      exploitation: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(150),
+      },
+      command_and_control: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(135),
+      },
+      actions_on_objectives: {
+        rule_ids: ['DET-CORR-010'],
+        first_seen: minutesAgo(120),
+      },
+    }),
+    progression_percentage: 57,
+    highest_stage: 'actions_on_objectives',
+    first_activity: minutesAgo(165),
+    last_activity: minutesAgo(120),
   },
 ];
 

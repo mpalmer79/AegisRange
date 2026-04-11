@@ -53,12 +53,18 @@ import {
   PlatformUser,
 } from './types';
 import {
+  MOCK_ALERTS,
   MOCK_HEALTH,
   MOCK_INCIDENTS,
+  MOCK_KILL_CHAIN_ANALYSES,
   MOCK_METRICS,
+  MOCK_MITRE_COVERAGE,
+  MOCK_MITRE_TECHNIQUES,
   MOCK_RISK_PROFILES,
   MOCK_RULE_EFFECTIVENESS,
   MOCK_SCENARIO_HISTORY,
+  MOCK_TACTIC_COVERAGE,
+  MOCK_TTP_MAPPINGS,
   REFERENCE_NOW_ISO,
 } from './mock-data';
 
@@ -557,41 +563,156 @@ export async function exportEvents(params?: {
 // ============================================================
 // MITRE ATT&CK — content in Slice C
 // ============================================================
-export async function getMitreMappings(): Promise<TTPMapping[]> {
-  return live(() => request<TTPMapping[]>('/mitre/mappings'), []);
-}
 
-export async function getMitreMapping(ruleId: string): Promise<TTPMapping> {
-  return liveOrThrow(
-    () => request<TTPMapping>(`/mitre/mappings/${ruleId}`),
-    'MITRE mapping mock populated in Slice C'
+/**
+ * computeScenarioTTPs — walks from a scenario id through its
+ * correlation chain → rules that fired in MOCK_ALERTS →
+ * technique ids in MOCK_TTP_MAPPINGS → full MitreTechnique
+ * objects. Used as the mock fallback for getMitreScenarioTTPs
+ * so the returned techniques stay consistent with whatever
+ * rules/chains exist elsewhere in the demo data.
+ */
+function computeScenarioTTPs(scenarioId: string): MitreTechnique[] {
+  const historyEntry = MOCK_SCENARIO_HISTORY.find(
+    (entry) => entry.scenario_id === scenarioId
+  );
+  if (!historyEntry) return [];
+  const firedRuleIds = new Set(
+    MOCK_ALERTS.filter(
+      (alert) => alert.correlation_id === historyEntry.correlation_id
+    ).map((alert) => alert.rule_id)
+  );
+  const techniqueIds = new Set<string>();
+  for (const mapping of MOCK_TTP_MAPPINGS) {
+    if (!firedRuleIds.has(mapping.rule_id)) continue;
+    for (const techId of mapping.technique_ids) {
+      techniqueIds.add(techId);
+    }
+  }
+  return MOCK_MITRE_TECHNIQUES.filter((technique) =>
+    techniqueIds.has(technique.id)
   );
 }
 
+export async function getMitreMappings(): Promise<TTPMapping[]> {
+  return live(
+    async () => {
+      const result = await request<TTPMapping[]>('/mitre/mappings');
+      if (!result || result.length === 0) {
+        throw new Error('empty mitre mappings response');
+      }
+      return result;
+    },
+    MOCK_TTP_MAPPINGS
+  );
+}
+
+export async function getMitreMapping(ruleId: string): Promise<TTPMapping> {
+  const mockMapping = MOCK_TTP_MAPPINGS.find(
+    (mapping) => mapping.rule_id === ruleId
+  );
+  if (await probeBackend()) {
+    try {
+      return await request<TTPMapping>(`/mitre/mappings/${ruleId}`);
+    } catch {
+      // Backend reachable but lookup failed — fall through to
+      // the mock so the demo still renders.
+    }
+  }
+  if (!mockMapping) {
+    throw new Error(`unknown rule_id: ${ruleId}`);
+  }
+  return mockMapping;
+}
+
 export async function getMitreCoverageMatrix(): Promise<MitreCoverageEntry[]> {
-  return live(() => request<MitreCoverageEntry[]>('/mitre/coverage'), []);
+  // Fall back to MOCK_MITRE_COVERAGE on unreachable backend,
+  // live errors, or an empty live response — the matrix view
+  // needs at least one row to render the tactic/technique grid.
+  return live(
+    async () => {
+      const result = await request<MitreCoverageEntry[]>('/mitre/coverage');
+      if (!result || result.length === 0) {
+        throw new Error('empty mitre coverage response');
+      }
+      return result;
+    },
+    MOCK_MITRE_COVERAGE
+  );
 }
 
 export async function getMitreTacticCoverage(): Promise<TacticCoverage[]> {
-  return live(() => request<TacticCoverage[]>('/mitre/tactics/coverage'), []);
+  // Fall back to MOCK_TACTIC_COVERAGE on unreachable backend,
+  // live errors, or an empty live response.
+  return live(
+    async () => {
+      const result = await request<TacticCoverage[]>(
+        '/mitre/tactics/coverage'
+      );
+      if (!result || result.length === 0) {
+        throw new Error('empty mitre tactic coverage response');
+      }
+      return result;
+    },
+    MOCK_TACTIC_COVERAGE
+  );
 }
 
-export async function getMitreScenarioTTPs(scenarioId: string): Promise<MitreTechnique[]> {
-  return live(() => request<MitreTechnique[]>(`/mitre/scenarios/${scenarioId}/ttps`), []);
+export async function getMitreScenarioTTPs(
+  scenarioId: string
+): Promise<MitreTechnique[]> {
+  return live(
+    async () => {
+      const result = await request<MitreTechnique[]>(
+        `/mitre/scenarios/${scenarioId}/ttps`
+      );
+      if (!result || result.length === 0) {
+        throw new Error('empty mitre scenario ttps response');
+      }
+      return result;
+    },
+    computeScenarioTTPs(scenarioId)
+  );
 }
 
 // ============================================================
 // Kill Chain — content in Slice C
 // ============================================================
-export async function getKillChainAnalysis(correlationId: string): Promise<KillChainAnalysis> {
-  return liveOrThrow(
-    () => request<KillChainAnalysis>(`/killchain/${correlationId}`),
-    'kill chain mock populated in Slice C'
+export async function getKillChainAnalysis(
+  correlationId: string
+): Promise<KillChainAnalysis> {
+  const mockAnalysis = MOCK_KILL_CHAIN_ANALYSES.find(
+    (analysis) => analysis.correlation_id === correlationId
   );
+  if (await probeBackend()) {
+    try {
+      return await request<KillChainAnalysis>(`/killchain/${correlationId}`);
+    } catch {
+      // Backend reachable but lookup failed — fall through to
+      // the mock so the demo still renders.
+    }
+  }
+  if (!mockAnalysis) {
+    throw new Error(`unknown correlation_id: ${correlationId}`);
+  }
+  return mockAnalysis;
 }
 
 export async function getAllKillChainAnalyses(): Promise<KillChainAnalysis[]> {
-  return live(() => request<KillChainAnalysis[]>('/killchain'), []);
+  // Fall back to MOCK_KILL_CHAIN_ANALYSES on unreachable backend,
+  // live errors, or an empty live response. One analysis per
+  // incident keeps the kill chain drawer aligned with
+  // MOCK_INCIDENTS and MOCK_SCENARIO_HISTORY.
+  return live(
+    async () => {
+      const result = await request<KillChainAnalysis[]>('/killchain');
+      if (!result || result.length === 0) {
+        throw new Error('empty kill chain response');
+      }
+      return result;
+    },
+    MOCK_KILL_CHAIN_ANALYSES
+  );
 }
 
 // ============================================================
