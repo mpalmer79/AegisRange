@@ -52,7 +52,12 @@ import {
   CurrentUser,
   PlatformUser,
 } from './types';
-import { MOCK_HEALTH, MOCK_METRICS, REFERENCE_NOW_ISO } from './mock-data';
+import {
+  MOCK_HEALTH,
+  MOCK_INCIDENTS,
+  MOCK_METRICS,
+  REFERENCE_NOW_ISO,
+} from './mock-data';
 
 // ------------------------------------------------------------
 // Base URL resolution
@@ -287,11 +292,28 @@ export async function getIncidents(): Promise<Incident[]> {
 }
 
 export async function getIncident(correlationId: string): Promise<Incident> {
-  // No mock fallback until A.3 — throw so the detail page shows its
-  // existing error state on non-live deployments.
-  return liveOrThrow(
-    () => request<Incident>(`/incidents/${correlationId}`),
-    'incident detail mock populated in Slice A.3'
+  // Look up the chain in MOCK_INCIDENTS first so we know whether
+  // a fallback is even possible. When the backend is reachable
+  // we still try it — but fall back to the mock if the request
+  // fails or comes back without a usable correlation_id.
+  const mockIncident = MOCK_INCIDENTS.find(
+    (incident) => incident.correlation_id === correlationId
+  );
+  if (!mockIncident) {
+    return liveOrThrow(
+      () => request<Incident>(`/incidents/${correlationId}`),
+      `unknown correlation_id: ${correlationId}`
+    );
+  }
+  return live(
+    async () => {
+      const result = await request<Incident>(`/incidents/${correlationId}`);
+      if (!result || !result.correlation_id) {
+        throw new Error('empty incident response');
+      }
+      return result;
+    },
+    mockIncident
   );
 }
 
@@ -357,7 +379,23 @@ export async function addIncidentNote(
 }
 
 export async function getIncidentNotes(correlationId: string): Promise<IncidentNote[]> {
-  return live(() => request<IncidentNote[]>(`/incidents/${correlationId}/notes`), []);
+  // Pull notes off the matching MOCK_INCIDENT (if any). If the
+  // live backend returns an empty array but the mock has notes,
+  // surface the mock notes so the demo isn't an empty pane.
+  const mockNotes =
+    MOCK_INCIDENTS.find((incident) => incident.correlation_id === correlationId)?.notes ?? [];
+  return live(
+    async () => {
+      const result = await request<IncidentNote[]>(
+        `/incidents/${correlationId}/notes`
+      );
+      if ((!result || result.length === 0) && mockNotes.length > 0) {
+        throw new Error('empty notes response');
+      }
+      return result ?? [];
+    },
+    mockNotes
+  );
 }
 
 // ============================================================
