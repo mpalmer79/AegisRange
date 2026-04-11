@@ -54,6 +54,7 @@ import {
 } from './types';
 import {
   MOCK_ALERTS,
+  MOCK_CAMPAIGNS,
   MOCK_HEALTH,
   MOCK_INCIDENTS,
   MOCK_KILL_CHAIN_ANALYSES,
@@ -719,14 +720,38 @@ export async function getAllKillChainAnalyses(): Promise<KillChainAnalysis[]> {
 // Campaigns — content in Slice C
 // ============================================================
 export async function getCampaigns(): Promise<Campaign[]> {
-  return live(() => request<Campaign[]>('/campaigns'), []);
+  // Fall back to MOCK_CAMPAIGNS on unreachable backend, live
+  // errors, or an empty live response. Two campaigns cluster
+  // four of the six MOCK_INCIDENTS by shared TTPs or
+  // actor-class — see mock-data.ts for the linking logic.
+  return live(
+    async () => {
+      const result = await request<Campaign[]>('/campaigns');
+      if (!result || result.length === 0) {
+        throw new Error('empty campaigns response');
+      }
+      return result;
+    },
+    MOCK_CAMPAIGNS
+  );
 }
 
 export async function getCampaign(campaignId: string): Promise<Campaign> {
-  return liveOrThrow(
-    () => request<Campaign>(`/campaigns/${campaignId}`),
-    'campaign mock populated in Slice C'
+  const mockCampaign = MOCK_CAMPAIGNS.find(
+    (campaign) => campaign.campaign_id === campaignId
   );
+  if (await probeBackend()) {
+    try {
+      return await request<Campaign>(`/campaigns/${campaignId}`);
+    } catch {
+      // Backend reachable but lookup failed — fall through to
+      // the mock so the demo still renders.
+    }
+  }
+  if (!mockCampaign) {
+    throw new Error(`unknown campaign_id: ${campaignId}`);
+  }
+  return mockCampaign;
 }
 
 // ============================================================

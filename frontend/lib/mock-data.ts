@@ -18,6 +18,7 @@
 
 import type {
   Alert,
+  Campaign,
   Event,
   HealthStatus,
   Incident,
@@ -2624,6 +2625,68 @@ export const MOCK_KILL_CHAIN_ANALYSES: KillChainAnalysis[] = [
     highest_stage: 'actions_on_objectives',
     first_activity: minutesAgo(165),
     last_activity: minutesAgo(120),
+  },
+];
+
+// ------------------------------------------------------------
+// Campaigns
+//
+// Two campaigns cluster the six correlation chains by shared
+// indicators. Four of six incidents are linked; AUTH_BRUTE and
+// SESSION_HIJACK stand alone as isolated attacks that don't
+// fit a broader pattern in this 72-hour window.
+//
+//   id        name                                 incidents
+//   ──────────────────────────────────────────────────────────
+//   CAM-0001  Insider Analyst Exfiltration Ring    DOC_EXFIL, MULTI_STAGE
+//   CAM-0002  Privileged Infrastructure Tampering  SVC_ABUSE, POLICY_CHANGE
+//
+// CAM-0001 has a strong technique overlap (both chains share
+// T1041 Exfiltration Over C2 Channel) and actor-role affinity
+// (both primary actors are analysts). Confidence: high.
+//
+// CAM-0002 has NO shared MITRE techniques — the link is
+// thematic: both chains involve non-standard-user identities
+// (a service account and a platform admin) making
+// unauthorized privileged operations against infrastructure
+// controls. Confidence: medium. The summary documents the
+// weaker link honestly so analysts don't overfit.
+// ------------------------------------------------------------
+
+export const MOCK_CAMPAIGNS: Campaign[] = [
+  {
+    campaign_id: 'CAM-0001',
+    campaign_name: 'Insider Analyst Exfiltration Ring',
+    campaign_type: 'insider_threat',
+    incident_correlation_ids: [
+      CORRELATION_IDS.DOC_EXFIL,
+      CORRELATION_IDS.MULTI_STAGE,
+    ],
+    shared_actors: [],
+    shared_ttps: ['T1041'],
+    severity: 'critical',
+    confidence: 'high',
+    first_seen: minutesAgo(1810),
+    last_seen: minutesAgo(120),
+    summary:
+      'Two analysts (priya.shah, mira.delacroix) exfiltrated restricted documents via Exfiltration Over C2 Channel (T1041) within a 28-hour window. The pattern suggests either coordinated action or copycat behavior following the first contained attempt — both actors share analyst role and overlapping document scope.',
+  },
+  {
+    campaign_id: 'CAM-0002',
+    campaign_name: 'Privileged Infrastructure Tampering',
+    campaign_type: 'privilege_abuse',
+    incident_correlation_ids: [
+      CORRELATION_IDS.SVC_ABUSE,
+      CORRELATION_IDS.POLICY_CHANGE,
+    ],
+    shared_actors: [],
+    shared_ttps: [],
+    severity: 'critical',
+    confidence: 'medium',
+    first_seen: minutesAgo(1205),
+    last_seen: minutesAgo(485),
+    summary:
+      'Non-human and privileged identities (svc-sat-telemetry, robin.chen) performed unauthorized operations against infrastructure controls within a 12-hour window. No shared MITRE techniques; correlated by actor-class and target surface. Likely independent incidents worth tracking together as a privilege-abuse cluster.',
   },
 ];
 
