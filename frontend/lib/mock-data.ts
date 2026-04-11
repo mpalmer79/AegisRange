@@ -20,6 +20,7 @@ import type {
   Alert,
   Event,
   HealthStatus,
+  Incident,
   Metrics,
 } from './types';
 
@@ -1062,6 +1063,479 @@ export const MOCK_ALERTS: Alert[] = [
       actor_id: 'mira.delacroix',
       timeline_summary: '4 detection events across 4 rules',
     },
+  },
+];
+
+// ------------------------------------------------------------
+// Incidents
+//
+// One incident per correlation chain. Every incident stitches
+// together the events and alerts that belong to its chain into
+// a chronological timeline so the drill-down view tells a
+// coherent story end-to-end.
+//
+// Status mix is intentional — recruiters always see at least
+// one open, one investigating, one contained incident no
+// matter when they load the demo.
+//
+//   inc-0001  AUTH_BRUTE      contained      (T-66h, closed loop)
+//   inc-0002  SESSION_HIJACK  investigating  (T-48h, no response yet)
+//   inc-0003  DOC_EXFIL       investigating  (T-30h, download blocked)
+//   inc-0004  SVC_ABUSE       contained      (T-20h, service disabled)
+//   inc-0005  POLICY_CHANGE   open           (T-8h, awaiting triage)
+//   inc-0006  MULTI_STAGE     open           (T-2h, still firing)
+// ------------------------------------------------------------
+
+export const MOCK_INCIDENTS: Incident[] = [
+  // ── Incident 1 — AUTH_BRUTE (contained) ───────────────────
+  {
+    incident_id: 'inc-0001',
+    incident_type: 'credential_compromise',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    status: 'contained',
+    severity: 'high',
+    confidence: 'high',
+    risk_score: 78,
+    primary_actor_id: 'wade.hollis',
+    actor_type: 'user',
+    actor_role: 'contractor',
+    detection_ids: ['DET-AUTH-001', 'DET-AUTH-002'],
+    detection_summary: [
+      '6 authentication failures in 2 minutes from a Tor exit',
+      'Successful login immediately after the failure burst',
+    ],
+    response_ids: ['resp-0001'],
+    containment_status: 'session_revoked',
+    event_ids: [
+      'evt-0001',
+      'evt-0002',
+      'evt-0003',
+      'evt-0004',
+      'evt-0005',
+      'evt-0006',
+      'evt-0007',
+    ],
+    affected_documents: [],
+    affected_sessions: ['sess-wh-tor-aa11'],
+    affected_services: [],
+    affected_resources: {
+      sessions: ['sess-wh-tor-aa11'],
+      actors: ['wade.hollis'],
+    },
+    timeline: [
+      {
+        timestamp: minutesAgo(3962),
+        entry_type: 'event',
+        entry_id: 'evt-0001',
+        summary: 'First authentication failure for wade.hollis from 185.220.101.42.',
+      },
+      {
+        timestamp: minutesAgo(3960),
+        entry_type: 'alert',
+        entry_id: 'alert-0001',
+        summary: 'DET-AUTH-001 fired: 6 failures in 2 minutes.',
+      },
+      {
+        timestamp: minutesAgo(3959),
+        entry_type: 'event',
+        entry_id: 'evt-0007',
+        summary: 'Authentication succeeded from the same Tor exit.',
+      },
+      {
+        timestamp: minutesAgo(3959),
+        entry_type: 'alert',
+        entry_id: 'alert-0002',
+        summary: 'DET-AUTH-002 fired: success after failure sequence.',
+      },
+      {
+        timestamp: minutesAgo(3955),
+        entry_type: 'response',
+        entry_id: 'resp-0001',
+        summary: 'Session sess-wh-tor-aa11 force-revoked; password reset required.',
+      },
+      {
+        timestamp: minutesAgo(3950),
+        entry_type: 'status_change',
+        entry_id: 'inc-0001-sc-1',
+        summary: 'Status moved to contained after session revocation confirmed.',
+      },
+    ],
+    created_at: minutesAgo(3960),
+    updated_at: minutesAgo(3950),
+    closed_at: null,
+    notes: [
+      {
+        note_id: 'note-0001',
+        author: 'priya.shah',
+        content:
+          'Source IP is a known Tor exit from the public list. Forced reset and revoked all wade.hollis sessions; awaiting password update before re-enabling.',
+        created_at: minutesAgo(3949),
+      },
+      {
+        note_id: 'note-0002',
+        author: 'operator-soc-01',
+        content: 'No lateral movement observed in the 6h window after revocation. Holding contained.',
+        created_at: minutesAgo(3700),
+      },
+    ],
+  },
+
+  // ── Incident 2 — SESSION_HIJACK (investigating) ───────────
+  {
+    incident_id: 'inc-0002',
+    incident_type: 'session_hijack',
+    correlation_id: CORRELATION_IDS.SESSION_HIJACK,
+    status: 'investigating',
+    severity: 'high',
+    confidence: 'high',
+    risk_score: 82,
+    primary_actor_id: 'alex.nguyen',
+    actor_type: 'user',
+    actor_role: 'engineer',
+    detection_ids: ['DET-SESSION-003'],
+    detection_summary: ['Same session token used from 2 IPs (US corp + HK external) in 5 minutes'],
+    response_ids: [],
+    containment_status: 'pending',
+    event_ids: ['evt-0010', 'evt-0011', 'evt-0012', 'evt-0013'],
+    affected_documents: [],
+    affected_sessions: ['sess-an-corp-7c10'],
+    affected_services: [],
+    affected_resources: {
+      sessions: ['sess-an-corp-7c10'],
+      actors: ['alex.nguyen'],
+    },
+    timeline: [
+      {
+        timestamp: minutesAgo(2880),
+        entry_type: 'event',
+        entry_id: 'evt-0010',
+        summary: 'Session token issued to alex.nguyen from corp VPN.',
+      },
+      {
+        timestamp: minutesAgo(2865),
+        entry_type: 'event',
+        entry_id: 'evt-0012',
+        summary: 'Same token used from 203.0.113.77 (HK).',
+      },
+      {
+        timestamp: minutesAgo(2864),
+        entry_type: 'alert',
+        entry_id: 'alert-0003',
+        summary: 'DET-SESSION-003 fired: token reuse from conflicting origins.',
+      },
+      {
+        timestamp: minutesAgo(2860),
+        entry_type: 'status_change',
+        entry_id: 'inc-0002-sc-1',
+        summary: 'Status moved to investigating; awaiting decision on session revocation.',
+      },
+    ],
+    created_at: minutesAgo(2864),
+    updated_at: minutesAgo(2860),
+    closed_at: null,
+    notes: [
+      {
+        note_id: 'note-0003',
+        author: 'priya.shah',
+        content:
+          'alex.nguyen confirmed via Slack they are at the corp office in SF. The HK origin is not legitimate. Recommend revoke + force re-auth pending IR sign-off.',
+        created_at: minutesAgo(2700),
+      },
+    ],
+  },
+
+  // ── Incident 3 — DOC_EXFIL (investigating) ────────────────
+  {
+    incident_id: 'inc-0003',
+    incident_type: 'data_exfiltration',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    status: 'investigating',
+    severity: 'critical',
+    confidence: 'high',
+    risk_score: 84,
+    primary_actor_id: 'priya.shah',
+    actor_type: 'user',
+    actor_role: 'analyst',
+    detection_ids: ['DET-DOC-004', 'DET-DOC-006'],
+    detection_summary: [
+      'Restricted document access denied (classification mismatch)',
+      'Read-to-download staging across 3 overlapping documents',
+    ],
+    response_ids: ['resp-0003'],
+    containment_status: 'download_restricted',
+    event_ids: [
+      'evt-0020',
+      'evt-0021',
+      'evt-0022',
+      'evt-0023',
+      'evt-0024',
+      'evt-0025',
+      'evt-0026',
+    ],
+    affected_documents: [
+      'doc-blueprint-Z',
+      'doc-payload-A',
+      'doc-payload-B',
+      'doc-payload-C',
+    ],
+    affected_sessions: ['sess-ps-corp-d040'],
+    affected_services: [],
+    affected_resources: {
+      documents: [
+        'doc-blueprint-Z',
+        'doc-payload-A',
+        'doc-payload-B',
+        'doc-payload-C',
+      ],
+      sessions: ['sess-ps-corp-d040'],
+      actors: ['priya.shah'],
+    },
+    timeline: [
+      {
+        timestamp: minutesAgo(1810),
+        entry_type: 'alert',
+        entry_id: 'alert-0004',
+        summary: 'DET-DOC-004 fired: priya.shah denied access to doc-blueprint-Z.',
+      },
+      {
+        timestamp: minutesAgo(1805),
+        entry_type: 'event',
+        entry_id: 'evt-0021',
+        summary: 'priya.shah read doc-payload-A.',
+      },
+      {
+        timestamp: minutesAgo(1802),
+        entry_type: 'event',
+        entry_id: 'evt-0024',
+        summary: 'priya.shah downloaded doc-payload-A.',
+      },
+      {
+        timestamp: minutesAgo(1800),
+        entry_type: 'alert',
+        entry_id: 'alert-0005',
+        summary: 'DET-DOC-006 fired: read-to-download staging on 3 docs.',
+      },
+      {
+        timestamp: minutesAgo(1795),
+        entry_type: 'response',
+        entry_id: 'resp-0003',
+        summary: 'Download privilege revoked for priya.shah.',
+      },
+      {
+        timestamp: minutesAgo(1790),
+        entry_type: 'status_change',
+        entry_id: 'inc-0003-sc-1',
+        summary: 'Status moved to investigating pending interview with priya.shah.',
+      },
+    ],
+    created_at: minutesAgo(1810),
+    updated_at: minutesAgo(1790),
+    closed_at: null,
+    notes: [
+      {
+        note_id: 'note-0004',
+        author: 'operator-soc-01',
+        content: 'priya.shah account flagged after the blueprint denial. Download restriction is in place.',
+        created_at: minutesAgo(1789),
+      },
+      {
+        note_id: 'note-0005',
+        author: 'mira.delacroix',
+        content:
+          'Reviewed doc-payload-A through C — all three are draft launch slides marked internal. Possible legitimate prep work, but the staging pattern still warrants interview.',
+        created_at: minutesAgo(1500),
+      },
+    ],
+  },
+
+  // ── Incident 4 — SVC_ABUSE (contained) ────────────────────
+  {
+    incident_id: 'inc-0004',
+    incident_type: 'service_account_abuse',
+    correlation_id: CORRELATION_IDS.SVC_ABUSE,
+    status: 'contained',
+    severity: 'high',
+    confidence: 'medium',
+    risk_score: 65,
+    primary_actor_id: 'svc-sat-telemetry',
+    actor_type: 'service',
+    actor_role: null,
+    detection_ids: ['DET-SVC-007'],
+    detection_summary: ['svc-sat-telemetry probed 4 admin routes in 90 seconds'],
+    response_ids: ['resp-0004'],
+    containment_status: 'service_disabled',
+    event_ids: ['evt-0030', 'evt-0031', 'evt-0032', 'evt-0033'],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: ['svc-sat-telemetry'],
+    affected_resources: {
+      services: ['svc-sat-telemetry'],
+    },
+    timeline: [
+      {
+        timestamp: minutesAgo(1205),
+        entry_type: 'event',
+        entry_id: 'evt-0030',
+        summary: 'svc-sat-telemetry hit /api/admin/users (403).',
+      },
+      {
+        timestamp: minutesAgo(1203),
+        entry_type: 'alert',
+        entry_id: 'alert-0006',
+        summary: 'DET-SVC-007 fired: 4 unauthorized admin routes in 2 minutes.',
+      },
+      {
+        timestamp: minutesAgo(1200),
+        entry_type: 'response',
+        entry_id: 'resp-0004',
+        summary: 'svc-sat-telemetry disabled and rotated.',
+      },
+      {
+        timestamp: minutesAgo(1198),
+        entry_type: 'status_change',
+        entry_id: 'inc-0004-sc-1',
+        summary: 'Status moved to contained after service disable confirmed.',
+      },
+    ],
+    created_at: minutesAgo(1203),
+    updated_at: minutesAgo(1198),
+    closed_at: null,
+    notes: [
+      {
+        note_id: 'note-0006',
+        author: 'robin.chen',
+        content:
+          'Service account had drifted past its declared scope after a deployment rollback. Disabled and pending owner sign-off before re-enabling.',
+        created_at: minutesAgo(1190),
+      },
+    ],
+  },
+
+  // ── Incident 5 — POLICY_CHANGE (open) ─────────────────────
+  {
+    incident_id: 'inc-0005',
+    incident_type: 'privileged_policy_change',
+    correlation_id: CORRELATION_IDS.POLICY_CHANGE,
+    status: 'open',
+    severity: 'critical',
+    confidence: 'high',
+    risk_score: 88,
+    primary_actor_id: 'robin.chen',
+    actor_type: 'user',
+    actor_role: 'platform-admin',
+    detection_ids: ['DET-ART-008', 'DET-POL-009'],
+    detection_summary: [
+      '3 firmware artifacts failed signature validation',
+      'Egress firewall opened by an actor under step-up requirement',
+    ],
+    response_ids: [],
+    containment_status: 'pending',
+    event_ids: ['evt-0040', 'evt-0041', 'evt-0042', 'evt-0043'],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: [],
+    affected_resources: {
+      actors: ['robin.chen'],
+    },
+    timeline: [
+      {
+        timestamp: minutesAgo(510),
+        entry_type: 'event',
+        entry_id: 'evt-0040',
+        summary: 'artifact-firmware-04 failed signature check.',
+      },
+      {
+        timestamp: minutesAgo(500),
+        entry_type: 'alert',
+        entry_id: 'alert-0007',
+        summary: 'DET-ART-008 fired: 3 artifact validation failures in 10 minutes.',
+      },
+      {
+        timestamp: minutesAgo(485),
+        entry_type: 'event',
+        entry_id: 'evt-0043',
+        summary: 'robin.chen pushed allow_egress 0.0.0.0/0 to policy-firewall-egress.',
+      },
+      {
+        timestamp: minutesAgo(484),
+        entry_type: 'alert',
+        entry_id: 'alert-0008',
+        summary: 'DET-POL-009 fired: privileged policy change under elevated risk.',
+      },
+    ],
+    created_at: minutesAgo(500),
+    updated_at: minutesAgo(484),
+    closed_at: null,
+    notes: [
+      {
+        note_id: 'note-0007',
+        author: 'operator-soc-02',
+        content:
+          'robin.chen is on step_up_required from a prior risk event — the policy change should not have been allowed. Paged platform on-call.',
+        created_at: minutesAgo(470),
+      },
+    ],
+  },
+
+  // ── Incident 6 — MULTI_STAGE (open, live) ─────────────────
+  {
+    incident_id: 'inc-0006',
+    incident_type: 'multi_signal_compromise',
+    correlation_id: CORRELATION_IDS.MULTI_STAGE,
+    status: 'open',
+    severity: 'critical',
+    confidence: 'high',
+    risk_score: 91,
+    primary_actor_id: 'mira.delacroix',
+    actor_type: 'user',
+    actor_role: 'analyst',
+    detection_ids: ['DET-CORR-010'],
+    detection_summary: ['4 distinct detection rules tripped within 15 minutes'],
+    response_ids: [],
+    containment_status: 'pending',
+    event_ids: ['evt-0050', 'evt-0051', 'evt-0052', 'evt-0053'],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: [],
+    affected_resources: {
+      actors: ['mira.delacroix'],
+    },
+    timeline: [
+      {
+        timestamp: minutesAgo(165),
+        entry_type: 'event',
+        entry_id: 'evt-0050',
+        summary: 'DET-AUTH-002 trigger observed for mira.delacroix.',
+      },
+      {
+        timestamp: minutesAgo(150),
+        entry_type: 'event',
+        entry_id: 'evt-0051',
+        summary: 'DET-SESSION-003 trigger observed for mira.delacroix.',
+      },
+      {
+        timestamp: minutesAgo(135),
+        entry_type: 'event',
+        entry_id: 'evt-0052',
+        summary: 'DET-DOC-006 trigger observed for mira.delacroix.',
+      },
+      {
+        timestamp: minutesAgo(120),
+        entry_type: 'event',
+        entry_id: 'evt-0053',
+        summary: 'DET-CORR-010 self-reference in the multi-signal sequence.',
+      },
+      {
+        timestamp: minutesAgo(120),
+        entry_type: 'alert',
+        entry_id: 'alert-0009',
+        summary: 'DET-CORR-010 fired: 4 distinct detections within 15 minutes.',
+      },
+    ],
+    created_at: minutesAgo(165),
+    updated_at: minutesAgo(120),
+    closed_at: null,
+    notes: [],
   },
 ];
 
