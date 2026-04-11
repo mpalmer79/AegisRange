@@ -285,6 +285,71 @@ export async function getAlerts(params?: {
 }
 
 // ============================================================
+// Mock state layer
+//
+// updateIncidentStatus / addIncidentNote need somewhere to
+// land when the backend is unreachable. We keep a JSON-cloned
+// snapshot of MOCK_INCIDENTS at module load and let the
+// mutation helpers below mutate it in place. The imported
+// MOCK_INCIDENTS object itself is never touched, so reloading
+// the page resets the demo.
+// ============================================================
+
+const mockIncidentsState: Incident[] = JSON.parse(
+  JSON.stringify(MOCK_INCIDENTS)
+) as Incident[];
+
+function findMockIncident(correlationId: string): Incident | undefined {
+  return mockIncidentsState.find(
+    (incident) => incident.correlation_id === correlationId
+  );
+}
+
+function mutateIncidentStatus(
+  correlationId: string,
+  status: IncidentStatus
+): Incident {
+  const incident = findMockIncident(correlationId);
+  if (!incident) {
+    throw new Error(`unknown correlation_id: ${correlationId}`);
+  }
+  const now = new Date().toISOString();
+  incident.status = status;
+  incident.updated_at = now;
+  if (status === 'closed') {
+    incident.closed_at = now;
+  }
+  incident.timeline.push({
+    timestamp: now,
+    entry_type: 'status_change',
+    entry_id: `${incident.incident_id}-sc-${incident.timeline.length + 1}`,
+    summary: `Status moved to ${status}.`,
+  });
+  return incident;
+}
+
+function mutateIncidentNote(
+  correlationId: string,
+  author: string,
+  content: string
+): IncidentNote {
+  const incident = findMockIncident(correlationId);
+  if (!incident) {
+    throw new Error(`unknown correlation_id: ${correlationId}`);
+  }
+  const now = new Date().toISOString();
+  const note: IncidentNote = {
+    note_id: `note-${Date.now().toString(36)}`,
+    author,
+    content,
+    created_at: now,
+  };
+  incident.notes.push(note);
+  incident.updated_at = now;
+  return note;
+}
+
+// ============================================================
 // Incidents — content in A.3
 // ============================================================
 export async function getIncidents(): Promise<Incident[]> {
@@ -296,9 +361,7 @@ export async function getIncident(correlationId: string): Promise<Incident> {
   // a fallback is even possible. When the backend is reachable
   // we still try it — but fall back to the mock if the request
   // fails or comes back without a usable correlation_id.
-  const mockIncident = MOCK_INCIDENTS.find(
-    (incident) => incident.correlation_id === correlationId
-  );
+  const mockIncident = findMockIncident(correlationId);
   if (!mockIncident) {
     return liveOrThrow(
       () => request<Incident>(`/incidents/${correlationId}`),
@@ -321,14 +384,18 @@ export async function updateIncidentStatus(
   correlationId: string,
   status: IncidentStatus
 ): Promise<Incident> {
-  return liveOrThrow(
-    () =>
-      request<Incident>(`/incidents/${correlationId}/status`, {
+  if (await probeBackend()) {
+    try {
+      return await request<Incident>(`/incidents/${correlationId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
-      }),
-    'incident status mutation mock populated in Slice A.3'
-  );
+      });
+    } catch {
+      // Backend reachable but the mutation failed — fall through
+      // to the in-memory mock so the demo still moves forward.
+    }
+  }
+  return mutateIncidentStatus(correlationId, status);
 }
 
 // ============================================================
@@ -368,22 +435,25 @@ export async function addIncidentNote(
   author: string,
   content: string
 ): Promise<IncidentNote> {
-  return liveOrThrow(
-    () =>
-      request<IncidentNote>(`/incidents/${correlationId}/notes`, {
+  if (await probeBackend()) {
+    try {
+      return await request<IncidentNote>(`/incidents/${correlationId}/notes`, {
         method: 'POST',
         body: JSON.stringify({ author, content }),
-      }),
-    'incident note mock populated in Slice A.3'
-  );
+      });
+    } catch {
+      // Backend reachable but the mutation failed — fall through
+      // to the in-memory mock so the demo still moves forward.
+    }
+  }
+  return mutateIncidentNote(correlationId, author, content);
 }
 
 export async function getIncidentNotes(correlationId: string): Promise<IncidentNote[]> {
   // Pull notes off the matching MOCK_INCIDENT (if any). If the
   // live backend returns an empty array but the mock has notes,
   // surface the mock notes so the demo isn't an empty pane.
-  const mockNotes =
-    MOCK_INCIDENTS.find((incident) => incident.correlation_id === correlationId)?.notes ?? [];
+  const mockNotes = findMockIncident(correlationId)?.notes ?? [];
   return live(
     async () => {
       const result = await request<IncidentNote[]>(
