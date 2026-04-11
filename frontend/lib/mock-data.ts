@@ -1794,6 +1794,532 @@ export const MOCK_INCIDENTS: Incident[] = [
     closed_at: null,
     notes: [],
   },
+
+  // ============================================================
+  // Background incidents (inc-0007 .. inc-0016)
+  //
+  // Ten historical / lower-priority incidents that bring the
+  // total to MOCK_METRICS.total_incidents (16) with the exact
+  // status distribution from MOCK_METRICS.incidents_by_status:
+  //
+  //   status         chain  background  total (target)
+  //   ─────────────────────────────────────────────────
+  //   open              2        1         3  (3)
+  //   investigating     2        2         4  (4)
+  //   contained         2        2         4  (4)
+  //   resolved          0        3         3  (3)
+  //   closed            0        2         2  (2)
+  //   ─────────────────────────────────────────────────
+  //   totals            6       10        16  (16)
+  //
+  // Background incidents are intentionally sparse: empty
+  // event_ids, no contributing alerts in MOCK_ALERTS, minimal
+  // timelines. They exist to populate the incidents feed /
+  // metrics panel realistically — a recruiter sees 16 rows in
+  // the incidents drawer instead of 6, but the narrative focus
+  // stays on the six correlation chains above.
+  //
+  // Every detection_id references a real DET-* rule from the
+  // backend ruleset; response_ids are forward references to
+  // MOCK_RESPONSES entries added in a later commit.
+  // ============================================================
+
+  // ── Incident 7 — benign scheduled-job retries (resolved) ──
+  {
+    incident_id: 'inc-0007',
+    incident_type: 'credential_compromise',
+    correlation_id: 'corr-bg-auth-007',
+    status: 'resolved',
+    severity: 'low',
+    confidence: 'low',
+    risk_score: 12,
+    primary_actor_id: 'cron-jobs-scheduler',
+    actor_type: 'service',
+    actor_role: null,
+    detection_ids: ['DET-AUTH-001'],
+    detection_summary: [
+      'Repeated Authentication Failure Burst triggered by scheduled-job credential refresh backoff.',
+    ],
+    response_ids: ['resp-0005'],
+    containment_status: 'false_positive_closed',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: ['cron-jobs-scheduler'],
+    affected_resources: { services: ['cron-jobs-scheduler'] },
+    timeline: [
+      {
+        timestamp: daysAgo(5),
+        entry_type: 'alert',
+        entry_id: 'inc-0007-a1',
+        summary: 'DET-AUTH-001 fired on cron-jobs-scheduler credential retries.',
+      },
+      {
+        timestamp: daysAgo(5),
+        entry_type: 'status_change',
+        entry_id: 'inc-0007-sc1',
+        summary: 'Status moved to investigating.',
+      },
+      {
+        timestamp: daysAgo(4),
+        entry_type: 'response',
+        entry_id: 'resp-0005',
+        summary: 'Marked false positive after identifying backoff loop.',
+      },
+      {
+        timestamp: daysAgo(4),
+        entry_type: 'status_change',
+        entry_id: 'inc-0007-sc2',
+        summary: 'Status moved to resolved.',
+      },
+    ],
+    created_at: daysAgo(5),
+    updated_at: daysAgo(4),
+    closed_at: null,
+    notes: [
+      {
+        note_id: 'note-0007-1',
+        author: 'operator-soc-02',
+        content:
+          'Scheduler was retrying a stale credential after a secret-rotation window. Added rate-limit exemption for the service account to prevent future false positives.',
+        created_at: daysAgo(4),
+      },
+    ],
+  },
+
+  // ── Incident 8 — contractor offboarding miss (resolved) ──
+  {
+    incident_id: 'inc-0008',
+    incident_type: 'access_policy_violation',
+    correlation_id: 'corr-bg-auth-008',
+    status: 'resolved',
+    severity: 'medium',
+    confidence: 'high',
+    risk_score: 35,
+    primary_actor_id: 'jessie.park',
+    actor_type: 'user',
+    actor_role: 'contractor',
+    detection_ids: ['DET-AUTH-002'],
+    detection_summary: [
+      'Successful authentication after contractor offboarding checkpoint.',
+    ],
+    response_ids: ['resp-0006'],
+    containment_status: 'access_revoked',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: [],
+    affected_resources: { actors: ['jessie.park'] },
+    timeline: [
+      {
+        timestamp: daysAgo(4),
+        entry_type: 'alert',
+        entry_id: 'inc-0008-a1',
+        summary: 'DET-AUTH-002 fired — contractor login after scheduled offboarding.',
+      },
+      {
+        timestamp: daysAgo(4),
+        entry_type: 'status_change',
+        entry_id: 'inc-0008-sc1',
+        summary: 'Status moved to investigating.',
+      },
+      {
+        timestamp: daysAgo(3),
+        entry_type: 'response',
+        entry_id: 'resp-0006',
+        summary: 'Access revoked; identity records reconciled against HR offboard list.',
+      },
+      {
+        timestamp: daysAgo(3),
+        entry_type: 'status_change',
+        entry_id: 'inc-0008-sc2',
+        summary: 'Status moved to resolved.',
+      },
+    ],
+    created_at: daysAgo(4),
+    updated_at: daysAgo(3),
+    closed_at: null,
+    notes: [],
+  },
+
+  // ── Incident 9 — low-and-slow credential spray (resolved) ──
+  {
+    incident_id: 'inc-0009',
+    incident_type: 'credential_compromise',
+    correlation_id: 'corr-bg-auth-009',
+    status: 'resolved',
+    severity: 'medium',
+    confidence: 'medium',
+    risk_score: 42,
+    primary_actor_id: 'unknown-external',
+    actor_type: 'external',
+    actor_role: null,
+    detection_ids: ['DET-AUTH-001'],
+    detection_summary: [
+      'Low-and-slow credential spray against the identity edge over ~4 hours from a residential proxy range.',
+    ],
+    response_ids: ['resp-0007'],
+    containment_status: 'ip_blocked',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: ['svc-identity-edge'],
+    affected_resources: { services: ['svc-identity-edge'] },
+    timeline: [
+      {
+        timestamp: daysAgo(3),
+        entry_type: 'alert',
+        entry_id: 'inc-0009-a1',
+        summary: 'DET-AUTH-001 fired — sustained failure pattern from external range.',
+      },
+      {
+        timestamp: daysAgo(2),
+        entry_type: 'response',
+        entry_id: 'resp-0007',
+        summary: 'Source CIDR blocked at the identity edge firewall.',
+      },
+      {
+        timestamp: daysAgo(2),
+        entry_type: 'status_change',
+        entry_id: 'inc-0009-sc1',
+        summary: 'Status moved to resolved.',
+      },
+    ],
+    created_at: daysAgo(3),
+    updated_at: daysAgo(2),
+    closed_at: null,
+    notes: [],
+  },
+
+  // ── Incident 10 — certificate-rotation false positive (closed) ──
+  {
+    incident_id: 'inc-0010',
+    incident_type: 'policy_change_anomaly',
+    correlation_id: 'corr-bg-net-010',
+    status: 'closed',
+    severity: 'low',
+    confidence: 'low',
+    risk_score: 8,
+    primary_actor_id: 'cert-rotator-01',
+    actor_type: 'service',
+    actor_role: null,
+    detection_ids: ['DET-POL-009'],
+    detection_summary: [
+      'Privileged policy change flagged during an automated certificate rotation window.',
+    ],
+    response_ids: ['resp-0008'],
+    containment_status: 'false_positive_closed',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: ['cert-rotator-01'],
+    affected_resources: { services: ['cert-rotator-01'] },
+    timeline: [
+      {
+        timestamp: daysAgo(7),
+        entry_type: 'alert',
+        entry_id: 'inc-0010-a1',
+        summary: 'DET-POL-009 fired during the cert-rotator maintenance window.',
+      },
+      {
+        timestamp: daysAgo(6),
+        entry_type: 'response',
+        entry_id: 'resp-0008',
+        summary: 'Cleared after matching the rotation schedule; added maintenance window allowlist.',
+      },
+      {
+        timestamp: daysAgo(6),
+        entry_type: 'status_change',
+        entry_id: 'inc-0010-sc1',
+        summary: 'Status moved to closed.',
+      },
+    ],
+    created_at: daysAgo(7),
+    updated_at: daysAgo(6),
+    closed_at: daysAgo(6),
+    notes: [],
+  },
+
+  // ── Incident 11 — backup script bulk read (closed) ──
+  {
+    incident_id: 'inc-0011',
+    incident_type: 'data_access_anomaly',
+    correlation_id: 'corr-bg-doc-011',
+    status: 'closed',
+    severity: 'informational',
+    confidence: 'low',
+    risk_score: 5,
+    primary_actor_id: 'backup-agent-02',
+    actor_type: 'service',
+    actor_role: null,
+    detection_ids: ['DET-DOC-005'],
+    detection_summary: [
+      'Abnormal Bulk Document Access triggered during the nightly backup run.',
+    ],
+    response_ids: ['resp-0009'],
+    containment_status: 'false_positive_closed',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: ['backup-agent-02'],
+    affected_resources: { services: ['backup-agent-02'] },
+    timeline: [
+      {
+        timestamp: daysAgo(6),
+        entry_type: 'alert',
+        entry_id: 'inc-0011-a1',
+        summary: 'DET-DOC-005 fired on backup-agent-02 nightly scan.',
+      },
+      {
+        timestamp: daysAgo(5),
+        entry_type: 'response',
+        entry_id: 'resp-0009',
+        summary: 'Threshold adjusted and service account allowlisted for bulk-read rule.',
+      },
+      {
+        timestamp: daysAgo(5),
+        entry_type: 'status_change',
+        entry_id: 'inc-0011-sc1',
+        summary: 'Status moved to closed.',
+      },
+    ],
+    created_at: daysAgo(6),
+    updated_at: daysAgo(5),
+    closed_at: daysAgo(5),
+    notes: [],
+  },
+
+  // ── Incident 12 — residential-proxy brute force (contained) ──
+  {
+    incident_id: 'inc-0012',
+    incident_type: 'credential_compromise',
+    correlation_id: 'corr-bg-auth-012',
+    status: 'contained',
+    severity: 'medium',
+    confidence: 'medium',
+    risk_score: 38,
+    primary_actor_id: 'unknown-external',
+    actor_type: 'external',
+    actor_role: null,
+    detection_ids: ['DET-AUTH-001'],
+    detection_summary: [
+      'Burst of 40+ failed logins from a residential proxy range against a handful of analyst accounts.',
+    ],
+    response_ids: ['resp-0010'],
+    containment_status: 'ip_blocked',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: ['svc-identity-edge'],
+    affected_resources: { services: ['svc-identity-edge'] },
+    timeline: [
+      {
+        timestamp: hoursAgo(60),
+        entry_type: 'alert',
+        entry_id: 'inc-0012-a1',
+        summary: 'DET-AUTH-001 fired — 40+ failures from residential proxy range.',
+      },
+      {
+        timestamp: hoursAgo(48),
+        entry_type: 'response',
+        entry_id: 'resp-0010',
+        summary: 'Source range blocked at identity edge; monitoring for shift.',
+      },
+      {
+        timestamp: hoursAgo(48),
+        entry_type: 'status_change',
+        entry_id: 'inc-0012-sc1',
+        summary: 'Status moved to contained.',
+      },
+    ],
+    created_at: hoursAgo(60),
+    updated_at: hoursAgo(48),
+    closed_at: null,
+    notes: [],
+  },
+
+  // ── Incident 13 — operator token reuse precaution (contained) ──
+  {
+    incident_id: 'inc-0013',
+    incident_type: 'session_anomaly',
+    correlation_id: 'corr-bg-sess-013',
+    status: 'contained',
+    severity: 'low',
+    confidence: 'low',
+    risk_score: 18,
+    primary_actor_id: 'operator-soc-01',
+    actor_type: 'user',
+    actor_role: 'operator',
+    detection_ids: ['DET-SESSION-003'],
+    detection_summary: [
+      'Token reuse flagged between corp VPN and BYOD laptop; benign after verification.',
+    ],
+    response_ids: ['resp-0011'],
+    containment_status: 'session_revoked',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: ['sess-bg-op01-7713'],
+    affected_services: [],
+    affected_resources: {
+      sessions: ['sess-bg-op01-7713'],
+      actors: ['operator-soc-01'],
+    },
+    timeline: [
+      {
+        timestamp: hoursAgo(50),
+        entry_type: 'alert',
+        entry_id: 'inc-0013-a1',
+        summary: 'DET-SESSION-003 fired — token reuse between two origins.',
+      },
+      {
+        timestamp: hoursAgo(49),
+        entry_type: 'response',
+        entry_id: 'resp-0011',
+        summary: 'Session revoked as a precaution; operator re-issued immediately.',
+      },
+      {
+        timestamp: hoursAgo(49),
+        entry_type: 'status_change',
+        entry_id: 'inc-0013-sc1',
+        summary: 'Status moved to contained.',
+      },
+    ],
+    created_at: hoursAgo(50),
+    updated_at: hoursAgo(49),
+    closed_at: null,
+    notes: [
+      {
+        note_id: 'note-0013-1',
+        author: 'operator-soc-02',
+        content:
+          'Verified directly with operator-soc-01 that both devices were in use concurrently. Token was revoked out of an abundance of caution and re-issued within two minutes.',
+        created_at: hoursAgo(49),
+      },
+    ],
+  },
+
+  // ── Incident 14 — svc-telemetry-ingest 403 drip (investigating) ──
+  {
+    incident_id: 'inc-0014',
+    incident_type: 'service_anomaly',
+    correlation_id: 'corr-bg-svc-014',
+    status: 'investigating',
+    severity: 'medium',
+    confidence: 'medium',
+    risk_score: 32,
+    primary_actor_id: 'svc-telemetry-ingest',
+    actor_type: 'service',
+    actor_role: null,
+    detection_ids: ['DET-SVC-007'],
+    detection_summary: [
+      'Steady drip of 403s from svc-telemetry-ingest probing admin routes; unclear if misconfig or recon.',
+    ],
+    response_ids: [],
+    containment_status: 'active_monitoring',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: ['svc-telemetry-ingest'],
+    affected_resources: { services: ['svc-telemetry-ingest'] },
+    timeline: [
+      {
+        timestamp: hoursAgo(14),
+        entry_type: 'alert',
+        entry_id: 'inc-0014-a1',
+        summary: 'DET-SVC-007 fired — slow drip of unauthorized route attempts.',
+      },
+      {
+        timestamp: hoursAgo(13),
+        entry_type: 'status_change',
+        entry_id: 'inc-0014-sc1',
+        summary: 'Status moved to investigating.',
+      },
+    ],
+    created_at: hoursAgo(14),
+    updated_at: hoursAgo(13),
+    closed_at: null,
+    notes: [],
+  },
+
+  // ── Incident 15 — off-hours admin login (investigating) ──
+  {
+    incident_id: 'inc-0015',
+    incident_type: 'access_anomaly',
+    correlation_id: 'corr-bg-sess-015',
+    status: 'investigating',
+    severity: 'medium',
+    confidence: 'low',
+    risk_score: 25,
+    primary_actor_id: 'robin.chen',
+    actor_type: 'user',
+    actor_role: 'platform-admin',
+    detection_ids: ['DET-AUTH-002'],
+    detection_summary: [
+      'Successful platform-admin login at 02:00 local time; outside normal working hours.',
+    ],
+    response_ids: [],
+    containment_status: 'under_review',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: [],
+    affected_resources: { actors: ['robin.chen'] },
+    timeline: [
+      {
+        timestamp: hoursAgo(12),
+        entry_type: 'alert',
+        entry_id: 'inc-0015-a1',
+        summary: 'Off-hours platform-admin authentication flagged for review.',
+      },
+      {
+        timestamp: hoursAgo(11),
+        entry_type: 'status_change',
+        entry_id: 'inc-0015-sc1',
+        summary: 'Status moved to investigating.',
+      },
+    ],
+    created_at: hoursAgo(12),
+    updated_at: hoursAgo(11),
+    closed_at: null,
+    notes: [],
+  },
+
+  // ── Incident 16 — analyst forbidden-doc uptick (open) ──
+  {
+    incident_id: 'inc-0016',
+    incident_type: 'data_access_anomaly',
+    correlation_id: 'corr-bg-doc-016',
+    status: 'open',
+    severity: 'medium',
+    confidence: 'low',
+    risk_score: 22,
+    primary_actor_id: 'aggregate',
+    actor_type: 'user',
+    actor_role: null,
+    detection_ids: ['DET-DOC-004'],
+    detection_summary: [
+      'Uptick in document.read.failure events across three analysts; classification mismatch cluster.',
+    ],
+    response_ids: [],
+    containment_status: 'triage_pending',
+    event_ids: [],
+    affected_documents: [],
+    affected_sessions: [],
+    affected_services: [],
+    affected_resources: {},
+    timeline: [
+      {
+        timestamp: hoursAgo(4),
+        entry_type: 'alert',
+        entry_id: 'inc-0016-a1',
+        summary: 'Cluster of DET-DOC-004 firings detected across 3 analysts.',
+      },
+    ],
+    created_at: hoursAgo(4),
+    updated_at: hoursAgo(4),
+    closed_at: null,
+    notes: [],
+  },
 ];
 
 // ------------------------------------------------------------
