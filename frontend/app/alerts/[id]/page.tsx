@@ -4,46 +4,12 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { getAlerts, getEvents, getIncident, getResponses } from '@/lib/api';
-import type { Alert } from '@/lib/types';
+import type { Alert, Event, Incident, IncidentResponse } from '@/lib/types';
 
-type EventRecord = {
-  event_id?: string;
-  created_at?: string;
-  event_type?: string;
-  actor_id?: string;
-  correlation_id?: string;
-  payload?: unknown;
-  [key: string]: unknown;
-};
-
-type IncidentRecord = {
-  incident_id?: string;
-  correlation_id?: string;
-  status?: string;
-  severity?: string;
-  primary_actor_id?: string;
-  risk_score?: number;
-  detection_ids?: string[];
-  response_ids?: string[];
-  created_at?: string;
-  [key: string]: unknown;
-};
-
-type ResponseRecord = {
-  response_id?: string;
-  response_type?: string;
-  action?: string;
-  status?: string;
-  result?: string;
-  target?: string;
-  target_id?: string;
-  correlation_id?: string;
-  created_at?: string;
-  payload?: unknown;
-  [key: string]: unknown;
-};
-
-const SEVERITY_STYLES: Record<string, { badge: string; border: string; text: string }> = {
+const SEVERITY_STYLES: Record<
+  string,
+  { badge: string; border: string; text: string }
+> = {
   critical: {
     badge: 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30',
     border: 'border-red-500/30',
@@ -84,16 +50,9 @@ function formatTimestamp(ts?: string) {
   }
 }
 
-function formatConfidence(confidence: string | number | null | undefined) {
-  if (confidence === null || confidence === undefined || confidence === '') {
-    return 'unknown';
-  }
-
-  if (typeof confidence === 'number') {
-    return `${Math.round(confidence * 100)}%`;
-  }
-
-  return String(confidence);
+function formatConfidence(confidence?: string) {
+  if (!confidence) return 'unknown';
+  return confidence;
 }
 
 function safeJson(value: unknown) {
@@ -104,31 +63,31 @@ function safeJson(value: unknown) {
   }
 }
 
-function getEventLabel(event: EventRecord) {
-  return (
-    String(event.event_type ?? event.payload && typeof event.payload === 'object'
-      ? (event.payload as Record<string, unknown>).event_type ?? ''
-      : '') || 'unknown_event'
-  );
+function getEventLabel(event: Event) {
+  if (event.event_type) return event.event_type;
+
+  if (event.payload && typeof event.payload === 'object') {
+    const payload = event.payload as Record<string, unknown>;
+    if (typeof payload.event_type === 'string') {
+      return payload.event_type;
+    }
+  }
+
+  return 'unknown_event';
 }
 
-function getResponseLabel(response: ResponseRecord) {
-  return (
-    response.response_type ||
-    response.action ||
-    response.result ||
-    'unknown_response'
-  );
+function getResponseLabel(response: IncidentResponse) {
+  return response.response_type || response.summary || 'unknown_response';
 }
 
 export default function AlertDetailPage() {
   const params = useParams();
-  const alertId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const alertId = typeof params?.id === 'string' ? params.id : null;
 
   const [alert, setAlert] = useState<Alert | null>(null);
-  const [incident, setIncident] = useState<IncidentRecord | null>(null);
-  const [events, setEvents] = useState<EventRecord[]>([]);
-  const [responses, setResponses] = useState<ResponseRecord[]>([]);
+  const [incident, setIncident] = useState<Incident | null>(null);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [responses, setResponses] = useState<IncidentResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,7 +95,7 @@ export default function AlertDetailPage() {
 
   useEffect(() => {
     async function loadAlertDetail() {
-      if (!alertId || typeof alertId !== 'string') {
+      if (!alertId) {
         setError('Invalid alert id');
         setLoading(false);
         return;
@@ -146,10 +105,11 @@ export default function AlertDetailPage() {
         setLoading(true);
         setError(null);
 
-        const allAlerts = await getAlerts({ limit: '500' });
-        const alertList = Array.isArray(allAlerts) ? allAlerts : [];
+        const allAlerts = await getAlerts({ limit: 500 });
         const matchedAlert =
-          alertList.find((item) => item.alert_id === alertId) ?? null;
+          Array.isArray(allAlerts)
+            ? allAlerts.find((item) => item.alert_id === alertId) ?? null
+            : null;
 
         if (!matchedAlert) {
           setAlert(null);
@@ -166,18 +126,18 @@ export default function AlertDetailPage() {
         const contributingIds = new Set(matchedAlert.contributing_event_ids ?? []);
 
         const [eventsResult, responsesResult] = await Promise.all([
-          correlationId ? getEvents({ correlation_id: correlationId, limit: '100' }) : Promise.resolve([]),
+          correlationId ? getEvents({ correlation_id: correlationId, limit: 100 }) : Promise.resolve([]),
           getResponses(),
         ]);
 
-        const fetchedEvents = Array.isArray(eventsResult) ? (eventsResult as EventRecord[]) : [];
-        const fetchedResponses = Array.isArray(responsesResult)
-          ? (responsesResult as ResponseRecord[])
-          : [];
+        const fetchedEvents = Array.isArray(eventsResult) ? eventsResult : [];
+        const fetchedResponses = Array.isArray(responsesResult) ? responsesResult : [];
 
         const relatedEvents =
           contributingIds.size > 0
-            ? fetchedEvents.filter((event) => event.event_id && contributingIds.has(event.event_id))
+            ? fetchedEvents.filter(
+                (event) => event.event_id && contributingIds.has(event.event_id)
+              )
             : fetchedEvents.filter((event) => {
                 if (correlationId && event.correlation_id === correlationId) return true;
                 if (matchedAlert.actor_id && event.actor_id === matchedAlert.actor_id) return true;
@@ -194,7 +154,7 @@ export default function AlertDetailPage() {
         if (correlationId) {
           try {
             const incidentResult = await getIncident(correlationId);
-            setIncident(incidentResult as IncidentRecord);
+            setIncident(incidentResult);
           } catch {
             setIncident(null);
           }
@@ -218,9 +178,16 @@ export default function AlertDetailPage() {
   const whyThisTriggered = useMemo(() => {
     if (!alert) return [];
 
+    const sortedEvents = [...events].sort((a, b) =>
+      String(a.timestamp ?? '').localeCompare(String(b.timestamp ?? ''))
+    );
+
+    const firstTimestamp = sortedEvents[0]?.timestamp;
+    const lastTimestamp = sortedEvents[sortedEvents.length - 1]?.timestamp;
+
     const evidenceWindow =
-      events.length > 0
-        ? `${formatTimestamp(events[events.length - 1]?.created_at)} to ${formatTimestamp(events[0]?.created_at)}`
+      sortedEvents.length > 0
+        ? `${formatTimestamp(firstTimestamp)} to ${formatTimestamp(lastTimestamp)}`
         : 'No event window available';
 
     return [
@@ -242,7 +209,7 @@ export default function AlertDetailPage() {
       },
       {
         label: 'Contributing events',
-        value: String(alert.contributing_event_ids?.length ?? events.length ?? 0),
+        value: String(alert.contributing_event_ids?.length ?? events.length),
       },
       {
         label: 'Outcome',
@@ -309,7 +276,9 @@ export default function AlertDetailPage() {
         </Link>
       </div>
 
-      <section className={`relative overflow-hidden rounded-2xl border ${severityStyle.border} bg-gradient-to-br from-white via-rose-50 to-orange-50 px-6 py-8 shadow-sm dark:from-gray-900 dark:via-red-950/20 dark:to-gray-900`}>
+      <section
+        className={`relative overflow-hidden rounded-2xl border ${severityStyle.border} bg-gradient-to-br from-white via-rose-50 to-orange-50 px-6 py-8 shadow-sm dark:from-gray-900 dark:via-red-950/20 dark:to-gray-900`}
+      >
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
@@ -325,7 +294,9 @@ export default function AlertDetailPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded border px-3 py-1 text-xs font-mono uppercase ${severityStyle.badge}`}>
+            <span
+              className={`rounded border px-3 py-1 text-xs font-mono uppercase ${severityStyle.badge}`}
+            >
               {alert.severity || 'low'}
             </span>
             <span className="rounded border border-slate-300 bg-white px-3 py-1 text-xs font-mono uppercase text-slate-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
@@ -506,7 +477,7 @@ export default function AlertDetailPage() {
                   </div>
 
                   <span className="text-xs font-mono text-slate-500 dark:text-gray-500">
-                    {formatTimestamp(event.created_at)}
+                    {formatTimestamp(event.timestamp)}
                   </span>
                 </div>
 
@@ -516,7 +487,7 @@ export default function AlertDetailPage() {
                       Actor
                     </p>
                     <p className="mt-1 break-all text-sm font-mono text-slate-700 dark:text-gray-300">
-                      {String(event.actor_id ?? 'unknown')}
+                      {event.actor_id || 'unknown'}
                     </p>
                   </div>
 
@@ -525,16 +496,16 @@ export default function AlertDetailPage() {
                       Correlation
                     </p>
                     <p className="mt-1 break-all text-sm font-mono text-slate-700 dark:text-gray-300">
-                      {String(event.correlation_id ?? 'n/a')}
+                      {event.correlation_id || 'n/a'}
                     </p>
                   </div>
 
                   <div>
                     <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
-                      Position
+                      Status
                     </p>
                     <p className="mt-1 text-sm font-mono text-slate-700 dark:text-gray-300">
-                      {index + 1} of {events.length}
+                      {event.status || 'unknown'}
                     </p>
                   </div>
                 </div>
@@ -593,7 +564,7 @@ export default function AlertDetailPage() {
                     </div>
 
                     <span className="text-xs font-mono text-slate-500 dark:text-gray-500">
-                      {formatTimestamp(response.created_at)}
+                      {formatTimestamp(response.triggered_at)}
                     </span>
                   </div>
 
@@ -603,7 +574,7 @@ export default function AlertDetailPage() {
                         Status
                       </p>
                       <p className="mt-1 text-sm font-mono text-slate-700 dark:text-gray-300">
-                        {response.status || response.result || 'unknown'}
+                        {response.status || 'unknown'}
                       </p>
                     </div>
 
@@ -612,21 +583,39 @@ export default function AlertDetailPage() {
                         Target
                       </p>
                       <p className="mt-1 break-all text-sm font-mono text-slate-700 dark:text-gray-300">
-                        {response.target || response.target_id || 'n/a'}
+                        {response.target || 'n/a'}
                       </p>
                     </div>
                   </div>
 
-                  {response.payload !== undefined && (
-                    <details className="mt-4 rounded-xl border border-slate-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                      <summary className="cursor-pointer px-4 py-3 text-xs font-mono uppercase tracking-wide text-slate-600 dark:text-gray-400">
-                        View response payload
-                      </summary>
-                      <pre className="overflow-x-auto border-t border-slate-200 px-4 py-3 text-xs leading-6 text-slate-700 dark:border-gray-800 dark:text-gray-300">
-                        {safeJson(response.payload)}
-                      </pre>
-                    </details>
-                  )}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
+                        Operator
+                      </p>
+                      <p className="mt-1 text-sm font-mono text-slate-700 dark:text-gray-300">
+                        {response.operator || 'system'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
+                        Executed
+                      </p>
+                      <p className="mt-1 text-sm font-mono text-slate-700 dark:text-gray-300">
+                        {formatTimestamp(response.executed_at ?? undefined)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+                    <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500">
+                      Summary
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-gray-300">
+                      {response.summary || 'No response summary provided.'}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -655,7 +644,7 @@ export default function AlertDetailPage() {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {(alert.contributing_event_ids ?? []).length > 0 ? (
-                  alert.contributing_event_ids?.map((id) => (
+                  alert.contributing_event_ids.map((id) => (
                     <span
                       key={id}
                       className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-mono text-slate-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
