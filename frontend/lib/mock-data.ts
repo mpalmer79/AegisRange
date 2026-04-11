@@ -110,3 +110,34 @@ export const MOCK_METRICS: Metrics = {
     closed: 2,
   },
 };
+
+// ------------------------------------------------------------
+// Correlation IDs
+//
+// Each id below names one narrative chain that ties events,
+// alerts, and (in A.3) an incident together. The chains span
+// the 72-hour SOC window with a deliberate mix of statuses so
+// the demo always shows old/contained activity alongside a
+// fresh, still-firing investigation.
+//
+//   Chain          Status         Window
+//   ─────────────────────────────────────
+//   AUTH_BRUTE     contained      T-66h
+//   SESSION_HIJACK investigating  T-48h
+//   DOC_EXFIL      investigating  T-30h
+//   SVC_ABUSE      contained      T-20h
+//   POLICY_CHANGE  open           T-8h
+//   MULTI_STAGE    open (live)    T-2h
+//
+// Subsequent slices reference these by name so renaming a
+// chain only requires touching this object.
+// ------------------------------------------------------------
+
+export const CORRELATION_IDS = {
+  AUTH_BRUTE: 'corr-auth-brute-001',
+  SESSION_HIJACK: 'corr-session-hijack-002',
+  DOC_EXFIL: 'corr-doc-exfil-003',
+  SVC_ABUSE: 'corr-svc-abuse-004',
+  POLICY_CHANGE: 'corr-policy-005',
+  MULTI_STAGE: 'corr-multi-stage-006',
+} as const;
