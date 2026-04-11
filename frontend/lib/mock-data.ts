@@ -17,6 +17,7 @@
 // ============================================================
 
 import type {
+  Alert,
   Event,
   HealthStatus,
   Metrics,
@@ -857,3 +858,263 @@ export const MOCK_EVENTS: Event[] = [
     severity: 'informational',
   },
 ];
+
+// ------------------------------------------------------------
+// Alerts
+//
+// One alert per detection rule that fires across the six
+// chains. Every contributing_event_id below points to a real
+// event in MOCK_EVENTS — nothing dangling. rule_name strings
+// match backend/app/services/detection_service.py verbatim so
+// the alerts table reads identically in live and mock modes.
+// ------------------------------------------------------------
+
+export const MOCK_ALERTS: Alert[] = [
+  // Chain 1 — AUTH_BRUTE
+  {
+    alert_id: 'alert-0001',
+    created_at: minutesAgo(3960),
+    rule_id: 'DET-AUTH-001',
+    rule_name: 'Repeated Authentication Failure Burst',
+    severity: 'medium',
+    confidence: 'medium',
+    actor_id: 'wade.hollis',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    contributing_event_ids: [
+      'evt-0001',
+      'evt-0002',
+      'evt-0003',
+      'evt-0004',
+      'evt-0005',
+      'evt-0006',
+    ],
+    summary: 'Detected 6 authentication failures in 2 minutes.',
+    payload: { failure_count: 6, source_ip: '185.220.101.42' },
+  },
+  {
+    alert_id: 'alert-0002',
+    created_at: minutesAgo(3959),
+    rule_id: 'DET-AUTH-002',
+    rule_name: 'Suspicious Success After Failure Sequence',
+    severity: 'high',
+    confidence: 'high',
+    actor_id: 'wade.hollis',
+    correlation_id: CORRELATION_IDS.AUTH_BRUTE,
+    contributing_event_ids: [
+      'evt-0001',
+      'evt-0002',
+      'evt-0003',
+      'evt-0004',
+      'evt-0005',
+      'evt-0006',
+      'evt-0007',
+    ],
+    summary: 'Successful authentication followed repeated failures within 5 minutes.',
+    payload: {
+      failure_count: 6,
+      success_event_id: 'evt-0007',
+      time_delta_seconds: 60,
+    },
+  },
+
+  // Chain 2 — SESSION_HIJACK
+  {
+    alert_id: 'alert-0003',
+    created_at: minutesAgo(2864),
+    rule_id: 'DET-SESSION-003',
+    rule_name: 'Token Reuse From Conflicting Origins',
+    severity: 'high',
+    confidence: 'high',
+    actor_id: 'alex.nguyen',
+    correlation_id: CORRELATION_IDS.SESSION_HIJACK,
+    contributing_event_ids: ['evt-0010', 'evt-0011', 'evt-0012', 'evt-0013'],
+    summary: 'Session sess-an-corp-7c10 used from 2 different IPs within 5 minutes.',
+    payload: {
+      session_id: 'sess-an-corp-7c10',
+      source_ip_list: ['10.20.4.21', '203.0.113.77'],
+    },
+  },
+
+  // Chain 3 — DOC_EXFIL
+  {
+    alert_id: 'alert-0004',
+    created_at: minutesAgo(1810),
+    rule_id: 'DET-DOC-004',
+    rule_name: 'Restricted Document Access Outside Role Scope',
+    severity: 'high',
+    confidence: 'high',
+    actor_id: 'priya.shah',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    contributing_event_ids: ['evt-0020'],
+    summary: 'Access attempt to document doc-blueprint-Z denied due to classification mismatch.',
+    payload: {
+      document_id: 'doc-blueprint-Z',
+      classification: 'restricted',
+      actor_role: 'analyst',
+    },
+  },
+  {
+    alert_id: 'alert-0005',
+    created_at: minutesAgo(1800),
+    rule_id: 'DET-DOC-006',
+    rule_name: 'Read-To-Download Staging Pattern',
+    severity: 'critical',
+    confidence: 'high',
+    actor_id: 'priya.shah',
+    correlation_id: CORRELATION_IDS.DOC_EXFIL,
+    contributing_event_ids: [
+      'evt-0021',
+      'evt-0022',
+      'evt-0023',
+      'evt-0024',
+      'evt-0025',
+      'evt-0026',
+    ],
+    summary: 'Detected read-to-download staging: 3 overlapping documents.',
+    payload: {
+      read_count: 3,
+      download_count: 3,
+      overlapping_documents: ['doc-payload-A', 'doc-payload-B', 'doc-payload-C'],
+    },
+  },
+
+  // Chain 4 — SVC_ABUSE
+  {
+    alert_id: 'alert-0006',
+    created_at: minutesAgo(1203),
+    rule_id: 'DET-SVC-007',
+    rule_name: 'Unauthorized Service Identity Route Access',
+    severity: 'high',
+    confidence: 'medium',
+    actor_id: 'svc-sat-telemetry',
+    correlation_id: CORRELATION_IDS.SVC_ABUSE,
+    contributing_event_ids: ['evt-0030', 'evt-0031', 'evt-0032', 'evt-0033'],
+    summary: 'Service svc-sat-telemetry made 4 unauthorized route attempts in 2 minutes.',
+    payload: {
+      service_id: 'svc-sat-telemetry',
+      route_list: [
+        '/api/admin/policies',
+        '/api/admin/secrets',
+        '/api/admin/users',
+        '/api/internal/keys',
+      ],
+      failure_count: 4,
+    },
+  },
+
+  // Chain 5 — POLICY_CHANGE
+  {
+    alert_id: 'alert-0007',
+    created_at: minutesAgo(500),
+    rule_id: 'DET-ART-008',
+    rule_name: 'Artifact Validation Failure Pattern',
+    severity: 'medium',
+    confidence: 'medium',
+    actor_id: 'robin.chen',
+    correlation_id: CORRELATION_IDS.POLICY_CHANGE,
+    contributing_event_ids: ['evt-0040', 'evt-0041', 'evt-0042'],
+    summary: 'Detected 3 artifact validation failures in 10 minutes.',
+    payload: {
+      artifact_ids: [
+        'artifact-firmware-04',
+        'artifact-firmware-05',
+        'artifact-firmware-06',
+      ],
+      failure_count: 3,
+    },
+  },
+  {
+    alert_id: 'alert-0008',
+    created_at: minutesAgo(485),
+    rule_id: 'DET-POL-009',
+    rule_name: 'Privileged Policy Change With Elevated Risk Context',
+    severity: 'critical',
+    confidence: 'high',
+    actor_id: 'robin.chen',
+    correlation_id: CORRELATION_IDS.POLICY_CHANGE,
+    contributing_event_ids: ['evt-0043'],
+    summary: 'Policy change by robin.chen while under elevated risk (step_up_required).',
+    payload: {
+      policy_id: 'policy-firewall-egress',
+      actor_risk_context: 'step_up_required',
+    },
+  },
+
+  // Chain 6 — MULTI_STAGE
+  {
+    alert_id: 'alert-0009',
+    created_at: minutesAgo(120),
+    rule_id: 'DET-CORR-010',
+    rule_name: 'Multi-Signal Compromise Sequence',
+    severity: 'critical',
+    confidence: 'high',
+    actor_id: 'mira.delacroix',
+    correlation_id: CORRELATION_IDS.MULTI_STAGE,
+    contributing_event_ids: ['evt-0050', 'evt-0051', 'evt-0052', 'evt-0053'],
+    summary: 'Correlated 4 distinct detections within 15 minutes.',
+    payload: {
+      detection_ids: [
+        'DET-AUTH-002',
+        'DET-CORR-010',
+        'DET-DOC-006',
+        'DET-SESSION-003',
+      ],
+      actor_id: 'mira.delacroix',
+      timeline_summary: '4 detection events across 4 rules',
+    },
+  },
+];
+
+// ------------------------------------------------------------
+// Filter helpers
+//
+// Used by the api.ts mock fallback so the filtered shape
+// matches what the live backend would return for the same
+// query string. Each parameter is independently optional and
+// applies AND semantics — passing no filter returns the full
+// list unchanged.
+// ------------------------------------------------------------
+
+export function filterEvents(
+  events: Event[],
+  filter?: {
+    actor_id?: string;
+    correlation_id?: string;
+    event_type?: string;
+    since_minutes?: number;
+  },
+): Event[] {
+  if (!filter) return events;
+  const cutoff =
+    filter.since_minutes !== undefined
+      ? REFERENCE_NOW - filter.since_minutes * 60_000
+      : null;
+  return events.filter((event) => {
+    if (filter.actor_id && event.actor_id !== filter.actor_id) return false;
+    if (filter.correlation_id && event.correlation_id !== filter.correlation_id) {
+      return false;
+    }
+    if (filter.event_type && event.event_type !== filter.event_type) return false;
+    if (cutoff !== null && Date.parse(event.timestamp) < cutoff) return false;
+    return true;
+  });
+}
+
+export function filterAlerts(
+  alerts: Alert[],
+  filter?: {
+    actor_id?: string;
+    correlation_id?: string;
+    rule_id?: string;
+  },
+): Alert[] {
+  if (!filter) return alerts;
+  return alerts.filter((alert) => {
+    if (filter.actor_id && alert.actor_id !== filter.actor_id) return false;
+    if (filter.correlation_id && alert.correlation_id !== filter.correlation_id) {
+      return false;
+    }
+    if (filter.rule_id && alert.rule_id !== filter.rule_id) return false;
+    return true;
+  });
+}
