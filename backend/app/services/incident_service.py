@@ -9,14 +9,14 @@ class IncidentService:
         self.store = store
 
     def register_event(self, event: Event) -> None:
-        incident = self.store.incidents_by_correlation.get(event.correlation_id)
+        incident = self.store.get_incident(event.correlation_id)
         if not incident:
             return
         self._append_event(incident, event)
         self.store.upsert_incident(incident)
 
     def register_alert(self, alert: Alert, source_event: Event) -> Incident:
-        incident = self.store.incidents_by_correlation.get(alert.correlation_id)
+        incident = self.store.get_incident(alert.correlation_id)
 
         should_create = (
             alert.severity in {Severity.HIGH, Severity.CRITICAL}

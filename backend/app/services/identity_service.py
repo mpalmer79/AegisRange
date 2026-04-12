@@ -51,12 +51,12 @@ class IdentityService:
         )
 
     def validate_session(self, session_id: str) -> bool:
-        if session_id in self.store.revoked_sessions:
+        if self.store.is_session_revoked(session_id):
             return False
-        return session_id in self.store.actor_sessions.values()
+        return self.store.session_exists(session_id)
 
     def revoke_session(self, session_id: str) -> bool:
-        if session_id not in self.store.actor_sessions.values():
+        if not self.store.session_exists(session_id):
             return False
         self.store.revoke_session(session_id)
         return True

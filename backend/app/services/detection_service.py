@@ -308,16 +308,16 @@ class DetectionService:
 
         store = self.telemetry.store
         has_elevated_risk = (
-            event.actor_id in store.step_up_required
-            or event.actor_id in store.download_restricted_actors
+            store.is_step_up_required(event.actor_id)
+            or store.is_download_restricted(event.actor_id)
         )
         if not has_elevated_risk:
             return None
 
         risk_contexts = []
-        if event.actor_id in store.step_up_required:
+        if store.is_step_up_required(event.actor_id):
             risk_contexts.append("step_up_required")
-        if event.actor_id in store.download_restricted_actors:
+        if store.is_download_restricted(event.actor_id):
             risk_contexts.append("download_restricted")
         actor_risk_context = ", ".join(risk_contexts)
 

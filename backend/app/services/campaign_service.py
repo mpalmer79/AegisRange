@@ -45,7 +45,7 @@ class CampaignDetectionService:
 
     def detect_campaigns(self) -> list[Campaign]:
         """Scan all incidents and group them into campaigns."""
-        incidents = list(self.store.incidents_by_correlation.values())
+        incidents = self.store.get_all_incidents()
         if len(incidents) < 2:
             return []
 
@@ -182,7 +182,7 @@ class CampaignDetectionService:
         for campaign in self._campaigns.values():
             # Check if the actor is involved in any of the campaign's incidents
             for correlation_id in campaign.incident_correlation_ids:
-                incident = self.store.incidents_by_correlation.get(correlation_id)
+                incident = self.store.get_incident(correlation_id)
                 if incident is not None and incident.primary_actor_id == actor_id:
                     results.append(campaign)
                     break

@@ -252,5 +252,54 @@ class TestDockerfileConstraints(unittest.TestCase):
         )
 
 
+class TestStoreEncapsulation(unittest.TestCase):
+    """Services must use store accessor methods, not raw attributes."""
+
+    def test_services_do_not_access_raw_store_attributes(self) -> None:
+        """AST-based regression guard against direct store attribute access."""
+        import ast
+        import pathlib
+
+        forbidden_attrs = {
+            "incidents_by_correlation",
+            "step_up_required",
+            "download_restricted_actors",
+            "disabled_services",
+            "blocked_routes",
+            "quarantined_artifacts",
+            "policy_change_restricted_actors",
+            "revoked_sessions",
+            "revoked_jtis",
+            "alert_signatures",
+            "login_failures_by_actor",
+            "document_reads_by_actor",
+            "authorization_failures_by_actor",
+            "artifact_failures_by_actor",
+            "risk_profiles",
+        }
+
+        violations: list[str] = []
+        services_dir = (
+            pathlib.Path(__file__).resolve().parent.parent / "app" / "services"
+        )
+        for py_file in services_dir.glob("*.py"):
+            tree = ast.parse(py_file.read_text())
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr in forbidden_attrs
+                ):
+                    violations.append(
+                        f"{py_file.name}:{node.lineno} accesses .{node.attr}"
+                    )
+
+        self.assertEqual(
+            violations,
+            [],
+            f"Services must not access raw store attributes:\n"
+            + "\n".join(violations),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

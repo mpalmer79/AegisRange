@@ -38,7 +38,7 @@ class RiskScoringService:
 
     def update_risk(self, alert: Alert) -> RiskProfile:
         """Calculate and update actor risk based on a new alert."""
-        profile = self.store.risk_profiles.get(alert.actor_id)
+        profile = self.store.get_risk_profile(alert.actor_id)
         if profile is None:
             profile = RiskProfile(actor_id=alert.actor_id)
             self.store.update_risk_profile(alert.actor_id, profile)
@@ -63,7 +63,7 @@ class RiskScoringService:
         profile.last_updated = utc_now()
 
         # Update incident risk_score if one exists
-        for incident in self.store.incidents_by_correlation.values():
+        for incident in self.store.get_all_incidents():
             if incident.primary_actor_id == alert.actor_id:
                 incident.risk_score = profile.current_score
                 self.store.upsert_incident(incident)
@@ -71,11 +71,11 @@ class RiskScoringService:
         return profile
 
     def get_profile(self, actor_id: str) -> RiskProfile | None:
-        return self.store.risk_profiles.get(actor_id)
+        return self.store.get_risk_profile(actor_id)
 
     def get_all_profiles(self) -> list[RiskProfile]:
         return sorted(
-            self.store.risk_profiles.values(),
+            self.store.get_all_risk_profiles(),
             key=lambda p: p.current_score,
             reverse=True,
         )

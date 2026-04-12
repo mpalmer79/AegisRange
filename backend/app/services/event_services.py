@@ -65,7 +65,7 @@ class TelemetryService:
         event_types: set[str] | None = None,
         since_minutes: int | None = None,
     ) -> list[Event]:
-        events: Iterable[Event] = self.store.events
+        events: Iterable[Event] = self.store.get_events()
 
         if actor_id:
             events = (event for event in events if event.actor_id == actor_id)
