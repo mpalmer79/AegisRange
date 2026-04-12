@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
+import ErrorBoundary from "@/app/components/ErrorBoundary";
 import { ThemeProvider } from "@/lib/theme-context";
 import { PlayerProgressProvider } from "@/lib/player-progress";
 
@@ -59,7 +60,9 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <PlayerProgressProvider>
-            <AppShell>{children}</AppShell>
+            <ErrorBoundary>
+              <AppShell>{children}</AppShell>
+            </ErrorBoundary>
           </PlayerProgressProvider>
         </ThemeProvider>
       </body>
