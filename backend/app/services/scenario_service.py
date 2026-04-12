@@ -390,9 +390,8 @@ class ScenarioEngine:
             "policy_change_restricted_actors": sorted(
                 self.store.policy_change_restricted_actors
             ),
+            "operated_by": operated_by,
         }
-        if operated_by:
-            summary["operated_by"] = operated_by
         self.store.append_scenario_history(
             {
                 **summary,

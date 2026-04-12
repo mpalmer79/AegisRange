@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
-from app.dependencies import scenario_engine
+from app.dependencies import require_role, scenario_engine
 
 logger = logging.getLogger("aegisrange")
-router = APIRouter(prefix="/scenarios", tags=["scenarios"])
+router = APIRouter(
+    prefix="/scenarios",
+    tags=["scenarios"],
+    dependencies=[Depends(require_role("red_team"))],
+)
 
 
 def _run_scenario(request: Request, scenario_id: str, run_fn):
