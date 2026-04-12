@@ -8,8 +8,8 @@
 :root,
 html.dark {
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --background: #0a0a0a;
   --foreground: #ededed;
   --surface: #0f1117;
@@ -28,20 +28,43 @@ html.dark {
 }
 
 html.light {
-  --background: #f4f6fb;
+  --font-sans:
+    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --background: #f4a460;
   --foreground: #0f172a;
-  --surface: #ffffff;
-  --surface-raised: #f8fafc;
-  --border: #e2e8f0;
+  --surface: #ecfeff;
+  --surface-raised: #e0f2fe;
+  --border: rgba(8, 145, 178, 0.35);
   --muted: #475569;
   --accent: #0891b2;
   --accent-glow: rgba(8, 145, 178, 0.25);
   --red-team: #dc2626;
   --blue-team: #2563eb;
-  --scrollbar-track: #e5e7eb;
-  --scrollbar-thumb: #cbd5e1;
-  --scrollbar-thumb-hover: #94a3b8;
+  --scrollbar-track: #e8b481;
+  --scrollbar-thumb: #b87a3d;
+  --scrollbar-thumb-hover: #8a5a2c;
+  /* Cyber-themed gradients used by .bg-white / .ar-surface overrides below */
+  --cyber-card-gradient: linear-gradient(
+    135deg,
+    #ecfeff 0%,
+    #f0f9ff 50%,
+    #ede9fe 100%
+  );
+  --cyber-card-raised-gradient: linear-gradient(
+    135deg,
+    #cffafe 0%,
+    #e0f2fe 50%,
+    #ddd6fe 100%
+  );
+  --cyber-card-strong-gradient: linear-gradient(
+    135deg,
+    #a5f3fc 0%,
+    #bae6fd 50%,
+    #c4b5fd 100%
+  );
   color-scheme: light;
+  font-family: var(--font-sans);
 }
 
 body {
@@ -49,6 +72,78 @@ body {
   background: var(--background);
   font-family: var(--font-sans);
   transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* ---------------------------------------------------------------------------
+ * Light mode: warm sand body + cyber-themed card gradients
+ *
+ * The body gets a sandy brown base with subtle cyan/violet radial accents
+ * for depth.  Common Tailwind card backgrounds (`bg-white`, `bg-slate-50`,
+ * `bg-gray-50`) are rewritten to cool cyan→violet gradients so cards pop
+ * against the warm background and pick up a SOC/cyber feel.  Borders
+ * inherit a cyan tint for the same reason.
+ *
+ * All overrides are scoped to `html.light` — dark mode is untouched.
+ * ------------------------------------------------------------------------- */
+html.light body {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(34, 211, 238, 0.25),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(168, 85, 247, 0.2),
+      transparent 55%
+    ),
+    var(--background);
+  background-attachment: fixed;
+}
+
+/* Card surfaces */
+html.light .bg-white {
+  background-color: transparent;
+  background-image: var(--cyber-card-gradient);
+}
+html.light .bg-slate-50,
+html.light .bg-gray-50 {
+  background-color: transparent;
+  background-image: var(--cyber-card-raised-gradient);
+}
+html.light .bg-slate-100,
+html.light .bg-gray-100 {
+  background-color: transparent;
+  background-image: var(--cyber-card-strong-gradient);
+}
+
+/* Translucent header / overlay surfaces (e.g. `bg-white/90`, `bg-white/60`) */
+html.light .bg-white\/90,
+html.light .bg-white\/80,
+html.light .bg-white\/60,
+html.light .bg-white\/40 {
+  background-color: rgba(236, 254, 255, 0.85);
+  background-image: linear-gradient(
+    135deg,
+    rgba(207, 250, 254, 0.75) 0%,
+    rgba(221, 214, 254, 0.75) 100%
+  );
+}
+
+/* Cyan-tinted borders so cards feel "tech" against the sand background */
+html.light .border-slate-200,
+html.light .border-gray-200 {
+  border-color: rgba(8, 145, 178, 0.35);
+}
+
+/* .ar-surface helpers used on home + scenario pages */
+html.light .ar-surface {
+  background: var(--cyber-card-gradient);
+  border-color: rgba(8, 145, 178, 0.35);
+}
+html.light .ar-surface-raised {
+  background: var(--cyber-card-raised-gradient);
+  border-color: rgba(8, 145, 178, 0.35);
 }
 
 /* Custom scrollbar */
