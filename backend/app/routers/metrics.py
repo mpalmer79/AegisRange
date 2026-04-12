@@ -5,12 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.dependencies import require_role
+from app.schemas import MetricsResponse
 from app.store import STORE
 
 router = APIRouter(tags=["metrics"])
 
 
-@router.get("/metrics", dependencies=[Depends(require_role("viewer"))])
+@router.get("/metrics", response_model=MetricsResponse, dependencies=[Depends(require_role("viewer"))])
 def get_metrics() -> dict:
     events_by_category: dict[str, int] = {}
     for e in STORE.get_events():

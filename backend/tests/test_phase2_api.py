@@ -104,7 +104,7 @@ class TestNewAlertFiltering(APITestBase):
         self.client.post("/scenarios/scn-svc-005")
         resp = self.client.get("/alerts", params={"rule_id": "DET-SVC-007"})
         self.assertEqual(resp.status_code, 200)
-        alerts = resp.json()
+        alerts = resp.json()["items"]
         self.assertGreater(len(alerts), 0)
         self.assertTrue(all(a["rule_id"] == "DET-SVC-007" for a in alerts))
 
@@ -116,7 +116,7 @@ class TestNewEventFiltering(APITestBase):
             "/events", params={"event_type": "authorization.failure"}
         )
         self.assertEqual(resp.status_code, 200)
-        events = resp.json()
+        events = resp.json()["items"]
         self.assertGreater(len(events), 0)
         self.assertTrue(all(e["event_type"] == "authorization.failure" for e in events))
 

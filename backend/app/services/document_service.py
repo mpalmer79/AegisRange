@@ -54,7 +54,7 @@ class DocumentService:
         if (
             self.store
             and actor_id
-            and actor_id in self.store.download_restricted_actors
+            and self.store.is_download_restricted(actor_id)
         ):
             return False, document
 

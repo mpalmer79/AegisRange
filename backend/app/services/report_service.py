@@ -121,11 +121,11 @@ class ReportService:
 
         # Build summary
         summary = {
-            "total_events": len(self.store.events),
-            "total_alerts": len(self.store.alerts),
-            "total_incidents": len(self.store.incidents_by_correlation),
-            "total_responses": len(self.store.responses),
-            "scenarios_executed": len(self.store.scenario_history),
+            "total_events": len(self.store.get_events()),
+            "total_alerts": len(self.store.get_alerts()),
+            "total_incidents": len(self.store.get_all_incidents()),
+            "total_responses": len(self.store.get_responses()),
+            "scenarios_executed": len(self.store.get_scenario_history_entries()),
         }
 
         return ExerciseReport(
@@ -160,11 +160,12 @@ class ReportService:
 
     def _calculate_exercise_window(self) -> dict:
         """Determine the exercise time window from event timestamps."""
-        if not self.store.events:
+        events = self.store.get_events()
+        if not events:
             now = utc_now()
             return {"start": now.isoformat(), "end": now.isoformat()}
 
-        timestamps = [e.timestamp for e in self.store.events]
+        timestamps = [e.timestamp for e in events]
         return {
             "start": min(timestamps).isoformat(),
             "end": max(timestamps).isoformat(),
@@ -173,26 +174,29 @@ class ReportService:
     def _build_scenario_results(self) -> list[dict]:
         """Build per-scenario results from scenario history and store data."""
         results: list[dict] = []
+        all_events = self.store.get_events()
+        all_alerts = self.store.get_alerts()
+        all_responses = self.store.get_responses()
 
-        for entry in self.store.scenario_history:
+        for entry in self.store.get_scenario_history_entries():
             scenario_id = entry.get("scenario_id", "unknown")
             correlation_id = entry.get("correlation_id", "")
 
             # Count events for this scenario
             scenario_events = [
-                e for e in self.store.events if e.correlation_id == correlation_id
+                e for e in all_events if e.correlation_id == correlation_id
             ]
             events_generated = len(scenario_events)
 
             # Count alerts for this scenario
             scenario_alerts = [
-                a for a in self.store.alerts if a.correlation_id == correlation_id
+                a for a in all_alerts if a.correlation_id == correlation_id
             ]
             alerts_triggered = len(scenario_alerts)
 
             # Count responses for this scenario
             scenario_responses = [
-                r for r in self.store.responses if r.correlation_id == correlation_id
+                r for r in all_responses if r.correlation_id == correlation_id
             ]
             responses_executed = len(scenario_responses)
 
@@ -227,7 +231,7 @@ class ReportService:
     def _calculate_detection_coverage(self) -> dict:
         """Count which of the 10 detection rules actually fired."""
         rule_trigger_counts: dict[str, int] = {}
-        for alert in self.store.alerts:
+        for alert in self.store.get_alerts():
             rule_trigger_counts[alert.rule_id] = (
                 rule_trigger_counts.get(alert.rule_id, 0) + 1
             )
@@ -252,13 +256,14 @@ class ReportService:
 
     def _calculate_response_effectiveness(self) -> dict:
         """Analyze response actions for effectiveness metrics."""
-        total_responses = len(self.store.responses)
+        responses = self.store.get_responses()
+        total_responses = len(responses)
 
         containment_actions = sum(
-            1 for r in self.store.responses if r.action_type in CONTAINMENT_ACTION_TYPES
+            1 for r in responses if r.action_type in CONTAINMENT_ACTION_TYPES
         )
 
-        unique_playbooks = len({r.playbook_id for r in self.store.responses})
+        unique_playbooks = len({r.playbook_id for r in responses})
 
         return {
             "total_responses": total_responses,
@@ -268,17 +273,17 @@ class ReportService:
 
     def _calculate_risk_summary(self) -> dict:
         """Summarize risk profiles across all actors."""
-        profiles = self.store.risk_profiles
+        all_profiles = self.store.get_all_risk_profiles()
 
-        if not profiles:
+        if not all_profiles:
             return {
                 "actors_assessed": 0,
                 "highest_risk_actor": None,
                 "average_risk_score": 0.0,
             }
 
-        actors_assessed = len(profiles)
-        scores = [(actor_id, p.current_score) for actor_id, p in profiles.items()]
+        actors_assessed = len(all_profiles)
+        scores = [(p.actor_id, p.current_score) for p in all_profiles]
         highest_risk_actor = max(scores, key=lambda x: x[1])[0] if scores else None
         average_risk_score = (
             round(sum(s for _, s in scores) / len(scores), 2) if scores else 0.0
@@ -309,7 +314,7 @@ class ReportService:
         # Check for lack of high/critical incidents
         has_high_severity = any(
             inc.severity in (Severity.HIGH, Severity.CRITICAL)
-            for inc in self.store.incidents_by_correlation.values()
+            for inc in self.store.get_all_incidents()
         )
         if not has_high_severity:
             recommendations.append(
@@ -327,15 +332,16 @@ class ReportService:
                     "Response coverage is limited. Review playbook configurations "
                     "for broader containment."
                 )
-        elif total_responses == 0 and len(self.store.alerts) > 0:
+        elif total_responses == 0 and len(self.store.get_alerts()) > 0:
             recommendations.append(
                 "Response coverage is limited. Review playbook configurations "
                 "for broader containment."
             )
 
         # Check risk scores
-        all_zero = all(p.current_score == 0 for p in self.store.risk_profiles.values())
-        if not self.store.risk_profiles or all_zero:
+        all_risk_profiles = self.store.get_all_risk_profiles()
+        all_zero = all(p.current_score == 0 for p in all_risk_profiles)
+        if not all_risk_profiles or all_zero:
             recommendations.append(
                 "Risk scoring shows no elevated actors. Verify risk scoring "
                 "integration with the detection pipeline."
@@ -350,7 +356,7 @@ class ReportService:
 
     def _calculate_mitre_coverage(self) -> dict:
         """Calculate MITRE ATT&CK coverage based on triggered detection rules."""
-        triggered_rules: set[str] = {a.rule_id for a in self.store.alerts}
+        triggered_rules: set[str] = {a.rule_id for a in self.store.get_alerts()}
 
         tactics_covered: set[str] = set()
         techniques_covered: set[str] = set()

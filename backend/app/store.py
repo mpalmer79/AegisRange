@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 from contextlib import contextmanager
-from typing import Generator
+from typing import TYPE_CHECKING, Generator
 
 from app.models import Alert, Event, Incident, ResponseAction
+
+if TYPE_CHECKING:
+    from app.services.risk_service import RiskProfile
 
 
 class InMemoryStore:
@@ -17,7 +21,7 @@ class InMemoryStore:
         self.incidents_by_correlation: dict[str, Incident] = {}
         self.actor_sessions: dict[str, str] = {}
         self.revoked_sessions: set[str] = set()
-        self.revoked_jtis: set[str] = set()
+        self.revoked_jtis: dict[str, float] = {}
         self.step_up_required: set[str] = set()
         self.download_restricted_actors: set[str] = set()
         self.alert_signatures: set[tuple[str, str, str]] = set()
@@ -33,9 +37,13 @@ class InMemoryStore:
         self.artifact_failures_by_actor: defaultdict[str, list[Event]] = defaultdict(
             list
         )
-        self.risk_profiles: dict[str, object] = {}
+        self.risk_profiles: dict[str, RiskProfile] = {}
         self.scenario_history: list[dict] = []
         self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
+        # Secondary indices for O(actor_events) lookups
+        self._events_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
+        self._events_by_correlation: defaultdict[str, list[Event]] = defaultdict(list)
+        self._events_by_type: defaultdict[str, list[Event]] = defaultdict(list)
         self._persistence = None
 
     # --- Entity write methods (incremental persistence) ---
@@ -43,6 +51,9 @@ class InMemoryStore:
     def append_event(self, event: Event) -> None:
         """Append a single event and persist incrementally."""
         self.events.append(event)
+        self._events_by_actor[event.actor_id].append(event)
+        self._events_by_correlation[event.correlation_id].append(event)
+        self._events_by_type[event.event_type].append(event)
         if self._persistence:
             self._persistence.persist_event(event)
 
@@ -89,7 +100,7 @@ class InMemoryStore:
 
     def revoke_jti(self, jti: str) -> None:
         """Mark a JWT token ID as revoked (authoritative containment state)."""
-        self.revoked_jtis.add(jti)
+        self.revoked_jtis[jti] = time.monotonic()
 
     def require_step_up(self, actor_id: str) -> None:
         """Require step-up authentication for an actor."""
@@ -121,7 +132,7 @@ class InMemoryStore:
         """Restrict policy changes for an actor."""
         self.policy_change_restricted_actors.add(actor_id)
 
-    def update_risk_profile(self, actor_id: str, profile: object) -> None:
+    def update_risk_profile(self, actor_id: str, profile: RiskProfile) -> None:
         """Update or create a risk profile for an actor."""
         self.risk_profiles[actor_id] = profile
 
@@ -200,6 +211,16 @@ class InMemoryStore:
         """Check if a JWT token ID has been revoked."""
         return jti in self.revoked_jtis
 
+    def prune_expired_revocations(self, max_age_seconds: int = 86400) -> int:
+        """Remove revoked JTIs older than *max_age_seconds*. Returns count pruned."""
+        now = time.monotonic()
+        expired = [
+            jti for jti, ts in self.revoked_jtis.items() if now - ts > max_age_seconds
+        ]
+        for jti in expired:
+            del self.revoked_jtis[jti]
+        return len(expired)
+
     def is_step_up_required(self, actor_id: str) -> bool:
         """Check if step-up auth is required for an actor."""
         return actor_id in self.step_up_required
@@ -227,6 +248,70 @@ class InMemoryStore:
             "disabled_services": len(self.disabled_services),
             "quarantined_artifacts": len(self.quarantined_artifacts),
         }
+
+    def get_all_incidents_dict(self) -> dict[str, Incident]:
+        """Return a copy of the incidents-by-correlation mapping."""
+        return dict(self.incidents_by_correlation)
+
+    def is_policy_change_restricted(self, actor_id: str) -> bool:
+        """Check if an actor is restricted from policy changes."""
+        return actor_id in self.policy_change_restricted_actors
+
+    def is_service_disabled(self, service_id: str) -> bool:
+        """Check if a service has been disabled."""
+        return service_id in self.disabled_services
+
+    def is_artifact_quarantined(self, artifact_id: str) -> bool:
+        """Check if an artifact has been quarantined."""
+        return artifact_id in self.quarantined_artifacts
+
+    def get_blocked_routes(self, service_id: str) -> set[str]:
+        """Return blocked routes for a service."""
+        return set(self.blocked_routes.get(service_id, set()))
+
+    def get_all_revoked_sessions(self) -> set[str]:
+        """Return all revoked session IDs (snapshot copy)."""
+        return set(self.revoked_sessions)
+
+    def get_all_download_restricted(self) -> set[str]:
+        """Return all download-restricted actor IDs."""
+        return set(self.download_restricted_actors)
+
+    def get_all_step_up_required(self) -> set[str]:
+        """Return all actor IDs requiring step-up auth."""
+        return set(self.step_up_required)
+
+    def get_all_disabled_services(self) -> set[str]:
+        """Return all disabled service IDs."""
+        return set(self.disabled_services)
+
+    def get_all_quarantined_artifacts(self) -> set[str]:
+        """Return all quarantined artifact IDs."""
+        return set(self.quarantined_artifacts)
+
+    def get_all_policy_change_restricted(self) -> set[str]:
+        """Return all policy-change-restricted actor IDs."""
+        return set(self.policy_change_restricted_actors)
+
+    def get_events_by_actor(self, actor_id: str) -> list[Event]:
+        """Return events for a specific actor (snapshot copy)."""
+        return list(self._events_by_actor.get(actor_id, []))
+
+    def get_events_by_correlation(self, correlation_id: str) -> list[Event]:
+        """Return events for a specific correlation ID (snapshot copy)."""
+        return list(self._events_by_correlation.get(correlation_id, []))
+
+    def get_events_by_type(self, event_type: str) -> list[Event]:
+        """Return events of a specific type (snapshot copy)."""
+        return list(self._events_by_type.get(event_type, []))
+
+    def get_risk_profile(self, actor_id: str) -> RiskProfile | None:
+        """Look up a risk profile by actor ID."""
+        return self.risk_profiles.get(actor_id)
+
+    def get_all_risk_profiles(self) -> list[RiskProfile]:
+        """Return all risk profiles."""
+        return list(self.risk_profiles.values())
 
     # --- Transaction context ---
 

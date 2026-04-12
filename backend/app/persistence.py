@@ -466,7 +466,7 @@ class PersistenceLayer:
 
             set_data = {
                 "revoked_sessions": sorted(self.store.revoked_sessions),
-                "revoked_jtis": sorted(self.store.revoked_jtis),
+                "revoked_jtis": sorted(self.store.revoked_jtis.keys()),
                 "step_up_required": sorted(self.store.step_up_required),
                 "download_restricted_actors": sorted(
                     self.store.download_restricted_actors
@@ -559,7 +559,7 @@ class PersistenceLayer:
             # Sets (transient operational state)
             set_data = {
                 "revoked_sessions": sorted(self.store.revoked_sessions),
-                "revoked_jtis": sorted(self.store.revoked_jtis),
+                "revoked_jtis": sorted(self.store.revoked_jtis.keys()),
                 "step_up_required": sorted(self.store.step_up_required),
                 "download_restricted_actors": sorted(
                     self.store.download_restricted_actors
@@ -735,7 +735,14 @@ class PersistenceLayer:
             self.store.incident_notes = staged_incident_notes
 
             self.store.revoked_sessions = staged_sets.get("revoked_sessions", set())
-            self.store.revoked_jtis = staged_sets.get("revoked_jtis", set())
+            # revoked_jtis is now a dict[str, float]; loaded JTIs get current
+            # monotonic timestamp (conservative — they won't be pruned too early)
+            import time as _time
+
+            _now_mono = _time.monotonic()
+            self.store.revoked_jtis = {
+                jti: _now_mono for jti in staged_sets.get("revoked_jtis", set())
+            }
             self.store.step_up_required = staged_sets.get("step_up_required", set())
             self.store.download_restricted_actors = staged_sets.get(
                 "download_restricted_actors", set()
@@ -805,10 +812,19 @@ class PersistenceLayer:
             "authorization.failure": self.store.authorization_failures_by_actor,
             "artifact.validation.failed": self.store.artifact_failures_by_actor,
         }
+        # Clear and rebuild secondary lookup indices
+        self.store._events_by_actor.clear()
+        self.store._events_by_correlation.clear()
+        self.store._events_by_type.clear()
         for event in self.store.events:
+            # Derived per-actor indices
             index = event_type_to_index.get(event.event_type)
             if index is not None:
                 index[event.actor_id].append(event)
+            # Secondary lookup indices
+            self.store._events_by_actor[event.actor_id].append(event)
+            self.store._events_by_correlation[event.correlation_id].append(event)
+            self.store._events_by_type[event.event_type].append(event)
 
     def _rebuild_alert_signatures(self) -> None:
         """Rebuild alert_signatures from the loaded alerts list.

@@ -65,11 +65,17 @@ class TelemetryService:
         event_types: set[str] | None = None,
         since_minutes: int | None = None,
     ) -> list[Event]:
-        events: Iterable[Event] = self.store.events
-
+        # Use the narrowest secondary index first, then filter remaining
+        # predicates.  This avoids scanning the entire event list.
         if actor_id:
-            events = (event for event in events if event.actor_id == actor_id)
-        if correlation_id:
+            events: Iterable[Event] = self.store.get_events_by_actor(actor_id)
+        elif correlation_id:
+            events = self.store.get_events_by_correlation(correlation_id)
+        else:
+            events = self.store.get_events()
+
+        # Apply remaining filters (skipping the one already used as index)
+        if actor_id and correlation_id:
             events = (
                 event for event in events if event.correlation_id == correlation_id
             )

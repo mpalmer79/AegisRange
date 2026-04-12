@@ -362,15 +362,15 @@ class ScenarioEngine:
     def _summary(
         self, scenario_id: str, correlation_id: str, *, operated_by: str | None = None
     ) -> dict[str, object]:
-        incident = self.store.incidents_by_correlation.get(correlation_id)
+        incident = self.store.get_incident(correlation_id)
         events_count = len(
-            [e for e in self.store.events if e.correlation_id == correlation_id]
+            [e for e in self.store.get_events() if e.correlation_id == correlation_id]
         )
         alerts_count = len(
-            [a for a in self.store.alerts if a.correlation_id == correlation_id]
+            [a for a in self.store.get_alerts() if a.correlation_id == correlation_id]
         )
         responses_count = len(
-            [r for r in self.store.responses if r.correlation_id == correlation_id]
+            [r for r in self.store.get_responses() if r.correlation_id == correlation_id]
         )
         summary: dict[str, object] = {
             "scenario_id": scenario_id,
@@ -382,13 +382,13 @@ class ScenarioEngine:
             "responses_total": responses_count,
             "responses_generated": responses_count,
             "incident_id": incident.incident_id if incident else None,
-            "step_up_required": "user-alice" in self.store.step_up_required,
-            "revoked_sessions": sorted(self.store.revoked_sessions),
-            "download_restricted_actors": sorted(self.store.download_restricted_actors),
-            "disabled_services": sorted(self.store.disabled_services),
-            "quarantined_artifacts": sorted(self.store.quarantined_artifacts),
+            "step_up_required": self.store.is_step_up_required("user-alice"),
+            "revoked_sessions": sorted(self.store.get_all_revoked_sessions()),
+            "download_restricted_actors": sorted(self.store.get_all_download_restricted()),
+            "disabled_services": sorted(self.store.get_all_disabled_services()),
+            "quarantined_artifacts": sorted(self.store.get_all_quarantined_artifacts()),
             "policy_change_restricted_actors": sorted(
-                self.store.policy_change_restricted_actors
+                self.store.get_all_policy_change_restricted()
             ),
             "operated_by": operated_by,
         }

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.dependencies import require_role
 from app.models import utc_now
-from app.schemas import IncidentNote, IncidentStatusUpdate
+from app.schemas import IncidentNote, IncidentNoteResponse, IncidentResponse, IncidentStatusUpdate
 from app.serializers import incident_to_dict
 from app.store import STORE
 
@@ -24,13 +24,13 @@ def _serialize_incident(incident) -> dict:
     )
 
 
-@router.get("/incidents", dependencies=[Depends(require_role("viewer"))])
+@router.get("/incidents", response_model=list[IncidentResponse], dependencies=[Depends(require_role("viewer"))])
 def list_incidents() -> list[dict]:
     return [_serialize_incident(inc) for inc in STORE.get_all_incidents()]
 
 
 @router.get(
-    "/incidents/{correlation_id}", dependencies=[Depends(require_role("viewer"))]
+    "/incidents/{correlation_id}", response_model=IncidentResponse, dependencies=[Depends(require_role("viewer"))]
 )
 def get_incident(correlation_id: str) -> dict:
     incident = STORE.get_incident(correlation_id)
@@ -41,6 +41,7 @@ def get_incident(correlation_id: str) -> dict:
 
 @router.patch(
     "/incidents/{correlation_id}/status",
+    response_model=IncidentResponse,
     dependencies=[Depends(require_role("analyst"))],
 )
 def update_incident_status(
@@ -92,7 +93,7 @@ def update_incident_status(
 
 
 @router.post(
-    "/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("analyst"))]
+    "/incidents/{correlation_id}/notes", response_model=IncidentNoteResponse, dependencies=[Depends(require_role("analyst"))]
 )
 def add_incident_note(
     correlation_id: str, note: IncidentNote, request: Request
@@ -119,7 +120,7 @@ def add_incident_note(
 
 
 @router.get(
-    "/incidents/{correlation_id}/notes", dependencies=[Depends(require_role("viewer"))]
+    "/incidents/{correlation_id}/notes", response_model=list[IncidentNoteResponse], dependencies=[Depends(require_role("viewer"))]
 )
 def get_incident_notes(correlation_id: str) -> list[dict]:
     incident = STORE.get_incident(correlation_id)

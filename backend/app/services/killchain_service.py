@@ -79,7 +79,7 @@ class KillChainService:
 
     def analyze_incident(self, correlation_id: str) -> KillChainAnalysis | None:
         """Analyze an incident's kill chain progression by looking at its detection_ids and mapping them to stages."""
-        incident = self.store.incidents_by_correlation.get(correlation_id)
+        incident = self.store.get_incident(correlation_id)
         if incident is None:
             return None
 
@@ -158,7 +158,7 @@ class KillChainService:
     def analyze_all_incidents(self) -> list[KillChainAnalysis]:
         """Kill chain analysis for all incidents."""
         analyses: list[KillChainAnalysis] = []
-        for correlation_id in self.store.incidents_by_correlation:
+        for correlation_id in self.store.get_all_incidents_dict():
             analysis = self.analyze_incident(correlation_id)
             if analysis is not None:
                 analyses.append(analysis)
