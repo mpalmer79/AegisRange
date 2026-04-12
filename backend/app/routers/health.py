@@ -5,12 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.models import utc_now
+from app.schemas import HealthResponse
 from app.store import STORE
 
 router = APIRouter()
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse)
 def health() -> dict:
     return {
         "status": "ok",

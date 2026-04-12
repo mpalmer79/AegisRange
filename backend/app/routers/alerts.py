@@ -5,13 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from app.dependencies import require_role
+from app.schemas import AlertResponse, PaginatedResponse
 from app.serializers import alert_to_dict
 from app.store import STORE
 
 router = APIRouter(tags=["alerts"])
 
 
-@router.get("/alerts", dependencies=[Depends(require_role("viewer"))])
+@router.get("/alerts", response_model=PaginatedResponse[AlertResponse], dependencies=[Depends(require_role("viewer"))])
 def list_alerts(
     actor_id: str | None = Query(default=None),
     correlation_id: str | None = Query(default=None),
