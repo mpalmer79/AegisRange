@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { getMetrics, getHealth, runScenario, getRiskProfiles } from '@/lib/api';
 import { Metrics, HealthStatus, ScenarioResult, RiskProfile } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 import DashboardHeader from '@/app/components/dashboard/DashboardHeader';
 import MetricCards from '@/app/components/dashboard/MetricCards';
 import ScenarioGrid from '@/app/components/dashboard/ScenarioGrid';
@@ -11,38 +12,25 @@ import TopRiskActors from '@/app/components/dashboard/TopRiskActors';
 import MetricsBreakdown from '@/app/components/dashboard/MetricsBreakdown';
 
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<Metrics | null>(null);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: metrics, loading: mLoading, error: mError, refetch: refetchMetrics } = useApi<Metrics>(getMetrics);
+  const { data: health, loading: hLoading, error: hError, refetch: refetchHealth } = useApi<HealthStatus>(getHealth);
+  const { data: riskData, loading: rpLoading, refetch: refetchRisk } = useApi<RiskProfile[]>(getRiskProfiles);
+
+  const loading = mLoading || hLoading || rpLoading;
+  const error = !loading && mError && hError ? 'Failed to connect to API. Is the backend running?' : null;
+  const topRiskActors = useMemo(
+    () => riskData ? [...riskData].sort((a, b) => b.current_score - a.current_score).slice(0, 5) : [],
+    [riskData]
+  );
+
   const [runningScenario, setRunningScenario] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ScenarioResult | null>(null);
-  const [topRiskActors, setTopRiskActors] = useState<RiskProfile[]>([]);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [m, h, rp] = await Promise.allSettled([getMetrics(), getHealth(), getRiskProfiles()]);
-      if (m.status === 'fulfilled') setMetrics(m.value);
-      if (h.status === 'fulfilled') setHealth(h.value);
-      if (rp.status === 'fulfilled') {
-        const sorted = [...rp.value].sort((a, b) => b.current_score - a.current_score).slice(0, 5);
-        setTopRiskActors(sorted);
-      }
-      if (m.status === 'rejected' && h.status === 'rejected') {
-        setError('Failed to connect to API. Is the backend running?');
-      }
-    } catch {
-      setError('Failed to fetch dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const fetchData = useCallback(() => {
+    refetchMetrics();
+    refetchHealth();
+    refetchRisk();
+  }, [refetchMetrics, refetchHealth, refetchRisk]);
 
   const handleRunScenario = async (scenarioId: string) => {
     setRunningScenario(scenarioId);

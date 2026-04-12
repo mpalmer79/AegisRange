@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Generator
 from app.models import Alert, Event, Incident, ResponseAction
 
 if TYPE_CHECKING:
+    from app.persistence import PersistenceLayer
     from app.services.risk_service import RiskProfile
 
 
@@ -44,7 +45,7 @@ class InMemoryStore:
         self._events_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self._events_by_correlation: defaultdict[str, list[Event]] = defaultdict(list)
         self._events_by_type: defaultdict[str, list[Event]] = defaultdict(list)
-        self._persistence = None
+        self._persistence: PersistenceLayer | None = None
 
     # --- Entity write methods (incremental persistence) ---
 
@@ -363,7 +364,7 @@ class InMemoryStore:
         if self._persistence:
             self._persistence.clear()
         p = self._persistence
-        self.__init__()
+        self.__init__()  # type: ignore[misc]
         self._persistence = p
 
 

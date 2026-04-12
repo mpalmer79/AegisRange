@@ -14,6 +14,7 @@ router = APIRouter(
     prefix="/scenarios",
     tags=["scenarios"],
     dependencies=[Depends(require_role("red_team"))],
+    responses={401: {"description": "Missing or invalid token"}},
 )
 
 

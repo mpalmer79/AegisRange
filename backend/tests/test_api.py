@@ -330,5 +330,307 @@ class TestCorrelationMiddleware(APITestBase):
         self.assertEqual(resp.headers["x-correlation-id"], "my-custom-corr")
 
 
+# ---------------------------------------------------------------------------
+# Metrics, SVC-005/CORR-006 API, alert/event filtering, reset
+# ---------------------------------------------------------------------------
+
+
+class TestMetricsEndpoint(APITestBase):
+    def test_metrics_empty(self) -> None:
+        resp = self.client.get("/metrics")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_events"], 0)
+        self.assertEqual(data["total_alerts"], 0)
+        self.assertEqual(data["total_incidents"], 0)
+
+    def test_metrics_after_scenario(self) -> None:
+        self.client.post("/scenarios/scn-auth-001")
+        resp = self.client.get("/metrics")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(data["total_events"], 0)
+        self.assertGreater(data["total_alerts"], 0)
+        self.assertGreater(data["total_incidents"], 0)
+        self.assertGreater(data["active_containments"], 0)
+
+    def test_metrics_keys(self) -> None:
+        resp = self.client.get("/metrics")
+        data = resp.json()
+        expected_keys = {
+            "total_events",
+            "total_alerts",
+            "total_responses",
+            "total_incidents",
+            "active_containments",
+            "events_by_category",
+            "alerts_by_severity",
+            "incidents_by_status",
+        }
+        self.assertEqual(set(data.keys()), expected_keys)
+
+
+class TestSCNSVC005Endpoint(APITestBase):
+    def test_scn_svc_005(self) -> None:
+        resp = self.client.post("/scenarios/scn-svc-005")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["scenario_id"], "SCN-SVC-005")
+        self.assertIn("svc-data-processor", data["disabled_services"])
+
+    def test_scn_svc_005_creates_incident(self) -> None:
+        resp = self.client.post("/scenarios/scn-svc-005")
+        data = resp.json()
+        self.assertIsNotNone(data["incident_id"])
+
+    def test_scn_svc_005_metrics(self) -> None:
+        self.client.post("/scenarios/scn-svc-005")
+        resp = self.client.get("/metrics")
+        data = resp.json()
+        self.assertGreater(data["active_containments"], 0)
+
+
+class TestSCNCORR006Endpoint(APITestBase):
+    def test_scn_corr_006(self) -> None:
+        resp = self.client.post("/scenarios/scn-corr-006")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["scenario_id"], "SCN-CORR-006")
+        self.assertIsNotNone(data["incident_id"])
+
+    def test_scn_corr_006_has_alerts(self) -> None:
+        resp = self.client.post("/scenarios/scn-corr-006")
+        data = resp.json()
+        self.assertGreaterEqual(data["alerts_total"], 3)
+
+    def test_scn_corr_006_step_up(self) -> None:
+        resp = self.client.post("/scenarios/scn-corr-006")
+        data = resp.json()
+        self.assertTrue(data["step_up_required"])
+
+    def test_scn_corr_006_incident_detail(self) -> None:
+        scenario_resp = self.client.post("/scenarios/scn-corr-006")
+        corr = scenario_resp.json()["correlation_id"]
+
+        resp = self.client.get(f"/incidents/{corr}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "open")
+        self.assertGreater(len(data["timeline"]), 0)
+        self.assertGreater(len(data["detection_ids"]), 0)
+
+
+class TestNewAlertFiltering(APITestBase):
+    def test_alerts_filter_svc_rule(self) -> None:
+        self.client.post("/scenarios/scn-svc-005")
+        resp = self.client.get("/alerts", params={"rule_id": "DET-SVC-007"})
+        self.assertEqual(resp.status_code, 200)
+        alerts = resp.json()["items"]
+        self.assertGreater(len(alerts), 0)
+        self.assertTrue(all(a["rule_id"] == "DET-SVC-007" for a in alerts))
+
+
+class TestNewEventFiltering(APITestBase):
+    def test_events_filter_authorization_failure(self) -> None:
+        self.client.post("/scenarios/scn-svc-005")
+        resp = self.client.get(
+            "/events", params={"event_type": "authorization.failure"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        events = resp.json()["items"]
+        self.assertGreater(len(events), 0)
+        self.assertTrue(all(e["event_type"] == "authorization.failure" for e in events))
+
+
+class TestResetClearsNewState(APITestBase):
+    def test_reset_clears_phase2_state(self) -> None:
+        self.client.post("/scenarios/scn-svc-005")
+        self.assertGreater(len(STORE.disabled_services), 0)
+
+        self.client.post("/admin/reset")
+        self.assertEqual(len(STORE.disabled_services), 0)
+        self.assertEqual(len(STORE.quarantined_artifacts), 0)
+        self.assertEqual(len(STORE.policy_change_restricted_actors), 0)
+        self.assertEqual(len(STORE.blocked_routes), 0)
+
+
+# ---------------------------------------------------------------------------
+# Analytics, notes, export, risk score API endpoints
+# ---------------------------------------------------------------------------
+
+
+class TestRiskProfilesEndpoint(APITestBase):
+    def test_risk_profiles_empty(self) -> None:
+        resp = self.client.get("/analytics/risk-profiles")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_risk_profiles_after_scenario(self) -> None:
+        self.client.post("/scenarios/scn-auth-001")
+        resp = self.client.get("/analytics/risk-profiles")
+        self.assertEqual(resp.status_code, 200)
+        profiles = resp.json()
+        self.assertGreater(len(profiles), 0)
+        self.assertIn("current_score", profiles[0])
+        self.assertIn("actor_id", profiles[0])
+
+    def test_risk_profile_by_actor(self) -> None:
+        self.client.post("/scenarios/scn-auth-001")
+        resp = self.client.get("/analytics/risk-profiles/user-alice")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["actor_id"], "user-alice")
+        self.assertGreater(data["current_score"], 0)
+
+    def test_risk_profile_not_found(self) -> None:
+        resp = self.client.get("/analytics/risk-profiles/user-nobody")
+        self.assertEqual(resp.status_code, 404)
+
+
+class TestRuleEffectivenessEndpoint(APITestBase):
+    def test_rule_effectiveness_empty(self) -> None:
+        resp = self.client.get("/analytics/rule-effectiveness")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_rule_effectiveness_after_scenario(self) -> None:
+        self.client.post("/scenarios/scn-auth-001")
+        resp = self.client.get("/analytics/rule-effectiveness")
+        self.assertEqual(resp.status_code, 200)
+        rules = resp.json()
+        self.assertGreater(len(rules), 0)
+        self.assertIn("rule_id", rules[0])
+        self.assertIn("trigger_count", rules[0])
+        self.assertIn("actors_affected", rules[0])
+
+
+class TestScenarioHistoryEndpoint(APITestBase):
+    def test_scenario_history_empty(self) -> None:
+        resp = self.client.get("/analytics/scenario-history")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_scenario_history_after_runs(self) -> None:
+        self.client.post("/scenarios/scn-auth-001")
+        self.client.post("/scenarios/scn-svc-005")
+        resp = self.client.get("/analytics/scenario-history")
+        self.assertEqual(resp.status_code, 200)
+        history = resp.json()
+        self.assertEqual(len(history), 2)
+        self.assertIn("executed_at", history[0])
+
+
+class TestIncidentNotesEndpoint(APITestBase):
+    def test_add_note(self) -> None:
+        scenario_resp = self.client.post("/scenarios/scn-auth-001")
+        corr = scenario_resp.json()["correlation_id"]
+
+        resp = self.client.post(
+            f"/incidents/{corr}/notes",
+            json={
+                "author": "analyst-1",
+                "content": "Investigated and confirmed credential abuse.",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        # Author is now attributed to the authenticated platform user, not the client-supplied value
+        self.assertEqual(data["author"], "admin")
+        self.assertIn("note_id", data)
+
+    def test_get_notes(self) -> None:
+        scenario_resp = self.client.post("/scenarios/scn-auth-001")
+        corr = scenario_resp.json()["correlation_id"]
+
+        self.client.post(
+            f"/incidents/{corr}/notes",
+            json={"author": "analyst-1", "content": "First note"},
+        )
+        self.client.post(
+            f"/incidents/{corr}/notes",
+            json={"author": "analyst-2", "content": "Second note"},
+        )
+
+        resp = self.client.get(f"/incidents/{corr}/notes")
+        self.assertEqual(resp.status_code, 200)
+        notes = resp.json()
+        self.assertEqual(len(notes), 2)
+
+    def test_add_note_nonexistent_incident(self) -> None:
+        resp = self.client.post(
+            "/incidents/nonexistent/notes",
+            json={"author": "analyst-1", "content": "Note"},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_note_appears_in_timeline(self) -> None:
+        scenario_resp = self.client.post("/scenarios/scn-auth-001")
+        corr = scenario_resp.json()["correlation_id"]
+
+        self.client.post(
+            f"/incidents/{corr}/notes",
+            json={"author": "analyst-1", "content": "Investigation note"},
+        )
+
+        resp = self.client.get(f"/incidents/{corr}")
+        timeline = resp.json()["timeline"]
+        note_entries = [e for e in timeline if e["entry_type"] == "analyst_note"]
+        self.assertGreater(len(note_entries), 0)
+
+    def test_notes_in_incident_detail(self) -> None:
+        scenario_resp = self.client.post("/scenarios/scn-auth-001")
+        corr = scenario_resp.json()["correlation_id"]
+
+        self.client.post(
+            f"/incidents/{corr}/notes",
+            json={"author": "analyst-1", "content": "Test note"},
+        )
+
+        resp = self.client.get(f"/incidents/{corr}")
+        data = resp.json()
+        self.assertIn("notes", data)
+        self.assertEqual(len(data["notes"]), 1)
+
+
+class TestEventExportEndpoint(APITestBase):
+    def test_export_empty(self) -> None:
+        resp = self.client.get("/events/export")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_events"], 0)
+        self.assertEqual(data["events"], [])
+        self.assertIn("export_timestamp", data)
+
+    def test_export_after_scenario(self) -> None:
+        self.client.post("/scenarios/scn-auth-001")
+        resp = self.client.get("/events/export")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(data["total_events"], 0)
+        self.assertEqual(len(data["events"]), data["total_events"])
+
+    def test_export_with_filter(self) -> None:
+        scenario_resp = self.client.post("/scenarios/scn-auth-001")
+        corr = scenario_resp.json()["correlation_id"]
+
+        resp = self.client.get("/events/export", params={"correlation_id": corr})
+        data = resp.json()
+        self.assertGreater(data["total_events"], 0)
+        self.assertTrue(all(e["correlation_id"] == corr for e in data["events"]))
+
+
+class TestIncidentRiskScore(APITestBase):
+    def test_incident_has_risk_score(self) -> None:
+        scenario_resp = self.client.post("/scenarios/scn-auth-001")
+        corr = scenario_resp.json()["correlation_id"]
+
+        resp = self.client.get(f"/incidents/{corr}")
+        data = resp.json()
+        self.assertIn("risk_score", data)
+        # Risk score should be set by the risk scoring engine
+        self.assertIsNotNone(data["risk_score"])
+        self.assertGreater(data["risk_score"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

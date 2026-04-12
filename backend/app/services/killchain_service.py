@@ -99,10 +99,10 @@ class KillChainService:
 
         # Map each detection rule to a kill chain stage
         for rule_id in incident.detection_ids:
-            stage_name = RULE_TO_STAGE.get(rule_id)
-            if stage_name is None:
+            mapped_stage = RULE_TO_STAGE.get(rule_id)
+            if mapped_stage is None:
                 continue
-            stage = stage_by_name[stage_name]
+            stage = stage_by_name[mapped_stage]
             if rule_id not in stage.detection_rule_ids:
                 stage.detection_rule_ids.append(rule_id)
             if not stage.detected:

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { getCampaigns } from '@/lib/api';
 import { Campaign } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 import Link from 'next/link';
 
 const CAMPAIGN_TYPE_COLORS: Record<string, string> = {
@@ -28,24 +28,8 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const data = await getCampaigns();
-        setCampaigns(data);
-      } catch {
-        setError('Failed to fetch campaign data. Is the backend running?');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data, loading, error } = useApi<Campaign[]>(getCampaigns);
+  const campaigns = data ?? [];
 
   const formatTimestamp = (ts: string) => {
     try {

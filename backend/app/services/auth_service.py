@@ -404,7 +404,7 @@ def require_role(minimum_role: str):
         HTTPException 401 - missing or invalid token
         HTTPException 403 - authenticated but insufficient role level
     """
-    minimum_level: int = ROLES.get(minimum_role, {}).get("level", 0)  # type: ignore[union-attr]
+    minimum_level: int = ROLES.get(minimum_role, {}).get("level", 0)  # type: ignore[union-attr, assignment]
 
     def _dependency(request: Request) -> TokenPayload:
         token = _extract_bearer_token(request)
@@ -415,7 +415,7 @@ def require_role(minimum_role: str):
         if payload is None:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-        user_level: int = ROLES.get(payload.role, {}).get("level", 0)  # type: ignore[union-attr]
+        user_level: int = ROLES.get(payload.role, {}).get("level", 0)  # type: ignore[union-attr, assignment]
         if user_level < minimum_level:
             raise HTTPException(
                 status_code=403,

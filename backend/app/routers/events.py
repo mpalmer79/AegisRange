@@ -9,7 +9,7 @@ from app.models import utc_now
 from app.schemas import EventResponse, EventsExportResponse, PaginatedResponse
 from app.serializers import event_to_dict
 
-router = APIRouter(tags=["events"])
+router = APIRouter(tags=["events"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/events", response_model=PaginatedResponse[EventResponse], dependencies=[Depends(require_role("viewer"))])

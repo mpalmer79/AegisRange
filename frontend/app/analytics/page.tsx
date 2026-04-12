@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { getRiskProfiles, getRuleEffectiveness, getScenarioHistory } from '@/lib/api';
 import { RiskProfile, RuleEffectiveness, ScenarioHistoryEntry } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 import Link from 'next/link';
 
 function riskScoreColor(score: number): string {
@@ -28,40 +28,17 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 export default function AnalyticsPage() {
-  const [riskProfiles, setRiskProfiles] = useState<RiskProfile[]>([]);
-  const [ruleEffectiveness, setRuleEffectiveness] = useState<RuleEffectiveness[]>([]);
-  const [scenarioHistory, setScenarioHistory] = useState<ScenarioHistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: riskData, loading: rpLoading, error: rpError } = useApi<RiskProfile[]>(getRiskProfiles);
+  const { data: rulesData, loading: rulesLoading, error: rulesError } = useApi<RuleEffectiveness[]>(getRuleEffectiveness);
+  const { data: historyData, loading: historyLoading, error: historyError } = useApi<ScenarioHistoryEntry[]>(getScenarioHistory);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const [profiles, rules, history] = await Promise.allSettled([
-          getRiskProfiles(),
-          getRuleEffectiveness(),
-          getScenarioHistory(),
-        ]);
-        if (profiles.status === 'fulfilled') setRiskProfiles(profiles.value);
-        if (rules.status === 'fulfilled') setRuleEffectiveness(rules.value);
-        if (history.status === 'fulfilled') setScenarioHistory(history.value);
-        if (
-          profiles.status === 'rejected' &&
-          rules.status === 'rejected' &&
-          history.status === 'rejected'
-        ) {
-          setError('Failed to fetch analytics data. Is the backend running?');
-        }
-      } catch {
-        setError('Failed to fetch analytics data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const riskProfiles = riskData ?? [];
+  const ruleEffectiveness = rulesData ?? [];
+  const scenarioHistory = historyData ?? [];
+  const loading = rpLoading || rulesLoading || historyLoading;
+  const error = !loading && rpError && rulesError && historyError
+    ? 'Failed to fetch analytics data. Is the backend running?'
+    : null;
 
   const sortedProfiles = [...riskProfiles].sort((a, b) => b.current_score - a.current_score);
   const sortedRules = [...ruleEffectiveness].sort((a, b) => b.trigger_count - a.trigger_count);

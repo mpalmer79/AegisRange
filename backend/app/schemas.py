@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
@@ -372,8 +372,8 @@ class AdminResetResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class SimulationLoginRequest(LoginRequest):
@@ -385,7 +385,7 @@ class SimulationLoginRequest(LoginRequest):
     (that is always derived from the real TCP connection).
     """
 
-    simulated_source_ip: str = "127.0.0.1"
+    simulated_source_ip: str = Field(default="127.0.0.1", max_length=45)
 
 
 class ReadRequest(BaseModel):
@@ -410,19 +410,19 @@ class ReadRequest(BaseModel):
     description.
     """
 
-    actor_id: str
-    actor_role: str
-    session_id: str | None = None
-    simulated_source_ip: str = "127.0.0.1"
+    actor_id: str = Field(..., min_length=1, max_length=128)
+    actor_role: str = Field(..., min_length=1, max_length=64)
+    session_id: str | None = Field(default=None, max_length=128)
+    simulated_source_ip: str = Field(default="127.0.0.1", max_length=45)
 
 
 class DownloadRequest(BaseModel):
     """Simulation-context request body — see ReadRequest docstring."""
 
-    actor_id: str
-    actor_role: str
-    session_id: str | None = None
-    simulated_source_ip: str = "127.0.0.1"
+    actor_id: str = Field(..., min_length=1, max_length=128)
+    actor_role: str = Field(..., min_length=1, max_length=64)
+    session_id: str | None = Field(default=None, max_length=128)
+    simulated_source_ip: str = Field(default="127.0.0.1", max_length=45)
 
 
 class IncidentStatusUpdate(BaseModel):
@@ -430,9 +430,30 @@ class IncidentStatusUpdate(BaseModel):
 
 
 class IncidentNote(BaseModel):
-    author: str
-    content: str
+    author: str = Field(..., min_length=1, max_length=128)
+    content: str = Field(..., min_length=1, max_length=10000)
 
 
 class ReportRequest(BaseModel):
-    title: str = "AegisRange Exercise Report"
+    title: str = Field(
+        default="AegisRange Exercise Report", min_length=1, max_length=256
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exercise report response model
+# ---------------------------------------------------------------------------
+
+
+class ExerciseReportResponse(BaseModel):
+    report_id: str
+    title: str
+    generated_at: str
+    exercise_window: dict[str, str]
+    summary: dict[str, Any]
+    scenario_results: list[dict[str, Any]]
+    detection_coverage: dict[str, Any]
+    response_effectiveness: dict[str, Any]
+    risk_summary: dict[str, Any]
+    recommendations: list[str]
+    mitre_coverage: dict[str, Any]

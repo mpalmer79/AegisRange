@@ -14,7 +14,7 @@ from app.serializers import incident_to_dict
 from app.store import STORE
 
 logger = logging.getLogger("aegisrange")
-router = APIRouter(tags=["incidents"])
+router = APIRouter(tags=["incidents"], responses={401: {"description": "Missing or invalid token"}})
 
 
 def _serialize_incident(incident) -> dict:

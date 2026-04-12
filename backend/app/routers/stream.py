@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies import require_role, stream_service
 
-router = APIRouter(tags=["stream"])
+router = APIRouter(tags=["stream"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/stream/events", dependencies=[Depends(require_role("viewer"))])

@@ -9,7 +9,7 @@ from app.schemas import RiskProfileResponse, RuleEffectivenessResponse
 from app.serializers import risk_profile_to_dict
 from app.store import STORE
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+router = APIRouter(prefix="/analytics", tags=["analytics"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/risk-profiles", response_model=list[RiskProfileResponse], dependencies=[Depends(require_role("analyst"))])

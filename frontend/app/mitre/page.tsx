@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { getMitreMappings, getMitreCoverageMatrix, getMitreTacticCoverage } from '@/lib/api';
 import { TTPMapping, MitreCoverageEntry, TacticCoverage } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 
 const TACTIC_ORDER = [
   'TA0001', 'TA0003', 'TA0004', 'TA0005', 'TA0006', 'TA0008', 'TA0009', 'TA0010',
@@ -34,35 +34,17 @@ function coverageBg(percentage: number): string {
 }
 
 export default function MitrePage() {
-  const [mappings, setMappings] = useState<TTPMapping[]>([]);
-  const [coverage, setCoverage] = useState<MitreCoverageEntry[]>([]);
-  const [tacticCoverage, setTacticCoverage] = useState<TacticCoverage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: mappingsData, loading: mLoading, error: mError } = useApi<TTPMapping[]>(getMitreMappings);
+  const { data: coverageData, loading: cLoading, error: cError } = useApi<MitreCoverageEntry[]>(getMitreCoverageMatrix);
+  const { data: tacticData, loading: tLoading, error: tError } = useApi<TacticCoverage[]>(getMitreTacticCoverage);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [m, c, t] = await Promise.allSettled([
-          getMitreMappings(),
-          getMitreCoverageMatrix(),
-          getMitreTacticCoverage(),
-        ]);
-        if (m.status === 'fulfilled') setMappings(m.value);
-        if (c.status === 'fulfilled') setCoverage(c.value);
-        if (t.status === 'fulfilled') setTacticCoverage(t.value);
-        if (m.status === 'rejected' && c.status === 'rejected' && t.status === 'rejected') {
-          setError('Failed to fetch MITRE ATT&CK data. Is the backend running?');
-        }
-      } catch {
-        setError('Failed to fetch data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const mappings = mappingsData ?? [];
+  const coverage = coverageData ?? [];
+  const tacticCoverage = tacticData ?? [];
+  const loading = mLoading || cLoading || tLoading;
+  const error = !loading && mError && cError && tError
+    ? 'Failed to fetch MITRE ATT&CK data. Is the backend running?'
+    : null;
 
   const sortedTactics = [...tacticCoverage].sort(
     (a, b) => TACTIC_ORDER.indexOf(a.tactic_id) - TACTIC_ORDER.indexOf(b.tactic_id)

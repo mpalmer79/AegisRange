@@ -8,7 +8,7 @@ from app.dependencies import require_role
 from app.schemas import MetricsResponse
 from app.store import STORE
 
-router = APIRouter(tags=["metrics"])
+router = APIRouter(tags=["metrics"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/metrics", response_model=MetricsResponse, dependencies=[Depends(require_role("viewer"))])

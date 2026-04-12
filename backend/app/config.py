@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from typing import Literal
 
 
 class Settings:
@@ -14,7 +15,7 @@ class Settings:
     TOKEN_EXPIRY_HOURS: int = int(os.getenv("TOKEN_EXPIRY_HOURS", "24"))
     DB_PATH: str = os.getenv("DB_PATH", "aegisrange.db")
     AUTH_COOKIE_NAME: str = "aegisrange_token"
-    AUTH_COOKIE_SAMESITE: str = "lax"
+    AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
 
     @property
     def auth_cookie_secure(self) -> bool:

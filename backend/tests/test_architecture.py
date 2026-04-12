@@ -301,5 +301,303 @@ class TestStoreEncapsulation(unittest.TestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# Store write/read method discipline, datetime deprecation, trust boundary docs
+# ---------------------------------------------------------------------------
+
+
+class TestStoreWriteMethodDiscipline(unittest.TestCase):
+    """Verify STORE write methods exist and work for all operational state."""
+
+    def setUp(self) -> None:
+        from app.store import InMemoryStore
+
+        self.store = InMemoryStore()
+
+    def test_revoke_session(self) -> None:
+        self.store.revoke_session("sess-1")
+        self.assertTrue(self.store.is_session_revoked("sess-1"))
+
+    def test_require_step_up(self) -> None:
+        self.store.require_step_up("actor-1")
+        self.assertTrue(self.store.is_step_up_required("actor-1"))
+
+    def test_clear_step_up(self) -> None:
+        self.store.require_step_up("actor-1")
+        self.store.clear_step_up("actor-1")
+        self.assertFalse(self.store.is_step_up_required("actor-1"))
+
+    def test_restrict_downloads(self) -> None:
+        self.store.restrict_downloads("actor-1")
+        self.assertTrue(self.store.is_download_restricted("actor-1"))
+
+    def test_disable_service(self) -> None:
+        self.store.disable_service("svc-1")
+        self.assertIn("svc-1", self.store.disabled_services)
+
+    def test_block_routes(self) -> None:
+        self.store.block_routes("svc-1", ["/api/admin", "/api/config"])
+        self.assertIn("svc-1", self.store.blocked_routes)
+        self.assertEqual(
+            self.store.blocked_routes["svc-1"], {"/api/admin", "/api/config"}
+        )
+
+    def test_quarantine_artifact(self) -> None:
+        self.store.quarantine_artifact("art-1")
+        self.assertIn("art-1", self.store.quarantined_artifacts)
+
+    def test_restrict_policy_changes(self) -> None:
+        self.store.restrict_policy_changes("actor-1")
+        self.assertIn("actor-1", self.store.policy_change_restricted_actors)
+
+    def test_update_risk_profile(self) -> None:
+        profile = {"actor_id": "actor-1", "score": 50}
+        self.store.update_risk_profile("actor-1", profile)
+        self.assertEqual(self.store.risk_profiles["actor-1"], profile)
+
+    def test_add_alert_signature_novel(self) -> None:
+        sig = ("rule-1", "actor-1", "corr-1")
+        self.assertTrue(self.store.add_alert_signature(sig))
+
+    def test_add_alert_signature_duplicate(self) -> None:
+        sig = ("rule-1", "actor-1", "corr-1")
+        self.store.add_alert_signature(sig)
+        self.assertFalse(self.store.add_alert_signature(sig))
+
+    def test_set_actor_session(self) -> None:
+        self.store.set_actor_session("actor-1", "sess-1")
+        self.assertTrue(self.store.session_exists("sess-1"))
+        self.assertEqual(self.store.find_actor_for_session("sess-1"), "actor-1")
+
+    def test_no_direct_collection_mutations_in_services(self) -> None:
+        """Services should not directly mutate STORE collections via .add/.append etc."""
+        import inspect
+
+        import app.services.response_service as rs
+        import app.services.event_services as es
+        import app.services.identity_service as ids
+        import app.services.pipeline_service as ps
+        import app.services.risk_service as risk
+
+        for mod in [rs, es, ids, ps, risk]:
+            source = inspect.getsource(mod)
+            for pattern in [
+                "self.store.revoked_sessions.add(",
+                "self.store.step_up_required.add(",
+                "self.store.download_restricted_actors.add(",
+                "self.store.disabled_services.add(",
+                "self.store.quarantined_artifacts.add(",
+                "self.store.policy_change_restricted_actors.add(",
+                "self.store.blocked_routes[",
+                "self.store.risk_profiles[",
+                "self.store.actor_sessions[",
+                "self.store.alert_signatures.add(",
+                "self.store.login_failures_by_actor[",
+                "self.store.document_reads_by_actor[",
+                "self.store.authorization_failures_by_actor[",
+                "self.store.artifact_failures_by_actor[",
+            ]:
+                self.assertNotIn(
+                    pattern,
+                    source,
+                    f"Direct mutation found in {mod.__name__}: {pattern}",
+                )
+
+
+class TestStoreReadAccessorDiscipline(unittest.TestCase):
+    """Verify STORE read accessor methods work and routers use them."""
+
+    def setUp(self) -> None:
+        from app.store import InMemoryStore
+
+        self.store = InMemoryStore()
+
+    def test_get_events_returns_list(self) -> None:
+        self.assertEqual(self.store.get_events(), [])
+
+    def test_get_alerts_returns_list(self) -> None:
+        self.assertEqual(self.store.get_alerts(), [])
+
+    def test_get_responses_returns_list(self) -> None:
+        self.assertEqual(self.store.get_responses(), [])
+
+    def test_get_incident_returns_none_for_missing(self) -> None:
+        self.assertIsNone(self.store.get_incident("nonexistent"))
+
+    def test_get_all_incidents_returns_list(self) -> None:
+        self.assertEqual(self.store.get_all_incidents(), [])
+
+    def test_get_incident_notes_returns_empty_for_missing(self) -> None:
+        self.assertEqual(self.store.get_incident_notes_for("nonexistent"), [])
+
+    def test_get_scenario_history_returns_list(self) -> None:
+        self.assertEqual(self.store.get_scenario_history_entries(), [])
+
+    def test_get_containment_counts_returns_zeros(self) -> None:
+        counts = self.store.get_containment_counts()
+        self.assertEqual(sum(counts.values()), 0)
+        self.assertIn("step_up_required", counts)
+        self.assertIn("revoked_sessions", counts)
+        self.assertIn("download_restricted", counts)
+        self.assertIn("disabled_services", counts)
+        self.assertIn("quarantined_artifacts", counts)
+
+    def test_is_session_revoked(self) -> None:
+        self.assertFalse(self.store.is_session_revoked("sess-1"))
+        self.store.revoke_session("sess-1")
+        self.assertTrue(self.store.is_session_revoked("sess-1"))
+
+    def test_session_exists(self) -> None:
+        self.assertFalse(self.store.session_exists("sess-1"))
+        self.store.set_actor_session("actor-1", "sess-1")
+        self.assertTrue(self.store.session_exists("sess-1"))
+
+    def test_find_actor_for_session(self) -> None:
+        self.assertIsNone(self.store.find_actor_for_session("sess-1"))
+        self.store.set_actor_session("actor-1", "sess-1")
+        self.assertEqual(self.store.find_actor_for_session("sess-1"), "actor-1")
+
+    def test_no_direct_collection_reads_in_security_routers(self) -> None:
+        import inspect
+
+        import app.routers.documents as docs
+        import app.routers.identity as ids
+
+        for mod in [docs, ids]:
+            source = inspect.getsource(mod)
+            for pattern in [
+                "STORE.revoked_sessions",
+                "STORE.step_up_required",
+                "STORE.actor_sessions",
+                "STORE.download_restricted_actors",
+            ]:
+                self.assertNotIn(
+                    pattern,
+                    source,
+                    f"Direct STORE collection read in {mod.__name__}: {pattern}. "
+                    "Use service methods instead.",
+                )
+
+    def test_no_direct_collection_reads_in_any_router(self) -> None:
+        import inspect
+        import re
+
+        import app.routers.alerts as alerts_mod
+        import app.routers.analytics as analytics_mod
+        import app.routers.incidents as incidents_mod
+        import app.routers.metrics as metrics_mod
+
+        raw_patterns = [
+            "STORE.events",
+            "STORE.alerts",
+            "STORE.responses",
+            "STORE.incidents_by_correlation",
+            "STORE.incident_notes",
+            "STORE.scenario_history",
+        ]
+
+        for mod in [alerts_mod, analytics_mod, incidents_mod, metrics_mod]:
+            source = inspect.getsource(mod)
+            for pattern in raw_patterns:
+                matches = re.findall(rf"{re.escape(pattern)}(?![_a-zA-Z(])", source)
+                self.assertEqual(
+                    len(matches),
+                    0,
+                    f"Direct collection read '{pattern}' found in {mod.__name__}. "
+                    "Use STORE accessor methods (e.g. STORE.get_events()) instead.",
+                )
+
+
+class TestDatetimeDeprecation(unittest.TestCase):
+    """Verify that no deprecated datetime.utcnow() calls remain in runtime code."""
+
+    @staticmethod
+    def _find_utcnow_calls(source: str) -> list[int]:
+        import ast
+
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return []
+
+        hits: list[int] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                if (
+                    isinstance(func, ast.Attribute)
+                    and func.attr == "utcnow"
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == "datetime"
+                ):
+                    hits.append(node.lineno)
+            if isinstance(node, ast.Attribute):
+                if (
+                    node.attr == "utcnow"
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "datetime"
+                ):
+                    hits.append(node.lineno)
+        return hits
+
+    def test_no_utcnow_calls_in_backend(self) -> None:
+        import pathlib
+
+        backend = pathlib.Path(__file__).parent.parent / "app"
+        for py_file in backend.rglob("*.py"):
+            hits = self._find_utcnow_calls(py_file.read_text())
+            self.assertEqual(
+                hits,
+                [],
+                f"datetime.utcnow usage on line(s) {hits} in {py_file.relative_to(backend.parent)}",
+            )
+
+    def test_no_utcnow_calls_in_tests(self) -> None:
+        import pathlib
+
+        tests = pathlib.Path(__file__).parent
+        for py_file in tests.rglob("*.py"):
+            hits = self._find_utcnow_calls(py_file.read_text())
+            self.assertEqual(
+                hits,
+                [],
+                f"datetime.utcnow usage on line(s) {hits} in {py_file.relative_to(tests.parent)}",
+            )
+
+    def test_zero_deprecation_warnings(self) -> None:
+        import warnings
+        from app.models import utc_now
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            utc_now()
+
+
+class TestTrustBoundaryDocs(unittest.TestCase):
+    """Verify trust boundary documentation is present on schemas."""
+
+    def test_read_request_documents_simulation_context(self) -> None:
+        from app.schemas import ReadRequest
+
+        doc = ReadRequest.__doc__ or ""
+        self.assertIn("simulated threat actor", doc)
+        self.assertIn("platform_user_id", doc)
+        self.assertIn("NOT", doc)
+        self.assertIn("simulated_source_ip", doc)
+
+    def test_download_request_references_read_request(self) -> None:
+        from app.schemas import DownloadRequest
+
+        doc = DownloadRequest.__doc__ or ""
+        self.assertIn("ReadRequest", doc)
+
+    def test_simulation_login_documents_simulated_source_ip(self) -> None:
+        from app.schemas import SimulationLoginRequest
+
+        doc = SimulationLoginRequest.__doc__ or ""
+        self.assertIn("simulated_source_ip", doc)
+        self.assertIn("NOT", doc)
+
+
 if __name__ == "__main__":
     unittest.main()

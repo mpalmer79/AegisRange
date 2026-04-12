@@ -11,7 +11,7 @@ from app.schemas import AdminResetResponse
 from app.store import STORE
 
 logger = logging.getLogger("aegisrange")
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.post("/reset", dependencies=[Depends(require_role("admin"))], response_model=AdminResetResponse)

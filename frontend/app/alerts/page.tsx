@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { getAlerts } from '@/lib/api';
 import { Alert } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 import AlertsHeader from './components/AlertsHeader';
 import AlertsMetrics from './components/AlertsMetrics';
 import AlertsFilters from './components/AlertsFilters';
@@ -10,38 +11,22 @@ import AlertCard from './components/AlertCard';
 import { getSeverityRank } from './components/alertUtils';
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [filterRuleId, setFilterRuleId] = useState('');
   const [filterActorId, setFilterActorId] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterConfidence, setFilterConfidence] = useState('all');
   const [sortBy, setSortBy] = useState('recent');
 
-  const fetchAlerts = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data: rawAlerts, loading, error, refetch: fetchAlerts } = useApi<Alert[]>(
+    () => {
       const params: Record<string, string> = {};
       if (filterRuleId.trim()) params.rule_id = filterRuleId.trim();
       if (filterActorId.trim()) params.actor_id = filterActorId.trim();
-
-      const data = await getAlerts(params);
-      setAlerts(Array.isArray(data) ? data : []);
-    } catch {
-      setError('Failed to fetch alerts');
-      setAlerts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filterRuleId, filterActorId]);
-
-  useEffect(() => {
-    fetchAlerts();
-  }, [fetchAlerts]);
+      return getAlerts(params);
+    },
+    [filterRuleId, filterActorId]
+  );
+  const alerts = useMemo(() => Array.isArray(rawAlerts) ? rawAlerts : [], [rawAlerts]);
 
   const filteredAlerts = useMemo(() => {
     let next = [...alerts];

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.dependencies import campaign_detection_service, require_role
 from app.schemas import CampaignResponse
 
-router = APIRouter(tags=["campaigns"])
+router = APIRouter(tags=["campaigns"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/campaigns", response_model=list[CampaignResponse], dependencies=[Depends(require_role("viewer"))])
