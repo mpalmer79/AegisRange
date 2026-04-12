@@ -68,7 +68,7 @@ jobs:
         run: python -c "import httpx; print(httpx.__version__)"
 
       - name: Run tests with coverage
-        run: python -m pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=0
+        run: python -m pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=80
 
       - name: Verify no datetime.utcnow usage
         run: |
@@ -89,6 +89,24 @@ jobs:
               sys.exit(1)
           print('OK: zero datetime.utcnow usage')
           "
+
+  backend-security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security tools
+        run: pip install bandit
+
+      - name: Run Bandit security scan
+        run: bandit -r app/ -c pyproject.toml --severity-level medium -f txt || true
 
   frontend-lint:
     runs-on: ubuntu-latest

@@ -146,7 +146,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`:
 | Job             | Steps                                           |
 |-----------------|--------------------------------------------------|
 | backend-lint    | `ruff check` + `ruff format --check`            |
-| backend-test    | `pytest` (455 tests) + `datetime.utcnow` scan   |
+| backend-test    | `pytest` (475+ tests, 95% coverage) + `datetime.utcnow` scan |
 | frontend-lint   | `next lint` (ESLint)                             |
 | frontend-build  | `tsc --noEmit` + `next build` + standalone check |
 | docker-build    | Build both Docker images (runs after tests pass) |
