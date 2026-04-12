@@ -313,8 +313,8 @@ export async function getEvents(params?: {
   if (params?.since_minutes) searchParams.set('since_minutes', String(params.since_minutes));
   const limit = params?.limit ?? DEFAULT_FEED_LIMIT;
   const offset = params?.offset ?? 0;
-  searchParams.set('limit', String(limit));
-  searchParams.set('offset', String(offset));
+  searchParams.set('page_size', String(limit));
+  searchParams.set('page', String(Math.floor(offset / limit) + 1));
   const query = searchParams.toString();
   // Mock fallback matches live semantics: apply filter, sort
   // newest-first, then slice to the requested window.
@@ -323,7 +323,17 @@ export async function getEvents(params?: {
     offset,
     offset + limit
   );
-  return liveListWithFallback(`/events?${query}`, fallback);
+  return live(
+    async () => {
+      const result = await request<{ items: Event[]; total: number }>(`/events?${query}`);
+      const items = result?.items ?? [];
+      if (items.length === 0) {
+        throw new Error(`empty response from /events`);
+      }
+      return items;
+    },
+    fallback
+  );
 }
 
 // ============================================================
@@ -342,15 +352,25 @@ export async function getAlerts(params?: {
   if (params?.rule_id) searchParams.set('rule_id', params.rule_id);
   const limit = params?.limit ?? DEFAULT_FEED_LIMIT;
   const offset = params?.offset ?? 0;
-  searchParams.set('limit', String(limit));
-  searchParams.set('offset', String(offset));
+  searchParams.set('page_size', String(limit));
+  searchParams.set('page', String(Math.floor(offset / limit) + 1));
   const query = searchParams.toString();
   const filtered = filterAlerts(MOCK_ALERTS, params);
   const fallback = sortByTimestampDesc(filtered, 'created_at').slice(
     offset,
     offset + limit
   );
-  return liveListWithFallback(`/alerts?${query}`, fallback);
+  return live(
+    async () => {
+      const result = await request<{ items: Alert[]; total: number }>(`/alerts?${query}`);
+      const items = result?.items ?? [];
+      if (items.length === 0) {
+        throw new Error(`empty response from /alerts`);
+      }
+      return items;
+    },
+    fallback
+  );
 }
 
 // ============================================================

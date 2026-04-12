@@ -183,7 +183,9 @@ class TestEventsEndpoint(APITestBase):
     def test_events_empty(self) -> None:
         resp = self.client.get("/events")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), [])
+        data = resp.json()
+        self.assertEqual(data["items"], [])
+        self.assertEqual(data["total"], 0)
 
     def test_events_after_login(self) -> None:
         self.client.post(
@@ -191,7 +193,7 @@ class TestEventsEndpoint(APITestBase):
         )
         resp = self.client.get("/events")
         self.assertEqual(resp.status_code, 200)
-        events = resp.json()
+        events = resp.json()["items"]
         self.assertGreater(len(events), 0)
         self.assertEqual(events[0]["actor_id"], "user-alice")
 
@@ -203,7 +205,7 @@ class TestEventsEndpoint(APITestBase):
             "/identity/login", json={"username": "bob", "password": "hunter2"}
         )
         resp = self.client.get("/events", params={"actor_id": "user-alice"})
-        events = resp.json()
+        events = resp.json()["items"]
         self.assertTrue(all(e["actor_id"] == "user-alice" for e in events))
 
     def test_events_filter_by_type(self) -> None:
@@ -216,7 +218,7 @@ class TestEventsEndpoint(APITestBase):
         resp = self.client.get(
             "/events", params={"event_type": "authentication.login.failure"}
         )
-        events = resp.json()
+        events = resp.json()["items"]
         self.assertTrue(
             all(e["event_type"] == "authentication.login.failure" for e in events)
         )
@@ -226,19 +228,21 @@ class TestAlertsEndpoint(APITestBase):
     def test_alerts_empty(self) -> None:
         resp = self.client.get("/alerts")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), [])
+        data = resp.json()
+        self.assertEqual(data["items"], [])
+        self.assertEqual(data["total"], 0)
 
     def test_alerts_after_scenario(self) -> None:
         self.client.post("/scenarios/scn-auth-001")
         resp = self.client.get("/alerts")
         self.assertEqual(resp.status_code, 200)
-        alerts = resp.json()
+        alerts = resp.json()["items"]
         self.assertGreater(len(alerts), 0)
 
     def test_alerts_filter_by_rule_id(self) -> None:
         self.client.post("/scenarios/scn-auth-001")
         resp = self.client.get("/alerts", params={"rule_id": "DET-AUTH-002"})
-        alerts = resp.json()
+        alerts = resp.json()["items"]
         self.assertTrue(all(a["rule_id"] == "DET-AUTH-002" for a in alerts))
 
 

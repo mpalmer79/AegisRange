@@ -17,7 +17,9 @@ class TestHealthContract(unittest.TestCase):
         client = authenticated_client()
         resp = client.get("/health")
         data = resp.json()
-        self.assertEqual(set(data.keys()), {"status", "timestamp"})
+        self.assertEqual(
+            set(data.keys()), {"status", "timestamp", "stats", "containment", "persistence"}
+        )
 
 
 class TestAlertContract(unittest.TestCase):
@@ -46,7 +48,7 @@ class TestAlertContract(unittest.TestCase):
         client = authenticated_client("viewer")
         resp = client.get("/alerts")
         self.assertEqual(resp.status_code, 200)
-        alerts = resp.json()
+        alerts = resp.json()["items"]
         self.assertGreater(len(alerts), 0, "No alerts to test against")
         for alert in alerts:
             self.assertEqual(
@@ -61,7 +63,7 @@ class TestAlertContract(unittest.TestCase):
         """Removed aliases should not appear."""
         client = authenticated_client("viewer")
         resp = client.get("/alerts")
-        for alert in resp.json():
+        for alert in resp.json()["items"]:
             self.assertNotIn(
                 "timestamp",
                 alert,

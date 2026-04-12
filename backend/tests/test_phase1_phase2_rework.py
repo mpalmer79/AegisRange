@@ -123,7 +123,7 @@ class TestSimulatedSourceIPInBody(unittest.TestCase):
                 "simulated_source_ip": "10.99.99.99",
             },
         )
-        events = client.get("/events?event_type=authentication.login.success").json()
+        events = client.get("/events?event_type=authentication.login.success").json()["items"]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         # source_ip should be the TestClient's IP, not the body value
@@ -142,7 +142,7 @@ class TestSimulatedSourceIPInBody(unittest.TestCase):
                 "simulated_source_ip": "192.168.1.99",
             },
         )
-        events = client.get("/events?event_type=document.read.success").json()
+        events = client.get("/events?event_type=document.read.success").json()["items"]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         self.assertNotEqual(latest["source_ip"], "192.168.1.99")
@@ -156,7 +156,7 @@ class TestSimulatedSourceIPInBody(unittest.TestCase):
             json={"username": "alice", "password": "correct-horse"},
             headers={"x-source-ip": "10.99.99.99"},
         )
-        events = client.get("/events?event_type=authentication.login.success").json()
+        events = client.get("/events?event_type=authentication.login.success").json()["items"]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         # With no simulated_source_ip in body, it should default to 127.0.0.1
@@ -192,7 +192,7 @@ class TestPlatformUserAttribution(unittest.TestCase):
             "/identity/login",
             json={"username": "alice", "password": "correct-horse"},
         )
-        events = client.get("/events?event_type=authentication.login.success").json()
+        events = client.get("/events?event_type=authentication.login.success").json()["items"]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         self.assertIn("platform_user_id", latest["payload"])
@@ -204,7 +204,7 @@ class TestPlatformUserAttribution(unittest.TestCase):
             "/documents/doc-001/read",
             json={"actor_id": "user-alice", "actor_role": "analyst"},
         )
-        events = client.get("/events?event_type=document.read.success").json()
+        events = client.get("/events?event_type=document.read.success").json()["items"]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         self.assertIn("platform_user_id", latest["payload"])
@@ -220,7 +220,7 @@ class TestPlatformUserAttribution(unittest.TestCase):
 
         analyst = authenticated_client("analyst")
         analyst.post(f"/identity/sessions/{session_id}/revoke")
-        events = analyst.get("/events?event_type=session.token.revoked").json()
+        events = analyst.get("/events?event_type=session.token.revoked").json()["items"]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         self.assertEqual(latest["payload"]["platform_user_id"], "analyst1")

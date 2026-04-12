@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator
@@ -20,7 +21,7 @@ class InMemoryStore:
         self.incidents_by_correlation: dict[str, Incident] = {}
         self.actor_sessions: dict[str, str] = {}
         self.revoked_sessions: set[str] = set()
-        self.revoked_jtis: set[str] = set()
+        self.revoked_jtis: dict[str, float] = {}
         self.step_up_required: set[str] = set()
         self.download_restricted_actors: set[str] = set()
         self.alert_signatures: set[tuple[str, str, str]] = set()
@@ -39,6 +40,10 @@ class InMemoryStore:
         self.risk_profiles: dict[str, RiskProfile] = {}
         self.scenario_history: list[dict] = []
         self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
+        # Secondary indices for O(actor_events) lookups
+        self._events_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
+        self._events_by_correlation: defaultdict[str, list[Event]] = defaultdict(list)
+        self._events_by_type: defaultdict[str, list[Event]] = defaultdict(list)
         self._persistence = None
 
     # --- Entity write methods (incremental persistence) ---
@@ -46,6 +51,9 @@ class InMemoryStore:
     def append_event(self, event: Event) -> None:
         """Append a single event and persist incrementally."""
         self.events.append(event)
+        self._events_by_actor[event.actor_id].append(event)
+        self._events_by_correlation[event.correlation_id].append(event)
+        self._events_by_type[event.event_type].append(event)
         if self._persistence:
             self._persistence.persist_event(event)
 
@@ -92,7 +100,7 @@ class InMemoryStore:
 
     def revoke_jti(self, jti: str) -> None:
         """Mark a JWT token ID as revoked (authoritative containment state)."""
-        self.revoked_jtis.add(jti)
+        self.revoked_jtis[jti] = time.monotonic()
 
     def require_step_up(self, actor_id: str) -> None:
         """Require step-up authentication for an actor."""
@@ -203,6 +211,16 @@ class InMemoryStore:
         """Check if a JWT token ID has been revoked."""
         return jti in self.revoked_jtis
 
+    def prune_expired_revocations(self, max_age_seconds: int = 86400) -> int:
+        """Remove revoked JTIs older than *max_age_seconds*. Returns count pruned."""
+        now = time.monotonic()
+        expired = [
+            jti for jti, ts in self.revoked_jtis.items() if now - ts > max_age_seconds
+        ]
+        for jti in expired:
+            del self.revoked_jtis[jti]
+        return len(expired)
+
     def is_step_up_required(self, actor_id: str) -> bool:
         """Check if step-up auth is required for an actor."""
         return actor_id in self.step_up_required
@@ -274,6 +292,18 @@ class InMemoryStore:
     def get_all_policy_change_restricted(self) -> set[str]:
         """Return all policy-change-restricted actor IDs."""
         return set(self.policy_change_restricted_actors)
+
+    def get_events_by_actor(self, actor_id: str) -> list[Event]:
+        """Return events for a specific actor (snapshot copy)."""
+        return list(self._events_by_actor.get(actor_id, []))
+
+    def get_events_by_correlation(self, correlation_id: str) -> list[Event]:
+        """Return events for a specific correlation ID (snapshot copy)."""
+        return list(self._events_by_correlation.get(correlation_id, []))
+
+    def get_events_by_type(self, event_type: str) -> list[Event]:
+        """Return events of a specific type (snapshot copy)."""
+        return list(self._events_by_type.get(event_type, []))
 
     def get_risk_profile(self, actor_id: str) -> RiskProfile | None:
         """Look up a risk profile by actor ID."""

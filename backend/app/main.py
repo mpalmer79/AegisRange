@@ -106,8 +106,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
 )
 
 # ---------------------------------------------------------------------------
@@ -115,9 +115,14 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 
+_jti_prune_counter: int = 0
+_JTI_PRUNE_INTERVAL: int = 100
+
+
 @app.middleware("http")
 async def correlation_middleware(request: Request, call_next):
     """Propagate or generate a correlation ID, and auto-save after mutations."""
+    global _jti_prune_counter
     correlation_id = request.headers.get("x-correlation-id") or f"corr-{uuid4()}"
     request.state.correlation_id = correlation_id
     response = await call_next(request)
@@ -125,6 +130,11 @@ async def correlation_middleware(request: Request, call_next):
     # Auto-save to SQLite after mutating requests
     if request.method in ("POST", "PATCH", "DELETE") and response.status_code < 400:
         STORE.save()
+    # Periodically prune expired JTI revocations
+    _jti_prune_counter += 1
+    if _jti_prune_counter >= _JTI_PRUNE_INTERVAL:
+        _jti_prune_counter = 0
+        STORE.prune_expired_revocations()
     return response
 
 
@@ -145,6 +155,25 @@ async def rate_limit_middleware(request: Request, call_next):
                 headers={"Retry-After": str(_RATE_LIMIT_WINDOW)},
             )
     return await call_next(request)
+
+
+@app.middleware("http")
+async def latency_middleware(request: Request, call_next):
+    """Record and log request latency."""
+    start = time.monotonic()
+    response = await call_next(request)
+    elapsed_ms = (time.monotonic() - start) * 1000
+    response.headers["X-Response-Time-Ms"] = f"{elapsed_ms:.1f}"
+    logger.debug(
+        "Request completed",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "status_code": response.status_code,
+            "elapsed_ms": round(elapsed_ms, 1),
+        },
+    )
+    return response
 
 
 # ---------------------------------------------------------------------------
