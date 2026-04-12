@@ -501,10 +501,10 @@ class PersistenceLayer:
                     k: sorted(v) for k, v in self.store.blocked_routes.items()
                 },
             }
-            for key, value in dict_data.items():
+            for dkey, dvalue in dict_data.items():
                 conn.execute(
                     "INSERT INTO state_dicts (key, data) VALUES (?, ?)",
-                    (key, json.dumps(value)),
+                    (dkey, json.dumps(dvalue)),
                 )
 
             conn.commit()
@@ -595,10 +595,10 @@ class PersistenceLayer:
                     k: sorted(v) for k, v in self.store.blocked_routes.items()
                 },
             }
-            for key, value in dict_data.items():
+            for dkey, dvalue in dict_data.items():
                 conn.execute(
                     "INSERT INTO state_dicts (key, data) VALUES (?, ?)",
-                    (key, json.dumps(value)),
+                    (dkey, json.dumps(dvalue)),
                 )
 
             # Scenario history
@@ -648,7 +648,7 @@ class PersistenceLayer:
                 "scenario_history",
                 "incident_notes",
             ):
-                total += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                total += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # nosec B608
             if total == 0:
                 return False
 

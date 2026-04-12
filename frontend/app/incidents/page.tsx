@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { getIncidents } from '@/lib/api';
 import { Incident } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 import IncidentsHeader from './components/IncidentsHeader';
 import IncidentsMetrics from './components/IncidentsMetrics';
 import IncidentsFilters from './components/IncidentsFilters';
@@ -10,32 +11,13 @@ import IncidentCard from './components/IncidentCard';
 import { getSeverityRank, getStatusRank } from './components/incidentUtils';
 
 export default function IncidentsPage() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: rawIncidents, loading, error, refetch: fetchIncidents } = useApi<Incident[]>(getIncidents);
+  const incidents = useMemo(() => Array.isArray(rawIncidents) ? rawIncidents : [], [rawIncidents]);
 
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterActor, setFilterActor] = useState('');
   const [sortBy, setSortBy] = useState('recent');
-
-  const fetchIncidents = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getIncidents();
-      setIncidents(Array.isArray(data) ? data : []);
-    } catch {
-      setError('Failed to fetch incidents');
-      setIncidents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchIncidents();
-  }, [fetchIncidents]);
 
   const filteredIncidents = useMemo(() => {
     let next = [...incidents];

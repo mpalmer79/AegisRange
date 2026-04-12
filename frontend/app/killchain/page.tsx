@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { getAllKillChainAnalyses } from '@/lib/api';
 import { KillChainAnalysis } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 import Link from 'next/link';
 
 const STAGE_COLORS: Record<string, string> = {
@@ -34,24 +34,8 @@ function progressionColor(pct: number): string {
 }
 
 export default function KillChainPage() {
-  const [analyses, setAnalyses] = useState<KillChainAnalysis[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const data = await getAllKillChainAnalyses();
-        setAnalyses(data);
-      } catch {
-        setError('Failed to fetch kill chain data. Is the backend running?');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data, loading, error } = useApi<KillChainAnalysis[]>(getAllKillChainAnalyses);
+  const analyses = data ?? [];
 
   const sortedAnalyses = [...analyses].sort((a, b) => b.progression_percentage - a.progression_percentage);
 

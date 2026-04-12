@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
 import { getEvents } from '@/lib/api';
 import { Event } from '@/lib/types';
+import { useApi } from '@/lib/hooks/useApi';
 
 const CATEGORY_COLORS: Record<string, string> = {
   auth: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/20',
@@ -36,35 +37,21 @@ function getStatusColor(status: string): string {
 }
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [filterActorId, setFilterActorId] = useState('');
   const [filterEventType, setFilterEventType] = useState('');
   const [filterCorrelationId, setFilterCorrelationId] = useState('');
 
-  const fetchEvents = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const { data: rawEvents, loading, error, refetch: fetchEvents } = useApi<Event[]>(
+    () => {
       const params: Record<string, string> = {};
       if (filterActorId.trim()) params.actor_id = filterActorId.trim();
       if (filterEventType.trim()) params.event_type = filterEventType.trim();
       if (filterCorrelationId.trim()) params.correlation_id = filterCorrelationId.trim();
-      const data = await getEvents(params);
-      setEvents(Array.isArray(data) ? data : []);
-    } catch {
-      setError('Failed to fetch events');
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filterActorId, filterEventType, filterCorrelationId]);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+      return getEvents(params);
+    },
+    [filterActorId, filterEventType, filterCorrelationId]
+  );
+  const events = Array.isArray(rawEvents) ? rawEvents : [];
 
   const formatTimestamp = (ts: string) => {
     try {

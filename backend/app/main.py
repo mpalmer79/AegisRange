@@ -100,7 +100,18 @@ async def lifespan(app: FastAPI):
 # Application
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="AegisRange API", version="0.7.0", lifespan=lifespan)
+app = FastAPI(
+    title="AegisRange API",
+    version="0.7.0",
+    description=(
+        "Defensive security simulation and validation platform. "
+        "Provides telemetry ingestion, deterministic detection, automated response, "
+        "and auditable incident management."
+    ),
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,

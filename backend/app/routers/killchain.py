@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.dependencies import killchain_service, require_role
 from app.schemas import KillChainAnalysisResponse
 
-router = APIRouter(tags=["killchain"])
+router = APIRouter(tags=["killchain"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/killchain", response_model=list[KillChainAnalysisResponse], dependencies=[Depends(require_role("viewer"))])

@@ -8,7 +8,7 @@ from app.dependencies import mitre_service, require_role
 from app.schemas import MitreMappingResponse, MitreCoverageResponse, MitreTacticCoverageResponse, MitreTechniqueResponse
 from app.serializers import mitre_mapping_to_dict, mitre_technique_to_dict
 
-router = APIRouter(prefix="/mitre", tags=["mitre"])
+router = APIRouter(prefix="/mitre", tags=["mitre"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/mappings", response_model=list[MitreMappingResponse], dependencies=[Depends(require_role("viewer"))])

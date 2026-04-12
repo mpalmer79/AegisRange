@@ -9,7 +9,7 @@ from app.schemas import AlertResponse, PaginatedResponse
 from app.serializers import alert_to_dict
 from app.store import STORE
 
-router = APIRouter(tags=["alerts"])
+router = APIRouter(tags=["alerts"], responses={401: {"description": "Missing or invalid token"}})
 
 
 @router.get("/alerts", response_model=PaginatedResponse[AlertResponse], dependencies=[Depends(require_role("viewer"))])
