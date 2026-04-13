@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { SCENARIO_DEFINITIONS } from '@/lib/types';
+import ScenarioCard from '@/components/scenario-card';
 
 // Color palette per scenario — each card gets its own accent so the grid stays
 // lively in both light and dark modes. Keep this aligned with the scenario
@@ -75,6 +77,8 @@ interface ScenarioGridProps {
 }
 
 export default function ScenarioGrid({ runningScenario, onRunScenario }: ScenarioGridProps) {
+  const router = useRouter();
+
   return (
     <div className="mb-8">
       <div className="flex items-end justify-between mb-4">
@@ -95,6 +99,25 @@ export default function ScenarioGrid({ runningScenario, onRunScenario }: Scenari
         {SCENARIO_DEFINITIONS.map((s) => {
           const accent = SCENARIO_ACCENTS[s.id] ?? DEFAULT_ACCENT;
           const isRunning = runningScenario === s.id;
+
+          /* ── Redesigned card for SCN-CORR-006 ────────────────── */
+          if (s.id === 'scn-corr-006') {
+            return (
+              <ScenarioCard
+                key={s.id}
+                title={s.name}
+                code="SCN-CORR-006"
+                description={s.description}
+                imageUrl="/images/correlated-attack.jpg"
+                isRunning={isRunning}
+                disabled={runningScenario !== null}
+                onOpenBriefing={() => router.push(`/scenarios/${s.id}`)}
+                onRun={() => onRunScenario(s.id)}
+              />
+            );
+          }
+
+          /* ── Original card for all other scenarios ───────────── */
           return (
             <div key={s.id} className="relative group">
               <Link
@@ -123,7 +146,6 @@ export default function ScenarioGrid({ runningScenario, onRunScenario }: Scenari
                   <span className={`text-sm ar-arrow ${accent.title}`}>&rarr;</span>
                 </div>
               </Link>
-              {/* Small Run-in-place button — does not navigate */}
               <button
                 type="button"
                 onClick={(e) => {
