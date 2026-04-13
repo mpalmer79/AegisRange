@@ -307,10 +307,9 @@ class DetectionService:
             return None
 
         store = self.telemetry.store
-        has_elevated_risk = (
-            store.is_step_up_required(event.actor_id)
-            or store.is_download_restricted(event.actor_id)
-        )
+        has_elevated_risk = store.is_step_up_required(
+            event.actor_id
+        ) or store.is_download_restricted(event.actor_id)
         if not has_elevated_risk:
             return None
 

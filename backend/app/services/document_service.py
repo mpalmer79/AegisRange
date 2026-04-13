@@ -51,11 +51,7 @@ class DocumentService:
         if not document:
             return False, None
 
-        if (
-            self.store
-            and actor_id
-            and self.store.is_download_restricted(actor_id)
-        ):
+        if self.store and actor_id and self.store.is_download_restricted(actor_id):
             return False, document
 
         role_level = CLASSIFICATION_ORDER.index(

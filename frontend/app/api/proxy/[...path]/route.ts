@@ -104,7 +104,7 @@ async function proxy(
       statusText: upstream.statusText,
       headers: responseHeaders,
     });
-  } catch (error) {
+  } catch {
     return Response.json(
       { error: 'Proxy request failed' },
       { status: 502 }

@@ -7,10 +7,16 @@ from fastapi import APIRouter, Depends
 from app.dependencies import report_service, require_role
 from app.schemas import ExerciseReportResponse, ReportRequest
 
-router = APIRouter(tags=["reports"], responses={401: {"description": "Missing or invalid token"}})
+router = APIRouter(
+    tags=["reports"], responses={401: {"description": "Missing or invalid token"}}
+)
 
 
-@router.post("/reports/generate", response_model=ExerciseReportResponse, dependencies=[Depends(require_role("analyst"))])
+@router.post(
+    "/reports/generate",
+    response_model=ExerciseReportResponse,
+    dependencies=[Depends(require_role("analyst"))],
+)
 def generate_exercise_report(payload: ReportRequest | None = None) -> dict:
     title = payload.title if payload else "AegisRange Exercise Report"
     report = report_service.generate_report(title)

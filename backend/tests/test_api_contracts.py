@@ -18,7 +18,8 @@ class TestHealthContract(unittest.TestCase):
         resp = client.get("/health")
         data = resp.json()
         self.assertEqual(
-            set(data.keys()), {"status", "timestamp", "stats", "containment", "persistence"}
+            set(data.keys()),
+            {"status", "timestamp", "stats", "containment", "persistence"},
         )
 
 
@@ -376,7 +377,9 @@ class TestSimulatedSourceIPInBody(unittest.TestCase):
                 "simulated_source_ip": "10.99.99.99",
             },
         )
-        events = client.get("/events?event_type=authentication.login.success").json()["items"]
+        events = client.get("/events?event_type=authentication.login.success").json()[
+            "items"
+        ]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         self.assertNotEqual(latest["source_ip"], "10.99.99.99")
@@ -405,7 +408,9 @@ class TestSimulatedSourceIPInBody(unittest.TestCase):
             json={"username": "alice", "password": "correct-horse"},
             headers={"x-source-ip": "10.99.99.99"},
         )
-        events = client.get("/events?event_type=authentication.login.success").json()["items"]
+        events = client.get("/events?event_type=authentication.login.success").json()[
+            "items"
+        ]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         self.assertEqual(latest["payload"]["simulated_source_ip"], "127.0.0.1")
@@ -439,7 +444,9 @@ class TestPlatformUserAttribution(unittest.TestCase):
             "/identity/login",
             json={"username": "alice", "password": "correct-horse"},
         )
-        events = client.get("/events?event_type=authentication.login.success").json()["items"]
+        events = client.get("/events?event_type=authentication.login.success").json()[
+            "items"
+        ]
         self.assertGreater(len(events), 0)
         latest = events[-1]
         self.assertIn("platform_user_id", latest["payload"])
