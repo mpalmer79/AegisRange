@@ -11,7 +11,7 @@ const SCENARIO_CARDS = [
     title: 'Brute Force Authentication',
     description:
       'Simulates a brute-force login attack with multiple failed authentication attempts followed by a successful login from a suspicious IP.',
-    imageUrl: '/images/brute-force.jpg',
+    imageUrl: '/images/brute-force.png',
   },
   {
     id: 'scn-session-002',
