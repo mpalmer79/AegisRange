@@ -348,26 +348,39 @@ class AuthService:
           - exp claim validation (rejects expired tokens)
           - iat claim validation (rejects future-issued tokens)
           - required claims: sub, role, jti, exp, iat
-          - issuer validation
-          - audience validation
+
+        Application-level validation:
+          - issuer (reject mismatches; accept missing for legacy tokens)
+          - audience (reject mismatches; accept missing for legacy tokens)
+          - JTI revocation check
+          - role membership check
         """
         try:
             raw = jwt.decode(
                 token,
                 self._secret_key,
                 algorithms=_JWT_ALLOWED_ALGORITHMS,
-                issuer=_JWT_ISSUER,
-                audience=_JWT_AUDIENCE,
                 options={
                     "require": ["sub", "role", "exp", "iat", "jti"],
                     "verify_exp": True,
                     "verify_iat": True,
                     "verify_signature": True,
+                    "verify_aud": False,
                 },
             )
         except jwt.ExpiredSignatureError:
             return None
         except jwt.InvalidTokenError:
+            return None
+
+        # Validate issuer/audience at application level.
+        # Accept tokens that omit these claims (legacy) but reject
+        # tokens that carry a *wrong* value.
+        token_iss = raw.get("iss")
+        if token_iss is not None and token_iss != _JWT_ISSUER:
+            return None
+        token_aud = raw.get("aud")
+        if token_aud is not None and token_aud != _JWT_AUDIENCE:
             return None
 
         jti = raw.get("jti")
@@ -421,10 +434,10 @@ class AuthService:
                 token,
                 self._secret_key,
                 algorithms=_JWT_ALLOWED_ALGORITHMS,
-                audience=_JWT_AUDIENCE,
                 options={
                     "verify_exp": False,
                     "verify_iat": False,
+                    "verify_aud": False,
                 },
             )
             return raw.get("jti")
