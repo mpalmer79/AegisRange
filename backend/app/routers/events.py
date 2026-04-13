@@ -9,10 +9,16 @@ from app.models import utc_now
 from app.schemas import EventResponse, EventsExportResponse, PaginatedResponse
 from app.serializers import event_to_dict
 
-router = APIRouter(tags=["events"], responses={401: {"description": "Missing or invalid token"}})
+router = APIRouter(
+    tags=["events"], responses={401: {"description": "Missing or invalid token"}}
+)
 
 
-@router.get("/events", response_model=PaginatedResponse[EventResponse], dependencies=[Depends(require_role("viewer"))])
+@router.get(
+    "/events",
+    response_model=PaginatedResponse[EventResponse],
+    dependencies=[Depends(require_role("viewer"))],
+)
 def list_events(
     actor_id: str | None = Query(default=None),
     correlation_id: str | None = Query(default=None),
@@ -41,7 +47,11 @@ def list_events(
     }
 
 
-@router.get("/events/export", response_model=EventsExportResponse, dependencies=[Depends(require_role("viewer"))])
+@router.get(
+    "/events/export",
+    response_model=EventsExportResponse,
+    dependencies=[Depends(require_role("viewer"))],
+)
 def export_events(
     correlation_id: str | None = Query(default=None),
     actor_id: str | None = Query(default=None),

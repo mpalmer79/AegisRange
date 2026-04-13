@@ -115,13 +115,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install security tools
-        run: pip install bandit safety pip-audit
+        run: pip install bandit pip-audit
 
       - name: Run Bandit security scan
         run: bandit -r app/ --severity-level medium -f txt
-
-      - name: Safety dependency scan (blocking)
-        run: safety check -r requirements.txt --output text
 
       - name: pip-audit dependency vulnerability scan (blocking)
         run: pip-audit -r requirements.txt --strict

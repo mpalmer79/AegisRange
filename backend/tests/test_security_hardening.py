@@ -6,8 +6,12 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from app.main import app, reset_rate_limits
-from app.services.rate_limiter import _TIER_LIMITS, EndpointSensitivity, InMemoryRateLimiter
+from app.main import app
+from app.services.rate_limiter import (
+    _TIER_LIMITS,
+    EndpointSensitivity,
+    InMemoryRateLimiter,
+)
 from tests.auth_helper import authenticated_client
 
 
@@ -217,9 +221,7 @@ class TestRateLimiterAbstraction(unittest.TestCase):
             self.assertFalse(
                 self.limiter.is_limited("test-ip", EndpointSensitivity.AUTH)
             )
-        self.assertTrue(
-            self.limiter.is_limited("test-ip", EndpointSensitivity.AUTH)
-        )
+        self.assertTrue(self.limiter.is_limited("test-ip", EndpointSensitivity.AUTH))
 
     def test_different_keys_independent(self) -> None:
         limit = _TIER_LIMITS[EndpointSensitivity.AUTH]
@@ -235,9 +237,7 @@ class TestRateLimiterAbstraction(unittest.TestCase):
         for _ in range(limit):
             self.limiter.is_limited("test-ip", EndpointSensitivity.AUTH)
         self.limiter.reset()
-        self.assertFalse(
-            self.limiter.is_limited("test-ip", EndpointSensitivity.AUTH)
-        )
+        self.assertFalse(self.limiter.is_limited("test-ip", EndpointSensitivity.AUTH))
 
     def test_write_limit_higher_than_auth(self) -> None:
         self.assertGreater(
@@ -271,7 +271,9 @@ class TestAuditLogging(unittest.TestCase):
         from app.services import audit_service
 
         audit_service.log_incident_mutation(
-            "corr-123", "status_update", "admin",
+            "corr-123",
+            "status_update",
+            "admin",
             details={"from": "open", "to": "investigating"},
         )
 
@@ -299,7 +301,10 @@ class TestRequestSizeLimit(unittest.TestCase):
         resp = client.post(
             "/auth/login",
             content="x" * (1_048_576 + 1),
-            headers={"Content-Type": "application/json", "Content-Length": str(1_048_576 + 1)},
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(1_048_576 + 1),
+            },
         )
         self.assertEqual(resp.status_code, 413)
 

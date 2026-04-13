@@ -35,7 +35,11 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "127.0.0.1"
 
 
-@router.post("/{document_id}/read", dependencies=[Depends(require_role("viewer"))], response_model=DocumentActionResponse)
+@router.post(
+    "/{document_id}/read",
+    dependencies=[Depends(require_role("viewer"))],
+    response_model=DocumentActionResponse,
+)
 def read_document(
     document_id: str,
     payload: ReadRequest,
@@ -92,7 +96,11 @@ def read_document(
     }
 
 
-@router.post("/{document_id}/download", dependencies=[Depends(require_role("viewer"))], response_model=DocumentActionResponse)
+@router.post(
+    "/{document_id}/download",
+    dependencies=[Depends(require_role("viewer"))],
+    response_model=DocumentActionResponse,
+)
 def download_document(
     document_id: str,
     payload: DownloadRequest,

@@ -44,6 +44,7 @@ from app.store import STORE
 setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
 logger = logging.getLogger("aegisrange")
 
+
 def reset_rate_limits() -> None:
     """Clear all rate-limit tracking data (called on store reset)."""
     rate_limiter.reset()
@@ -269,7 +270,9 @@ async def rate_limit_middleware(request: Request, call_next):
     ip_key = f"ip:{client_ip}:{sensitivity.value}"
     if rate_limiter.is_limited(ip_key, sensitivity):
         audit_service.log_rate_limit_exceeded(
-            client_ip, path, sensitivity.value,
+            client_ip,
+            path,
+            sensitivity.value,
             correlation_id=getattr(request.state, "correlation_id", None),
         )
         return JSONResponse(
@@ -294,7 +297,9 @@ async def rate_limit_middleware(request: Request, call_next):
             user_key = f"user:{user_id}:{sensitivity.value}"
             if rate_limiter.is_limited(user_key, sensitivity):
                 audit_service.log_rate_limit_exceeded(
-                    client_ip, path, f"per-user:{sensitivity.value}",
+                    client_ip,
+                    path,
+                    f"per-user:{sensitivity.value}",
                     correlation_id=getattr(request.state, "correlation_id", None),
                 )
                 return JSONResponse(

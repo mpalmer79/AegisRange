@@ -9,17 +9,27 @@ from app.schemas import RiskProfileResponse, RuleEffectivenessResponse
 from app.serializers import risk_profile_to_dict
 from app.store import STORE
 
-router = APIRouter(prefix="/analytics", tags=["analytics"], responses={401: {"description": "Missing or invalid token"}})
+router = APIRouter(
+    prefix="/analytics",
+    tags=["analytics"],
+    responses={401: {"description": "Missing or invalid token"}},
+)
 
 
-@router.get("/risk-profiles", response_model=list[RiskProfileResponse], dependencies=[Depends(require_role("analyst"))])
+@router.get(
+    "/risk-profiles",
+    response_model=list[RiskProfileResponse],
+    dependencies=[Depends(require_role("analyst"))],
+)
 def get_risk_profiles() -> list[dict]:
     profiles = risk_service.get_all_profiles()
     return [risk_profile_to_dict(p) for p in profiles]
 
 
 @router.get(
-    "/risk-profiles/{actor_id}", response_model=RiskProfileResponse, dependencies=[Depends(require_role("analyst"))]
+    "/risk-profiles/{actor_id}",
+    response_model=RiskProfileResponse,
+    dependencies=[Depends(require_role("analyst"))],
 )
 def get_risk_profile(actor_id: str) -> dict:
     profile = risk_service.get_profile(actor_id)
@@ -28,7 +38,11 @@ def get_risk_profile(actor_id: str) -> dict:
     return risk_profile_to_dict(profile)
 
 
-@router.get("/rule-effectiveness", response_model=list[RuleEffectivenessResponse], dependencies=[Depends(require_role("analyst"))])
+@router.get(
+    "/rule-effectiveness",
+    response_model=list[RuleEffectivenessResponse],
+    dependencies=[Depends(require_role("analyst"))],
+)
 def get_rule_effectiveness() -> list[dict]:
     rule_counts: dict[str, dict] = {}
     for alert in STORE.get_alerts():

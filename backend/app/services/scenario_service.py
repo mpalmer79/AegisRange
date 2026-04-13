@@ -370,7 +370,11 @@ class ScenarioEngine:
             [a for a in self.store.get_alerts() if a.correlation_id == correlation_id]
         )
         responses_count = len(
-            [r for r in self.store.get_responses() if r.correlation_id == correlation_id]
+            [
+                r
+                for r in self.store.get_responses()
+                if r.correlation_id == correlation_id
+            ]
         )
         summary: dict[str, object] = {
             "scenario_id": scenario_id,
@@ -384,7 +388,9 @@ class ScenarioEngine:
             "incident_id": incident.incident_id if incident else None,
             "step_up_required": self.store.is_step_up_required("user-alice"),
             "revoked_sessions": sorted(self.store.get_all_revoked_sessions()),
-            "download_restricted_actors": sorted(self.store.get_all_download_restricted()),
+            "download_restricted_actors": sorted(
+                self.store.get_all_download_restricted()
+            ),
             "disabled_services": sorted(self.store.get_all_disabled_services()),
             "quarantined_artifacts": sorted(self.store.get_all_quarantined_artifacts()),
             "policy_change_restricted_actors": sorted(

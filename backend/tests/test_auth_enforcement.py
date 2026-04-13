@@ -184,9 +184,7 @@ class TestMalformedTokens(unittest.TestCase):
             "iat": now - timedelta(hours=2),
             "jti": "expired-test-jti",
         }
-        expired_token = pyjwt.encode(
-            payload, svc._secret_key, algorithm="HS256"
-        )
+        expired_token = pyjwt.encode(payload, svc._secret_key, algorithm="HS256")
 
         self.client.headers["Authorization"] = f"Bearer {expired_token}"
         resp = self.client.get("/events")

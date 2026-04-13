@@ -18,7 +18,13 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.dependencies import auth_service, require_role
-from app.schemas import AuthLoginResponse, AuthLogoutResponse, AuthMeResponse, AuthUserResponse, LoginRequest
+from app.schemas import (
+    AuthLoginResponse,
+    AuthLogoutResponse,
+    AuthMeResponse,
+    AuthUserResponse,
+    LoginRequest,
+)
 from app.serializers import auth_user_to_dict
 from app.services import audit_service
 from app.store import STORE
@@ -115,9 +121,7 @@ def platform_logout(request: Request) -> JSONResponse:
         jti = auth_service.extract_jti(cookie_token)
         if jti:
             STORE.revoke_jti(jti)
-            audit_service.log_logout(
-                jti=jti, correlation_id=correlation_id
-            )
+            audit_service.log_logout(jti=jti, correlation_id=correlation_id)
             logger.info("Revoked JTI on logout", extra={"jti": jti})
     response = JSONResponse(content={"status": "logged_out"})
     _clear_auth_cookie(response)
@@ -125,7 +129,9 @@ def platform_logout(request: Request) -> JSONResponse:
     return response
 
 
-@router.get("/me", dependencies=[Depends(require_role("viewer"))], response_model=AuthMeResponse)
+@router.get(
+    "/me", dependencies=[Depends(require_role("viewer"))], response_model=AuthMeResponse
+)
 def get_current_user(request: Request) -> dict:
     """Return the authenticated platform user's identity from the cookie/token."""
     platform_user = getattr(request.state, "platform_user", None)
@@ -139,7 +145,11 @@ def get_current_user(request: Request) -> dict:
     }
 
 
-@router.get("/users", dependencies=[Depends(require_role("admin"))], response_model=list[AuthUserResponse])
+@router.get(
+    "/users",
+    dependencies=[Depends(require_role("admin"))],
+    response_model=list[AuthUserResponse],
+)
 def list_platform_users() -> list[dict]:
     users = auth_service.list_users()
     return [auth_user_to_dict(u) for u in users]

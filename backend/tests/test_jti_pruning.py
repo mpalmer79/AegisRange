@@ -73,7 +73,7 @@ class TestJtiPruningMiddleware(unittest.TestCase):
     def test_pruning_triggered_every_100_requests(self) -> None:
         """JTI pruning fires every 100 requests through the middleware."""
         from fastapi.testclient import TestClient
-        from app.main import app, _JTI_PRUNE_INTERVAL
+        from app.main import app
         import app.main as main_mod
 
         client = TestClient(app)

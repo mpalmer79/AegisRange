@@ -289,10 +289,7 @@ class TestStoreEncapsulation(unittest.TestCase):
         for py_file in services_dir.glob("*.py"):
             tree = ast.parse(py_file.read_text())
             for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.Attribute)
-                    and node.attr in forbidden_attrs
-                ):
+                if isinstance(node, ast.Attribute) and node.attr in forbidden_attrs:
                     violations.append(
                         f"{py_file.name}:{node.lineno} accesses .{node.attr}"
                     )
@@ -300,8 +297,7 @@ class TestStoreEncapsulation(unittest.TestCase):
         self.assertEqual(
             violations,
             [],
-            f"Services must not access raw store attributes:\n"
-            + "\n".join(violations),
+            "Services must not access raw store attributes:\n" + "\n".join(violations),
         )
 
 

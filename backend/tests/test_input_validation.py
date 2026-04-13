@@ -149,7 +149,5 @@ class TestReportRequestValidation(unittest.TestCase):
         self.assertEqual(resp.status_code, 422)
 
     def test_oversized_title_rejected(self):
-        resp = self.client.post(
-            "/reports/generate", json={"title": "t" * 257}
-        )
+        resp = self.client.post("/reports/generate", json={"title": "t" * 257})
         self.assertEqual(resp.status_code, 422)

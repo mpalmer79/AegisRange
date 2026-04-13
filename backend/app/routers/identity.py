@@ -19,7 +19,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.dependencies import identity_service, pipeline, require_role
 from app.models import Confidence, Event, Severity
-from app.schemas import IdentityLoginResponse, SessionRevokeResponse, SimulationLoginRequest
+from app.schemas import (
+    IdentityLoginResponse,
+    SessionRevokeResponse,
+    SimulationLoginRequest,
+)
 
 logger = logging.getLogger("aegisrange")
 router = APIRouter(prefix="/identity", tags=["identity"])
@@ -34,7 +38,11 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "127.0.0.1"
 
 
-@router.post("/login", dependencies=[Depends(require_role("viewer"))], response_model=IdentityLoginResponse)
+@router.post(
+    "/login",
+    dependencies=[Depends(require_role("viewer"))],
+    response_model=IdentityLoginResponse,
+)
 def login(
     payload: SimulationLoginRequest,
     request: Request,
@@ -87,7 +95,9 @@ def login(
 
 
 @router.post(
-    "/sessions/{session_id}/revoke", dependencies=[Depends(require_role("analyst"))], response_model=SessionRevokeResponse
+    "/sessions/{session_id}/revoke",
+    dependencies=[Depends(require_role("analyst"))],
+    response_model=SessionRevokeResponse,
 )
 def revoke_session(session_id: str, request: Request) -> dict:
     if not identity_service.session_exists(session_id):
