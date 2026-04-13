@@ -371,7 +371,13 @@ class AdminResetResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class LoginRequest(BaseModel):
+class _StrictInput(BaseModel):
+    """Base class for request schemas that reject unknown fields."""
+
+    model_config = {"extra": "forbid"}
+
+
+class LoginRequest(_StrictInput):
     username: str = Field(..., min_length=1, max_length=64)
     password: str = Field(..., min_length=1, max_length=128)
 
@@ -388,7 +394,7 @@ class SimulationLoginRequest(LoginRequest):
     simulated_source_ip: str = Field(default="127.0.0.1", max_length=45)
 
 
-class ReadRequest(BaseModel):
+class ReadRequest(_StrictInput):
     """Simulation-context request body.
 
     ``actor_id`` and ``actor_role`` identify the **simulated threat actor**
@@ -416,7 +422,7 @@ class ReadRequest(BaseModel):
     simulated_source_ip: str = Field(default="127.0.0.1", max_length=45)
 
 
-class DownloadRequest(BaseModel):
+class DownloadRequest(_StrictInput):
     """Simulation-context request body — see ReadRequest docstring."""
 
     actor_id: str = Field(..., min_length=1, max_length=128)
@@ -425,16 +431,16 @@ class DownloadRequest(BaseModel):
     simulated_source_ip: str = Field(default="127.0.0.1", max_length=45)
 
 
-class IncidentStatusUpdate(BaseModel):
+class IncidentStatusUpdate(_StrictInput):
     status: Literal["investigating", "contained", "resolved", "closed"]
 
 
-class IncidentNote(BaseModel):
+class IncidentNote(_StrictInput):
     author: str = Field(..., min_length=1, max_length=128)
     content: str = Field(..., min_length=1, max_length=10000)
 
 
-class ReportRequest(BaseModel):
+class ReportRequest(_StrictInput):
     title: str = Field(
         default="AegisRange Exercise Report", min_length=1, max_length=256
     )

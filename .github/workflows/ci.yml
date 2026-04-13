@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   backend-lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -44,6 +49,8 @@ jobs:
   backend-test:
     runs-on: ubuntu-latest
     needs: backend-lint
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -95,6 +102,8 @@ jobs:
 
   backend-security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -106,16 +115,63 @@ jobs:
           python-version: "3.11"
 
       - name: Install security tools
-        run: pip install bandit safety
+        run: pip install bandit safety pip-audit
 
       - name: Run Bandit security scan
         run: bandit -r app/ --severity-level medium -f txt
 
-      - name: Safety dependency scan
-        run: safety check -r requirements.txt --output text || true
+      - name: Safety dependency scan (blocking)
+        run: safety check -r requirements.txt --output text
+
+      - name: pip-audit dependency vulnerability scan (blocking)
+        run: pip-audit -r requirements.txt --strict
+
+  secret-scanning:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz
+          chmod +x gitleaks
+
+      - name: Run gitleaks secret scan
+        run: ./gitleaks detect --source . --verbose
+
+  sbom-generation:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install CycloneDX
+        run: pip install cyclonedx-bom
+
+      - name: Generate backend SBOM
+        run: cyclonedx-py requirements backend/requirements.txt -o backend-sbom.json --format json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom
+          path: backend-sbom.json
+          retention-days: 90
 
   frontend-lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend
@@ -134,9 +190,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=critical
+
   frontend-test:
     runs-on: ubuntu-latest
     needs: frontend-lint
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend
@@ -158,6 +219,8 @@ jobs:
   frontend-build:
     runs-on: ubuntu-latest
     needs: [frontend-lint, frontend-test]
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend
@@ -184,7 +247,9 @@ jobs:
 
   docker-build:
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-build]
+    needs: [backend-test, backend-security, secret-scanning, frontend-build]
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -193,3 +258,13 @@ jobs:
 
       - name: Build frontend image
         run: docker build -t aegisrange-frontend ./frontend
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan backend image for vulnerabilities
+        run: trivy image --severity CRITICAL,HIGH --exit-code 1 aegisrange-backend
+
+      - name: Scan frontend image for vulnerabilities
+        run: trivy image --severity CRITICAL,HIGH --exit-code 1 aegisrange-frontend

@@ -130,18 +130,36 @@ export function resetBackendProbe(): void {
 // ------------------------------------------------------------
 // Typed request helper with timeout
 // ------------------------------------------------------------
+function getCsrfToken(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const match = document.cookie.match(
+    /(?:^|;\s*)aegisrange_csrf=([^;]*)/
+  );
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
+    const csrfToken = getCsrfToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...((options?.headers as Record<string, string>) ?? {}),
+    };
+    // Include CSRF token on state-changing requests
+    if (
+      csrfToken &&
+      options?.method &&
+      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method)
+    ) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
     const res = await fetch(`${BASE_URL}${path}`, {
       ...options,
       credentials: 'include',
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
+      headers,
     });
     if (!res.ok) {
       throw new Error(`API ${res.status}: ${res.statusText}`);

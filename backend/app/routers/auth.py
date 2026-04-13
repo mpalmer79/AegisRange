@@ -3,11 +3,15 @@
 Login sets an httpOnly cookie as the primary auth channel so the JWT
 token never touches JavaScript.  The JSON body still returns non-secret
 metadata (username, role, expires_at) for UI state.
+
+A non-httpOnly CSRF cookie is also set on login so the frontend can
+read it and include it as a header on state-changing requests.
 """
 
 from __future__ import annotations
 
 import logging
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -16,6 +20,7 @@ from app.config import settings
 from app.dependencies import auth_service, require_role
 from app.schemas import AuthLoginResponse, AuthLogoutResponse, AuthMeResponse, AuthUserResponse, LoginRequest
 from app.serializers import auth_user_to_dict
+from app.services import audit_service
 from app.store import STORE
 
 logger = logging.getLogger("aegisrange.auth")
@@ -35,6 +40,25 @@ def _set_auth_cookie(response: JSONResponse, token: str) -> None:
     )
 
 
+def _set_csrf_cookie(response: JSONResponse) -> None:
+    """Set a non-httpOnly CSRF token cookie.
+
+    The cookie is readable by JavaScript so the frontend can include
+    the token value in the ``X-CSRF-Token`` header on state-changing
+    requests.  The middleware validates that the header matches the
+    cookie.
+    """
+    csrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=settings.CSRF_COOKIE_NAME,
+        value=csrf_token,
+        httponly=False,  # must be readable by JS
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        secure=settings.auth_cookie_secure,
+        path="/",
+    )
+
+
 def _clear_auth_cookie(response: JSONResponse) -> None:
     """Clear the httpOnly auth cookie."""
     response.delete_cookie(
@@ -46,10 +70,26 @@ def _clear_auth_cookie(response: JSONResponse) -> None:
     )
 
 
+def _clear_csrf_cookie(response: JSONResponse) -> None:
+    """Clear the CSRF cookie."""
+    response.delete_cookie(
+        key=settings.CSRF_COOKIE_NAME,
+        httponly=False,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        secure=settings.auth_cookie_secure,
+        path="/",
+    )
+
+
 @router.post("/login", response_model=AuthLoginResponse)
-def platform_login(payload: LoginRequest) -> JSONResponse:
+def platform_login(payload: LoginRequest, request: Request) -> JSONResponse:
     success, token, expires_at = auth_service.authenticate(
         payload.username, payload.password
+    )
+    client_ip = request.client.host if request.client else None
+    correlation_id = getattr(request.state, "correlation_id", None)
+    audit_service.log_login_attempt(
+        payload.username, success, client_ip=client_ip, correlation_id=correlation_id
     )
     if not success or token is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -61,6 +101,7 @@ def platform_login(payload: LoginRequest) -> JSONResponse:
     }
     response = JSONResponse(content=body)
     _set_auth_cookie(response, token)
+    _set_csrf_cookie(response)
     return response
 
 
@@ -69,13 +110,18 @@ def platform_logout(request: Request) -> JSONResponse:
     """Log out by revoking the JWT token ID and clearing the cookie."""
     # Extract JTI from the cookie before clearing it.
     cookie_token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+    correlation_id = getattr(request.state, "correlation_id", None)
     if cookie_token:
         jti = auth_service.extract_jti(cookie_token)
         if jti:
             STORE.revoke_jti(jti)
+            audit_service.log_logout(
+                jti=jti, correlation_id=correlation_id
+            )
             logger.info("Revoked JTI on logout", extra={"jti": jti})
     response = JSONResponse(content={"status": "logged_out"})
     _clear_auth_cookie(response)
+    _clear_csrf_cookie(response)
     return response
 
 

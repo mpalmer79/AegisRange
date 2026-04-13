@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -173,22 +172,21 @@ class TestMalformedTokens(unittest.TestCase):
 
     def test_expired_token_rejected(self) -> None:
         """A manually backdated token should fail verification."""
+        import jwt as pyjwt
+
         svc = AuthService()
         # Build a token that expired 1 hour ago
         now = datetime.now(timezone.utc)
-        header = {"alg": "HS256", "typ": "JWT"}
         payload = {
             "sub": "admin",
             "role": "admin",
-            "exp": (now - timedelta(hours=1)).isoformat(),
-            "iat": (now - timedelta(hours=2)).isoformat(),
+            "exp": now - timedelta(hours=1),
+            "iat": now - timedelta(hours=2),
             "jti": "expired-test-jti",
         }
-        h_b64 = svc._b64_encode(json.dumps(header, separators=(",", ":")))
-        p_b64 = svc._b64_encode(json.dumps(payload, separators=(",", ":")))
-        sig = svc._sign(f"{h_b64}.{p_b64}")
-        s_b64 = svc._b64_encode(sig)
-        expired_token = f"{h_b64}.{p_b64}.{s_b64}"
+        expired_token = pyjwt.encode(
+            payload, svc._secret_key, algorithm="HS256"
+        )
 
         self.client.headers["Authorization"] = f"Bearer {expired_token}"
         resp = self.client.get("/events")

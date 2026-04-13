@@ -1,21 +1,26 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
-import json
 import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+import jwt
 from fastapi import HTTPException, Request
 
 from app.models import utc_now as _utc_now
 
 logger = logging.getLogger("aegisrange.auth")
 
+# ---------------------------------------------------------------------------
+# JWT algorithm — only HS256 allowed; reject all others at decode time.
+# ---------------------------------------------------------------------------
+
+_JWT_ALGORITHM = "HS256"
+_JWT_ALLOWED_ALGORITHMS = ["HS256"]
 
 # ---------------------------------------------------------------------------
 # Role definitions
@@ -143,12 +148,22 @@ class TokenPayload:
 
 
 # ---------------------------------------------------------------------------
-# AuthService
+# AuthService — standards-based JWT via PyJWT
 # ---------------------------------------------------------------------------
 
 
 class AuthService:
-    """JWT authentication and user management for the AegisRange simulation platform."""
+    """JWT authentication and user management for the AegisRange simulation platform.
+
+    Uses PyJWT for standards-compliant token creation and verification.
+    All tokens are signed with HS256 (HMAC-SHA256). The ``decode`` call
+    enforces:
+      - signature verification
+      - expiration (``exp``) validation
+      - issued-at (``iat``) validation
+      - required claims (``sub``, ``role``, ``jti``, ``exp``, ``iat``)
+      - algorithm restriction (HS256 only)
+    """
 
     def __init__(
         self, secret_key: str | None = None, token_expiry_hours: int | None = None
@@ -212,69 +227,45 @@ class AuthService:
         return True, token, expires_at
 
     def create_token(self, username: str, role: str) -> str:
-        """Create a JWT-style token using stdlib only.
+        """Create a JWT token using PyJWT (HS256).
 
-        Format: ``base64(header).base64(payload).base64(signature)``
-        where the signature is HMAC-SHA256 of ``header_b64.payload_b64``.
+        Standard claims: sub, role, exp, iat, jti.
         """
         now = _utc_now()
-        header = {"alg": "HS256", "typ": "JWT"}
         payload = {
             "sub": username,
             "role": role,
-            "exp": (now + timedelta(hours=self._token_expiry_hours)).isoformat(),
-            "iat": now.isoformat(),
+            "exp": now + timedelta(hours=self._token_expiry_hours),
+            "iat": now,
             "jti": str(uuid4()),
         }
-
-        header_b64 = self._b64_encode(json.dumps(header, separators=(",", ":")))
-        payload_b64 = self._b64_encode(json.dumps(payload, separators=(",", ":")))
-        signature = self._sign(f"{header_b64}.{payload_b64}")
-        signature_b64 = self._b64_encode(signature)
-
-        return f"{header_b64}.{payload_b64}.{signature_b64}"
+        return jwt.encode(payload, self._secret_key, algorithm=_JWT_ALGORITHM)
 
     def verify_token(self, token: str) -> TokenPayload | None:
-        """Verify a JWT token and return the decoded payload, or ``None``."""
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
+        """Verify a JWT token and return the decoded payload, or ``None``.
 
-        header_b64, payload_b64, signature_b64 = parts
-
-        # Verify signature
-        expected_sig = self._sign(f"{header_b64}.{payload_b64}")
+        PyJWT enforces:
+          - signature verification (HS256 only)
+          - exp claim validation (rejects expired tokens)
+          - iat claim validation (rejects future-issued tokens)
+          - required claims: sub, role, jti, exp, iat
+        """
         try:
-            actual_sig = self._b64_decode(signature_b64)
-        except Exception:
+            raw = jwt.decode(
+                token,
+                self._secret_key,
+                algorithms=_JWT_ALLOWED_ALGORITHMS,
+                options={
+                    "require": ["sub", "role", "exp", "iat", "jti"],
+                    "verify_exp": True,
+                    "verify_iat": True,
+                    "verify_signature": True,
+                },
+            )
+        except jwt.ExpiredSignatureError:
             return None
-
-        if not hmac.compare_digest(expected_sig.encode(), actual_sig.encode()):
+        except jwt.InvalidTokenError:
             return None
-
-        # Decode payload
-        try:
-            raw = json.loads(self._b64_decode(payload_b64))
-        except Exception:
-            return None
-
-        # Check expiration (handle both tz-aware and tz-naive ISO strings)
-        try:
-            exp = datetime.fromisoformat(raw["exp"])
-        except (KeyError, ValueError):
-            return None
-
-        now = _utc_now()
-        # Normalise: if the stored exp is naive, treat it as UTC
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-
-        if now > exp:
-            return None
-
-        iat = datetime.fromisoformat(raw["iat"])
-        if iat.tzinfo is None:
-            iat = iat.replace(tzinfo=timezone.utc)
 
         jti = raw.get("jti")
         if jti is None:
@@ -286,16 +277,21 @@ class AuthService:
         if STORE.is_jti_revoked(jti):
             return None
 
-        try:
-            return TokenPayload(
-                sub=raw["sub"],
-                role=raw["role"],
-                exp=exp,
-                iat=iat,
-                jti=jti,
-            )
-        except (KeyError, ValueError):
+        # Validate role is a known role
+        if raw.get("role") not in ROLES:
             return None
+
+        # Convert exp/iat to datetime objects
+        exp = datetime.fromtimestamp(raw["exp"], tz=timezone.utc)
+        iat = datetime.fromtimestamp(raw["iat"], tz=timezone.utc)
+
+        return TokenPayload(
+            sub=raw["sub"],
+            role=raw["role"],
+            exp=exp,
+            iat=iat,
+            jti=jti,
+        )
 
     def get_user(self, username: str) -> AuthUser | None:
         """Look up a user by username."""
@@ -311,35 +307,19 @@ class AuthService:
         Used during logout to revoke the token.  The cookie was set
         by us, but we still guard against malformed input.
         """
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
         try:
-            raw = json.loads(self._b64_decode(parts[1]))
+            raw = jwt.decode(
+                token,
+                self._secret_key,
+                algorithms=_JWT_ALLOWED_ALGORITHMS,
+                options={
+                    "verify_exp": False,
+                    "verify_iat": False,
+                },
+            )
             return raw.get("jti")
-        except (ValueError, KeyError):
+        except jwt.InvalidTokenError:
             return None
-
-    # -- internal helpers ----------------------------------------------------
-
-    @staticmethod
-    def _b64_encode(data: str) -> str:
-        """URL-safe base64 encode without padding."""
-        return base64.urlsafe_b64encode(data.encode()).rstrip(b"=").decode()
-
-    @staticmethod
-    def _b64_decode(data: str) -> str:
-        """URL-safe base64 decode, re-adding padding as needed."""
-        padded = data + "=" * (-len(data) % 4)
-        return base64.urlsafe_b64decode(padded.encode()).decode()
-
-    def _sign(self, message: str) -> str:
-        """HMAC-SHA256 hex digest of *message* using the configured secret."""
-        return hmac.new(
-            self._secret_key.encode(),
-            message.encode(),
-            hashlib.sha256,
-        ).hexdigest()
 
 
 # ---------------------------------------------------------------------------
