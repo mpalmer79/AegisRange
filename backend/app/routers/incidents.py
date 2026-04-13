@@ -11,6 +11,7 @@ from app.dependencies import require_role
 from app.models import utc_now
 from app.schemas import IncidentNote, IncidentNoteResponse, IncidentResponse, IncidentStatusUpdate
 from app.serializers import incident_to_dict
+from app.services import audit_service
 from app.store import STORE
 
 logger = logging.getLogger("aegisrange")
@@ -87,7 +88,15 @@ def update_incident_status(
         reference_id=incident.incident_id,
         summary=f"Status changed from {old_status} to {payload.status} by {changed_by}.",
     )
-    STORE.upsert_incident(incident)
+    with STORE.transaction():
+        STORE.upsert_incident(incident)
+
+    audit_service.log_incident_mutation(
+        correlation_id,
+        "status_update",
+        changed_by,
+        details={"from": old_status, "to": payload.status},
+    )
 
     return _serialize_incident(incident)
 
@@ -109,13 +118,21 @@ def add_incident_note(
         "content": note.content,
         "created_at": utc_now().isoformat(),
     }
-    STORE.append_incident_note(correlation_id, entry)
-    incident.add_timeline_entry(
-        entry_type="analyst_note",
-        reference_id=entry["note_id"],
-        summary=f"Note by {attributed_author}: {note.content[:80]}",
+    with STORE.transaction():
+        STORE.append_incident_note(correlation_id, entry)
+        incident.add_timeline_entry(
+            entry_type="analyst_note",
+            reference_id=entry["note_id"],
+            summary=f"Note by {attributed_author}: {note.content[:80]}",
+        )
+        STORE.upsert_incident(incident)
+
+    audit_service.log_incident_mutation(
+        correlation_id,
+        "note_added",
+        attributed_author,
+        details={"note_id": entry["note_id"]},
     )
-    STORE.upsert_incident(incident)
     return entry
 
 

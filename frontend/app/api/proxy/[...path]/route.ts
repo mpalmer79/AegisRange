@@ -19,23 +19,57 @@ function buildTargetUrl(path: string[], request: NextRequest): string {
   return `${backend}/${joinedPath}${search}`;
 }
 
+// ---------------------------------------------------------------------------
+// Header allowlists
+//
+// Only explicitly approved headers are forwarded upstream or downstream.
+// All unknown, internal, and hop-by-hop headers are stripped.
+// ---------------------------------------------------------------------------
+
+const ALLOWED_REQUEST_HEADERS = new Set([
+  'content-type',
+  'accept',
+  'authorization',
+  'x-correlation-id',
+  'x-csrf-token',
+  'cookie',
+]);
+
+const ALLOWED_RESPONSE_HEADERS = new Set([
+  'content-type',
+  'x-correlation-id',
+  'x-response-time-ms',
+  'x-content-type-options',
+  'x-frame-options',
+  'referrer-policy',
+  'strict-transport-security',
+  'content-security-policy',
+  'cache-control',
+  'set-cookie',
+  'retry-after',
+]);
+
 function buildUpstreamHeaders(request: NextRequest): Headers {
   const headers = new Headers();
 
   request.headers.forEach((value, key) => {
     const lower = key.toLowerCase();
-
-    if (
-      lower === 'host' ||
-      lower === 'connection' ||
-      lower === 'content-length' ||
-      lower === 'transfer-encoding' ||
-      lower === 'content-encoding'
-    ) {
-      return;
+    if (ALLOWED_REQUEST_HEADERS.has(lower)) {
+      headers.set(key, value);
     }
+  });
 
-    headers.set(key, value);
+  return headers;
+}
+
+function buildDownstreamHeaders(upstream: Response): Headers {
+  const headers = new Headers();
+
+  upstream.headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+    if (ALLOWED_RESPONSE_HEADERS.has(lower)) {
+      headers.set(key, value);
+    }
   });
 
   return headers;
@@ -62,23 +96,7 @@ async function proxy(
     }
 
     const upstream = await fetch(targetUrl, init);
-
-    const responseHeaders = new Headers();
-
-    upstream.headers.forEach((value, key) => {
-      const lower = key.toLowerCase();
-
-      if (
-        lower === 'content-length' ||
-        lower === 'transfer-encoding' ||
-        lower === 'content-encoding'
-      ) {
-        return;
-      }
-
-      responseHeaders.set(key, value);
-    });
-
+    const responseHeaders = buildDownstreamHeaders(upstream);
     const body = await upstream.arrayBuffer();
 
     return new Response(body, {
@@ -87,15 +105,9 @@ async function proxy(
       headers: responseHeaders,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown proxy error';
-
     return Response.json(
-      {
-        error: 'Proxy request failed',
-        detail: message,
-      },
-      { status: 500 }
+      { error: 'Proxy request failed' },
+      { status: 502 }
     );
   }
 }

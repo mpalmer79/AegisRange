@@ -16,6 +16,8 @@ class Settings:
     DB_PATH: str = os.getenv("DB_PATH", "aegisrange.db")
     AUTH_COOKIE_NAME: str = "aegisrange_token"
     AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    CSRF_COOKIE_NAME: str = "aegisrange_csrf"
+    CSRF_HEADER_NAME: str = "x-csrf-token"
 
     @property
     def auth_cookie_secure(self) -> bool:

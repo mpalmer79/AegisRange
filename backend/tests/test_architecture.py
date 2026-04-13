@@ -10,8 +10,12 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from app.main import app, reset_rate_limits, _RATE_LIMIT_MAX_REQUESTS
+from app.main import app, reset_rate_limits
+from app.services.rate_limiter import _TIER_LIMITS, EndpointSensitivity
 from tests.auth_helper import authenticated_client
+
+_AUTH_RATE_LIMIT = _TIER_LIMITS[EndpointSensitivity.AUTH]
+_READ_RATE_LIMIT = _TIER_LIMITS[EndpointSensitivity.READ]
 
 
 class TestRateLimiting(unittest.TestCase):
@@ -26,7 +30,7 @@ class TestRateLimiting(unittest.TestCase):
 
     def test_auth_login_rate_limited_after_threshold(self) -> None:
         """Exceeding the rate limit should return 429."""
-        for _ in range(_RATE_LIMIT_MAX_REQUESTS):
+        for _ in range(_AUTH_RATE_LIMIT):
             resp = self.client.post(
                 "/auth/login",
                 json={
@@ -47,16 +51,16 @@ class TestRateLimiting(unittest.TestCase):
         self.assertEqual(resp.status_code, 429)
         self.assertIn("Retry-After", resp.headers)
 
-    def test_rate_limit_does_not_affect_other_endpoints(self) -> None:
-        """Non-auth endpoints should never be rate limited."""
+    def test_rate_limit_does_not_affect_read_endpoints(self) -> None:
+        """Read endpoints have a much higher limit than auth endpoints."""
         client = authenticated_client("viewer")
-        for _ in range(_RATE_LIMIT_MAX_REQUESTS + 5):
+        for _ in range(_AUTH_RATE_LIMIT + 5):
             resp = client.get("/events")
             self.assertEqual(resp.status_code, 200)
 
     def test_rate_limit_reset_clears_counters(self) -> None:
         """reset_rate_limits() should allow fresh requests."""
-        for _ in range(_RATE_LIMIT_MAX_REQUESTS):
+        for _ in range(_AUTH_RATE_LIMIT):
             self.client.post(
                 "/auth/login",
                 json={
@@ -78,7 +82,7 @@ class TestRateLimiting(unittest.TestCase):
 
     def test_admin_reset_clears_rate_limits(self) -> None:
         """POST /admin/reset should also clear rate limits."""
-        for _ in range(_RATE_LIMIT_MAX_REQUESTS):
+        for _ in range(_AUTH_RATE_LIMIT):
             self.client.post(
                 "/auth/login",
                 json={
@@ -101,7 +105,7 @@ class TestRateLimiting(unittest.TestCase):
 
     def test_429_response_format(self) -> None:
         """Rate limit response should have proper JSON body."""
-        for _ in range(_RATE_LIMIT_MAX_REQUESTS):
+        for _ in range(_AUTH_RATE_LIMIT):
             self.client.post(
                 "/auth/login",
                 json={

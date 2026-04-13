@@ -40,9 +40,9 @@ The emphasis is on:
 The system consists of:
 
 - user-facing frontend
-- API gateway layer
+- Next.js proxy layer (API gateway equivalent)
 - backend service modules
-- persistent data store (PostgreSQL)
+- persistent data store (SQLite with WAL mode)
 
 Core domains:
 - identity and session management

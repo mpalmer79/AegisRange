@@ -186,27 +186,39 @@ All mutations must be persisted to ensure durability.
 
 ## 11. Persistence Model
 
-The system uses a hybrid persistence approach.
+The system uses a hybrid persistence approach with a single source of truth for all mutations: the domain transaction layer.
 
 ### Runtime State
 In-memory store for active operations.
 
 ### Durable State
-SQLite for persistence.
+SQLite for persistence (WAL mode, NORMAL synchronous).
 
 ### Strategy
 
-Incremental persistence:
-- events
-- alerts
-- responses
-- incidents
+All entity mutations occur inside explicit `STORE.transaction()` contexts:
+- Pipeline processing (events → alerts → responses → incidents)
+- Incident status updates
+- Incident note additions
 
-Snapshot persistence:
-- enforcement state
-- risk profiles
+Operational state (containment sets, risk profiles) is persisted via middleware after successful mutations.
 
-This balances simplicity and durability for the MVP stage.
+No state changes occur outside controlled boundaries.
+
+### What Is Persisted
+
+Incremental (transaction-based):
+- events, alerts, responses, incidents, notes, scenario history
+
+Snapshot (after mutations):
+- enforcement state (revoked sessions, step-up requirements, etc.)
+- risk profiles, blocked routes
+
+### What Is Not Persisted (by design)
+
+- Alert dedup signatures (derived from alerts on load)
+- Actor sessions (ephemeral, reset on restart)
+- Per-actor event indices (rebuilt from events on load)
 
 ---
 
@@ -241,12 +253,12 @@ Non-guarantees:
 
 ---
 
-## 14. Constraints
+## 14. Scaling Constraints
 
-- single-worker requirement
-- in-memory coordination limits scaling
-- SQLite is not horizontally scalable
-- hybrid persistence can create minor drift on crash
+- Single Uvicorn worker required (enforced in Dockerfile)
+- In-memory rate limiter is process-local (swap `InMemoryRateLimiter` for Redis-backed implementation to support multiple workers)
+- SQLite is the persistence backend (not horizontally scalable; migration path to PostgreSQL documented in DEPLOY.md)
+- In-memory store is the authoritative runtime data source
 
 These are known and accepted for the current stage.
 
@@ -254,15 +266,58 @@ These are known and accepted for the current stage.
 
 ## 15. Security Model
 
-Platform security:
+### Authentication
 
-- JWT authentication
-- hashed credentials
-- RBAC
-- protected routes
-- token expiration
+- JWT tokens via PyJWT (HS256), standards-compliant
+- PBKDF2-HMAC-SHA256 password hashing (260,000 iterations)
+- httpOnly cookies as primary auth channel (token never touches JS)
+- Bearer header fallback for API clients
+- Token revocation via JTI deny-list (persisted to SQLite)
+- Timing-safe comparison on all credential checks
 
-Simulation identity is separate from platform identity.
+### Authorization
+
+- Role-based access control (RBAC) with 5-level hierarchy
+- Single verification path via `require_role()` dependency
+- Simulation identity is strictly separated from platform identity
+
+### Browser Trust Boundaries
+
+- CSRF protection: double-submit cookie pattern on state-changing requests
+- SameSite=Lax cookies with Secure flag in production
+- Security headers on all responses:
+  - Content-Security-Policy
+  - Strict-Transport-Security
+  - X-Content-Type-Options: nosniff
+  - X-Frame-Options: DENY
+  - Referrer-Policy: strict-origin-when-cross-origin
+
+### Input Validation
+
+- Strict Pydantic schemas on all request bodies (unknown fields rejected)
+- Request size limit enforced at middleware layer (1 MB)
+- Field-level length and type constraints
+
+### Rate Limiting
+
+- Abstract rate limiter interface (swappable backend)
+- Per-IP, per-user, per-endpoint sensitivity tiers
+- AUTH tier: 20 req/60s (brute-force protection)
+- WRITE tier: 60 req/60s
+- READ tier: 200 req/60s
+- Process-local implementation (single-worker constraint)
+
+### Proxy Trust Boundary
+
+- Frontend proxy uses explicit header allowlists (request and response)
+- All unknown, internal, and hop-by-hop headers are stripped
+- Backend error details are not forwarded to clients
+
+### Audit Logging
+
+- Dedicated audit logger (`aegisrange.audit`) for security events
+- Structured entries with category, action, outcome, actor, correlation ID
+- Covers: login attempts, logouts, CSRF failures, rate limiting, incident mutations, admin actions, scenario execution
 
 ---
 
@@ -270,16 +325,18 @@ Simulation identity is separate from platform identity.
 
 Current:
 
+- structured JSON logging
+- security audit trail (aegisrange.audit logger)
 - persisted records
 - incident timelines
-- reports
-- real-time updates
+- correlation ID propagation on all requests
+- request latency tracking
 
 Future:
 
-- structured logging
-- metrics
-- tracing
+- centralized log aggregation (SIEM integration)
+- metrics export (Prometheus)
+- distributed tracing
 - failure tracking
 
 ---
