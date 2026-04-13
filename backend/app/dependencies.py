@@ -6,7 +6,12 @@ individual router modules can import them without circular dependencies.
 
 from __future__ import annotations
 
-from app.services.auth_service import _auth_service, require_role  # noqa: F401
+from app.services.auth_service import (  # noqa: F401
+    _auth_service,
+    require_identity_type,
+    require_role,
+    require_scope,
+)
 from app.services.campaign_service import CampaignDetectionService
 from app.services.detection_service import DetectionService
 from app.services.document_service import DocumentService

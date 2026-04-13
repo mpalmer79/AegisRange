@@ -324,17 +324,25 @@ class TestJWTPyJWTIntegration(unittest.TestCase):
         """Tokens should be standard 3-part JWTs decodable by PyJWT."""
         import jwt as pyjwt
 
-        from app.services.auth_service import AuthService
+        from app.services.auth_service import AuthService, _JWT_AUDIENCE
 
         svc = AuthService()
         token = svc.create_token("admin", "admin")
-        # Should be decodable by PyJWT
-        decoded = pyjwt.decode(token, svc._secret_key, algorithms=["HS256"])
+        # Should be decodable by PyJWT with proper audience
+        decoded = pyjwt.decode(
+            token, svc._secret_key, algorithms=["HS256"], audience=_JWT_AUDIENCE
+        )
         self.assertEqual(decoded["sub"], "admin")
         self.assertEqual(decoded["role"], "admin")
         self.assertIn("exp", decoded)
         self.assertIn("iat", decoded)
         self.assertIn("jti", decoded)
+        # Verify new identity claims
+        self.assertEqual(decoded["identity_type"], "user")
+        self.assertEqual(decoded["iss"], "aegisrange")
+        self.assertEqual(decoded["aud"], "aegisrange")
+        self.assertIsInstance(decoded["scopes"], list)
+        self.assertIn("read", decoded["scopes"])
 
     def test_unknown_algorithm_rejected(self) -> None:
         """Tokens signed with a non-HS256 algorithm should be rejected."""

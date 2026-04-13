@@ -25,6 +25,7 @@ class AuditCategory(str, Enum):
     MUTATION = "mutation"
     ADMIN = "admin"
     RATE_LIMIT = "rate_limit"
+    DETECTION = "detection"
 
 
 def _now_iso() -> str:
@@ -219,4 +220,36 @@ def log_csrf_failure(
         target=path,
         correlation_id=correlation_id,
         details={"method": method},
+    )
+
+
+def log_detection_rule_change(
+    rule_id: str,
+    action: str,
+    actor: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+    _log(
+        AuditCategory.DETECTION,
+        action,
+        actor=actor,
+        target=rule_id,
+        details=details,
+    )
+
+
+def log_detection_triggered(
+    rule_id: str,
+    rule_version: str,
+    actor_id: str,
+    correlation_id: str,
+    severity: str,
+) -> None:
+    _log(
+        AuditCategory.DETECTION,
+        "rule_triggered",
+        actor=actor_id,
+        target=rule_id,
+        correlation_id=correlation_id,
+        details={"rule_version": rule_version, "severity": severity},
     )

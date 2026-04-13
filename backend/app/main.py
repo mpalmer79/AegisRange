@@ -225,8 +225,14 @@ async def correlation_middleware(request: Request, call_next):
     middleware only persists operational state (containment sets, risk
     profiles) after successful mutations.
     """
+    from app.services.auth_service import validate_correlation_id
+
     global _jti_prune_counter
-    correlation_id = request.headers.get("x-correlation-id") or f"corr-{uuid4()}"
+    provided_id = request.headers.get("x-correlation-id")
+    if provided_id and validate_correlation_id(provided_id):
+        correlation_id = provided_id
+    else:
+        correlation_id = f"corr-{uuid4()}"
     request.state.correlation_id = correlation_id
     response = await call_next(request)
     response.headers["x-correlation-id"] = correlation_id
