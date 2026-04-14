@@ -1,10 +1,50 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useViewport } from '@/lib/responsive';
+import { useAuth } from '@/lib/auth-context';
 import { useCommandPalette } from './CommandPalette';
+
+/**
+ * Formats a session expiry timestamp as a human-readable
+ * countdown (e.g. "23h 41m", "12m", "expired").
+ */
+function formatTimeLeft(expiresAt: string): string {
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return 'expired';
+  const hours = Math.floor(diff / 3_600_000);
+  const minutes = Math.floor((diff % 3_600_000) / 60_000);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+/** Renders a live-updating session countdown. */
+function SessionExpiry({ expiresAt }: { expiresAt: string }) {
+  const [label, setLabel] = useState(() => formatTimeLeft(expiresAt));
+
+  useEffect(() => {
+    const tick = () => setLabel(formatTimeLeft(expiresAt));
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  const isExpired = label === 'expired';
+
+  return (
+    <p
+      className={`mt-1 font-mono text-[10px] ${
+        isExpired
+          ? 'text-red-500 dark:text-red-400'
+          : 'text-slate-400 dark:text-gray-600'
+      }`}
+    >
+      Session: {label}
+    </p>
+  );
+}
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: DashboardIcon },
@@ -29,8 +69,10 @@ interface SidebarProps {
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { isDesktop } = useViewport();
   const { openPalette } = useCommandPalette();
+  const { isAuthenticated, username, role, logout, demoMode, expiresAt } = useAuth();
 
   const isVisible = isDesktop || open;
 
@@ -132,18 +174,74 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         </nav>
 
         <div className="border-t border-slate-200 p-4 dark:border-gray-800">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-            <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              Demo Mode
-            </p>
-          </div>
-          <p className="truncate font-mono text-xs text-slate-700 dark:text-gray-300">Vanta Orbital SOC</p>
-          <p className="font-mono text-[10px] uppercase text-slate-400 dark:text-gray-600">Tier 2 · Analyst</p>
-          <p className="mt-2 font-mono text-[10px] text-slate-300 dark:text-gray-700">v0.6.0 · Live sandbox</p>
+          {isAuthenticated ? (
+            <>
+              <div className="mb-2 flex items-center gap-2">
+                {demoMode ? (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                    </span>
+                    <p className="font-mono text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      Demo Mode
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                    </span>
+                    <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      Authenticated
+                    </p>
+                  </>
+                )}
+              </div>
+              <p className="truncate font-mono text-xs text-slate-700 dark:text-gray-300">
+                {username}
+              </p>
+              <p className="font-mono text-[10px] uppercase text-slate-400 dark:text-gray-600">
+                {role}
+              </p>
+              {expiresAt && !demoMode && (
+                <SessionExpiry expiresAt={expiresAt} />
+              )}
+              {!demoMode && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await logout();
+                    if (!isDesktop) onClose();
+                    router.push('/login');
+                  }}
+                  className="mt-2 font-mono text-[10px] text-slate-400 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-colors"
+                >
+                  Sign out
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                </span>
+                <p className="font-mono text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Not signed in
+                </p>
+              </div>
+              <Link
+                href="/login"
+                onClick={!isDesktop ? onClose : undefined}
+                className="inline-block mt-1 font-mono text-xs text-cyan-600 hover:text-cyan-500 dark:text-cyan-400 dark:hover:text-cyan-300 transition-colors"
+              >
+                Sign in
+              </Link>
+            </>
+          )}
+          <p className="mt-2 font-mono text-[10px] text-slate-300 dark:text-gray-700">v0.6.0</p>
         </div>
       </aside>
     </>

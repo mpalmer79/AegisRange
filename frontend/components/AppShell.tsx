@@ -8,19 +8,15 @@ import AuthGuard from './AuthGuard';
 import Sidebar from './Sidebar';
 import { CommandPaletteProvider } from './CommandPalette';
 
-/**
- * Demo-mode shell.
- *
- * Authentication has been removed for the recruiter demo deployment
- * (see lib/auth-context.tsx). The AuthProvider + AuthGuard wrappers
- * are kept as no-op pass-throughs so existing imports still compile.
- * Every route — including "/" — renders the full sidebar + command
- * palette without redirecting anywhere.
- */
+/** Routes that render without the sidebar / command palette chrome. */
+const CHROMELESS_ROUTES = ['/login'];
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isDesktop } = useViewport();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const isChromeless = CHROMELESS_ROUTES.includes(pathname);
 
   // Close sidebar on navigation (mobile/tablet)
   useEffect(() => {
@@ -31,6 +27,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isDesktop) setSidebarOpen(false);
   }, [isDesktop]);
+
+  // Login page and similar chromeless routes render without sidebar.
+  if (isChromeless) {
+    return (
+      <AuthProvider>
+        <AuthGuard>{children}</AuthGuard>
+      </AuthProvider>
+    );
+  }
 
   return (
     <AuthProvider>

@@ -9,6 +9,8 @@ interface ScenarioCardProps {
   onRun?: () => void;
   isRunning?: boolean;
   disabled?: boolean;
+  /** Tooltip text shown when the Run button is disabled due to auth. */
+  disabledReason?: string;
 }
 
 const FALLBACK_IMAGE = '/images/scenario-default.jpg';
@@ -22,6 +24,7 @@ export default function ScenarioCard({
   onRun,
   isRunning = false,
   disabled = false,
+  disabledReason,
 }: ScenarioCardProps) {
   const bgImage = imageUrl || FALLBACK_IMAGE;
 
@@ -90,6 +93,7 @@ export default function ScenarioCard({
                 onRun?.();
               }}
               disabled={disabled}
+              title={disabled ? disabledReason : undefined}
               className="flex-1 px-4 py-2.5 rounded-lg text-[11px] font-mono font-bold uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-lg shadow-cyan-500/25 hover:shadow-cyan-400/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isRunning ? (

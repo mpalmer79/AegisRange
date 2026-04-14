@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth, canRunScenarios } from '@/lib/auth-context';
 import ScenarioCard from '@/components/scenario-card';
 
 const SCENARIO_CARDS = [
@@ -65,6 +66,14 @@ export default function ScenarioGrid({
   onRunScenario,
 }: ScenarioGridProps) {
   const router = useRouter();
+  const { isAuthenticated, role } = useAuth();
+  const hasAccess = isAuthenticated && canRunScenarios(role);
+
+  const disabledReason = !isAuthenticated
+    ? 'Sign in to run scenarios'
+    : !hasAccess
+      ? 'Insufficient permissions'
+      : undefined;
 
   return (
     <div className="mb-8">
@@ -93,7 +102,8 @@ export default function ScenarioGrid({
             description={scenario.description}
             imageUrl={scenario.imageUrl}
             isRunning={runningScenario === scenario.id}
-            disabled={runningScenario !== null}
+            disabled={runningScenario !== null || !hasAccess}
+            disabledReason={disabledReason}
             onOpenBriefing={() => router.push(`/scenarios/${scenario.id}`)}
             onRun={() => onRunScenario(scenario.id)}
           />

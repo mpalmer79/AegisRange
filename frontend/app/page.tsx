@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { getMetrics, getHealth, runScenario, getRiskProfiles } from '@/lib/api';
+import { getMetrics, getHealth, runScenario, getRiskProfiles, getScenarioErrorMessage } from '@/lib/api';
 import { Metrics, HealthStatus, ScenarioResult, RiskProfile } from '@/lib/types';
 import { useApi } from '@/lib/hooks/useApi';
 import DashboardHeader from '@/app/components/dashboard/DashboardHeader';
@@ -25,6 +25,7 @@ export default function DashboardPage() {
 
   const [runningScenario, setRunningScenario] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ScenarioResult | null>(null);
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     refetchMetrics();
@@ -34,12 +35,14 @@ export default function DashboardPage() {
 
   const handleRunScenario = async (scenarioId: string) => {
     setRunningScenario(scenarioId);
+    setScenarioError(null);
     try {
       const result = await runScenario(scenarioId);
       setLastResult(result);
       fetchData();
-    } catch {
+    } catch (err) {
       setLastResult(null);
+      setScenarioError(getScenarioErrorMessage(err));
     } finally {
       setRunningScenario(null);
     }
@@ -64,6 +67,12 @@ export default function DashboardPage() {
       <MetricCards metrics={metrics} />
 
       <ScenarioGrid runningScenario={runningScenario} onRunScenario={handleRunScenario} />
+
+      {scenarioError && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg text-red-700 dark:text-red-300 text-sm">
+          {scenarioError}
+        </div>
+      )}
 
       {lastResult && <ScenarioResultPanel lastResult={lastResult} />}
 
