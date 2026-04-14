@@ -289,9 +289,7 @@ def mfa_verify(payload: MFAVerifyRequest, request: Request) -> JSONResponse:
         )
         raise HTTPException(status_code=401, detail="Invalid TOTP code")
 
-    audit_service.log_mfa_verification(
-        username, True, correlation_id=correlation_id
-    )
+    audit_service.log_mfa_verification(username, True, correlation_id=correlation_id)
 
     return _issue_token_response(username)
 

@@ -163,7 +163,9 @@ class TestTokenExpirySingleSource(unittest.TestCase):
         self.assertEqual(returned_expiry, payload.exp)
 
     def test_authenticate_returns_four_values(self) -> None:
-        success, token, expires_at, mfa_status = _auth_service.authenticate("admin", "Admin_Pass_2025!")
+        success, token, expires_at, mfa_status = _auth_service.authenticate(
+            "admin", "Admin_Pass_2025!"
+        )
         self.assertTrue(success)
         self.assertIsNotNone(token)
         self.assertIsNotNone(expires_at)
@@ -171,7 +173,9 @@ class TestTokenExpirySingleSource(unittest.TestCase):
         self.assertIsNone(mfa_status)
 
     def test_authenticate_failure_returns_none_expiry(self) -> None:
-        success, token, expires_at, mfa_status = _auth_service.authenticate("admin", "Wrong_Pass_9999!")
+        success, token, expires_at, mfa_status = _auth_service.authenticate(
+            "admin", "Wrong_Pass_9999!"
+        )
         self.assertFalse(success)
         self.assertIsNone(token)
         self.assertIsNone(expires_at)

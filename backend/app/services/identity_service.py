@@ -26,7 +26,11 @@ class IdentityService:
                 "role": "analyst",
                 "actor_id": "user-alice",
             },
-            "bob": {"password": "Hunter2_Strong_99!", "role": "admin", "actor_id": "user-bob"},
+            "bob": {
+                "password": "Hunter2_Strong_99!",
+                "role": "admin",
+                "actor_id": "user-bob",
+            },
         }
 
     def authenticate(self, username: str, password: str) -> AuthResult:

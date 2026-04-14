@@ -26,7 +26,8 @@ class TestHealthEndpoint(APITestBase):
 class TestLoginEndpoint(APITestBase):
     def test_successful_login(self) -> None:
         resp = self.client.post(
-            "/identity/login", json={"username": "alice", "password": "Correct_Horse_42!"}
+            "/identity/login",
+            json={"username": "alice", "password": "Correct_Horse_42!"},
         )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -36,7 +37,8 @@ class TestLoginEndpoint(APITestBase):
 
     def test_failed_login(self) -> None:
         resp = self.client.post(
-            "/identity/login", json={"username": "alice", "password": "Wrong_Pass_9999!"}
+            "/identity/login",
+            json={"username": "alice", "password": "Wrong_Pass_9999!"},
         )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -44,7 +46,8 @@ class TestLoginEndpoint(APITestBase):
 
     def test_unknown_user(self) -> None:
         resp = self.client.post(
-            "/identity/login", json={"username": "unknown", "password": "Unknown_Pass_1!"}
+            "/identity/login",
+            json={"username": "unknown", "password": "Unknown_Pass_1!"},
         )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -52,7 +55,8 @@ class TestLoginEndpoint(APITestBase):
 
     def test_login_emits_event(self) -> None:
         self.client.post(
-            "/identity/login", json={"username": "alice", "password": "Correct_Horse_42!"}
+            "/identity/login",
+            json={"username": "alice", "password": "Correct_Horse_42!"},
         )
         self.assertGreater(len(STORE.events), 0)
         self.assertEqual(STORE.events[0].event_type, "authentication.login.success")
@@ -61,7 +65,8 @@ class TestLoginEndpoint(APITestBase):
 class TestSessionRevocation(APITestBase):
     def test_revoke_existing_session(self) -> None:
         login_resp = self.client.post(
-            "/identity/login", json={"username": "bob", "password": "Hunter2_Strong_99!"}
+            "/identity/login",
+            json={"username": "bob", "password": "Hunter2_Strong_99!"},
         )
         session_id = login_resp.json()["session_id"]
 
@@ -189,7 +194,8 @@ class TestEventsEndpoint(APITestBase):
 
     def test_events_after_login(self) -> None:
         self.client.post(
-            "/identity/login", json={"username": "alice", "password": "Correct_Horse_42!"}
+            "/identity/login",
+            json={"username": "alice", "password": "Correct_Horse_42!"},
         )
         resp = self.client.get("/events")
         self.assertEqual(resp.status_code, 200)
@@ -199,10 +205,12 @@ class TestEventsEndpoint(APITestBase):
 
     def test_events_filter_by_actor(self) -> None:
         self.client.post(
-            "/identity/login", json={"username": "alice", "password": "Correct_Horse_42!"}
+            "/identity/login",
+            json={"username": "alice", "password": "Correct_Horse_42!"},
         )
         self.client.post(
-            "/identity/login", json={"username": "bob", "password": "Hunter2_Strong_99!"}
+            "/identity/login",
+            json={"username": "bob", "password": "Hunter2_Strong_99!"},
         )
         resp = self.client.get("/events", params={"actor_id": "user-alice"})
         events = resp.json()["items"]
@@ -210,10 +218,12 @@ class TestEventsEndpoint(APITestBase):
 
     def test_events_filter_by_type(self) -> None:
         self.client.post(
-            "/identity/login", json={"username": "alice", "password": "Wrong_Pass_9999!"}
+            "/identity/login",
+            json={"username": "alice", "password": "Wrong_Pass_9999!"},
         )
         self.client.post(
-            "/identity/login", json={"username": "alice", "password": "Correct_Horse_42!"}
+            "/identity/login",
+            json={"username": "alice", "password": "Correct_Horse_42!"},
         )
         resp = self.client.get(
             "/events", params={"event_type": "authentication.login.failure"}

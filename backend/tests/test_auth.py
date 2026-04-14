@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.auth_service import AuthService, ROLES, DEFAULT_USERS, DEFAULT_PASSWORDS
+from app.services.auth_service import (
+    AuthService,
+    ROLES,
+    DEFAULT_USERS,
+    DEFAULT_PASSWORDS,
+)
 from tests.auth_helper import authenticated_client
 
 
@@ -13,7 +18,9 @@ class TestAuthService(unittest.TestCase):
         self.service = AuthService()
 
     def test_authenticate_valid_user(self) -> None:
-        success, token, expires_at, mfa_status = self.service.authenticate("admin", "Admin_Pass_2025!")
+        success, token, expires_at, mfa_status = self.service.authenticate(
+            "admin", "Admin_Pass_2025!"
+        )
         self.assertTrue(success)
         self.assertIsNotNone(token)
         self.assertIsInstance(token, str)
@@ -22,7 +29,9 @@ class TestAuthService(unittest.TestCase):
         self.assertIsNone(mfa_status)
 
     def test_authenticate_invalid_password(self) -> None:
-        success, token, expires_at, mfa_status = self.service.authenticate("admin", "Wrong_Pass_9999!")
+        success, token, expires_at, mfa_status = self.service.authenticate(
+            "admin", "Wrong_Pass_9999!"
+        )
         self.assertFalse(success)
         self.assertIsNone(token)
         self.assertIsNone(expires_at)
