@@ -4,6 +4,14 @@ import { render, screen } from '@testing-library/react';
 const mockUsePathname = jest.fn(() => '/');
 jest.mock('next/navigation', () => ({
   usePathname: () => mockUsePathname(),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
+    prefetch: jest.fn(),
+  }),
 }));
 
 // Mock next/link
@@ -20,7 +28,19 @@ jest.mock('@/lib/responsive', () => ({
 
 // Mock CommandPalette
 jest.mock('@/components/CommandPalette', () => ({
-  useCommandPalette: () => ({ open: jest.fn() }),
+  useCommandPalette: () => ({ openPalette: jest.fn() }),
+}));
+
+// Mock auth context
+jest.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({
+    isAuthenticated: false,
+    username: null,
+    role: null,
+    loading: false,
+    login: jest.fn(),
+    logout: jest.fn(),
+  }),
 }));
 
 import Sidebar from '@/components/Sidebar';

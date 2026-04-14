@@ -53,6 +53,42 @@ import {
   CurrentUser,
   PlatformUser,
 } from './types';
+
+// ------------------------------------------------------------
+// Typed API error — carries the HTTP status code so callers
+// can distinguish 401 / 403 / 5xx without parsing strings.
+// ------------------------------------------------------------
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    statusText: string,
+  ) {
+    super(`API ${status}: ${statusText}`);
+    this.name = 'ApiError';
+  }
+}
+
+/** Map a scenario-execution error to a user-facing message. */
+export function getScenarioErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    switch (error.status) {
+      case 401:
+        return 'Please sign in to run scenarios.';
+      case 403:
+        return 'Your account does not have permission to run scenarios.';
+      case 429:
+        return 'Rate limit exceeded. Please wait before running another scenario.';
+      default:
+        return `Scenario execution failed (${error.status}).`;
+    }
+  }
+  if (error instanceof Error) {
+    if (error.message.includes('Backend unavailable')) {
+      return 'Scenario execution is unavailable right now.';
+    }
+  }
+  return 'An unexpected error occurred.';
+}
 import {
   filterAlerts,
   filterEvents,
@@ -162,7 +198,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       headers,
     });
     if (!res.ok) {
-      throw new Error(`API ${res.status}: ${res.statusText}`);
+      throw new ApiError(res.status, res.statusText);
     }
     return (await res.json()) as T;
   } finally {
@@ -807,35 +843,23 @@ export async function generateReport(title?: string): Promise<ExerciseReport> {
 // Platform Auth
 // ============================================================
 export async function platformLogin(username: string, password: string): Promise<AuthToken> {
-  return live(
-    () =>
-      request<AuthToken>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      }),
-    {
-      username,
-      role: 'analyst',
-      expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-    }
-  );
+  return request<AuthToken>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
 }
 
 export async function platformLogout(): Promise<void> {
-  return live(
-    async () => {
-      await request<{ status: string }>('/auth/logout', { method: 'POST' });
-    },
-    undefined
-  );
+  await request<{ status: string }>('/auth/logout', { method: 'POST' });
 }
 
-export async function getCurrentUser(): Promise<CurrentUser> {
-  return live(() => request<CurrentUser>('/auth/me'), {
-    username: 'demo-operator',
-    role: 'analyst',
-    display_name: 'Demo Operator',
-  });
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  if (!(await probeBackend())) return null;
+  try {
+    return await request<CurrentUser>('/auth/me');
+  } catch {
+    return null;
+  }
 }
 
 export async function getPlatformUsers(): Promise<PlatformUser[]> {
