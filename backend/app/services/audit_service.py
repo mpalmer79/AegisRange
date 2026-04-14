@@ -206,6 +206,23 @@ def log_rate_limit_exceeded(
     )
 
 
+def log_account_lockout(
+    username: str,
+    remaining_seconds: int,
+    client_ip: str | None = None,
+    correlation_id: str | None = None,
+) -> None:
+    _log(
+        AuditCategory.AUTH,
+        "account_lockout",
+        outcome="blocked",
+        actor=username,
+        client_ip=client_ip,
+        correlation_id=correlation_id,
+        details={"remaining_seconds": remaining_seconds},
+    )
+
+
 def log_csrf_failure(
     path: str,
     method: str,

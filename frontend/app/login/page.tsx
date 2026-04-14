@@ -39,6 +39,9 @@ function LoginForm() {
           case 401:
             setError('Invalid username or password.');
             break;
+          case 423:
+            setError('Account temporarily locked due to too many failed attempts. Please wait and try again.');
+            break;
           case 429:
             setError('Too many login attempts. Please wait and try again.');
             break;
