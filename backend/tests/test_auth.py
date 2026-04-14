@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.auth_service import AuthService, ROLES, DEFAULT_USERS
+from app.services.auth_service import AuthService, ROLES, DEFAULT_USERS, DEFAULT_PASSWORDS
 from tests.auth_helper import authenticated_client
 
 
@@ -13,26 +13,29 @@ class TestAuthService(unittest.TestCase):
         self.service = AuthService()
 
     def test_authenticate_valid_user(self) -> None:
-        success, token, expires_at = self.service.authenticate("admin", "admin_pass")
+        success, token, expires_at, mfa_status = self.service.authenticate("admin", "Admin_Pass_2025!")
         self.assertTrue(success)
         self.assertIsNotNone(token)
         self.assertIsInstance(token, str)
         self.assertGreater(len(token), 10)
         self.assertIsNotNone(expires_at)
+        self.assertIsNone(mfa_status)
 
     def test_authenticate_invalid_password(self) -> None:
-        success, token, expires_at = self.service.authenticate("admin", "wrong_pass")
+        success, token, expires_at, mfa_status = self.service.authenticate("admin", "Wrong_Pass_9999!")
         self.assertFalse(success)
         self.assertIsNone(token)
         self.assertIsNone(expires_at)
+        self.assertIsNone(mfa_status)
 
     def test_authenticate_unknown_user(self) -> None:
-        success, token, expires_at = self.service.authenticate(
-            "nonexistent", "anything"
+        success, token, expires_at, mfa_status = self.service.authenticate(
+            "nonexistent", "Anything_Pass_1!"
         )
         self.assertFalse(success)
         self.assertIsNone(token)
         self.assertIsNone(expires_at)
+        self.assertIsNone(mfa_status)
 
     def test_create_and_verify_token(self) -> None:
         token = self.service.create_token("admin", "admin")
@@ -90,7 +93,7 @@ class TestAuthAPI(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -108,7 +111,7 @@ class TestAuthAPI(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "wrong",
+                "password": "Wrong_Pass_9999!",
             },
         )
         self.assertEqual(resp.status_code, 401)
@@ -128,7 +131,7 @@ class TestAuthAPI(unittest.TestCase):
                 "/auth/login",
                 json={
                     "username": username,
-                    "password": f"{username}_pass",
+                    "password": DEFAULT_PASSWORDS[username],
                 },
             )
             self.assertEqual(

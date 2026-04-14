@@ -30,7 +30,7 @@ class TestCSRFProtection(unittest.TestCase):
         # Login to get auth cookie
         login_resp = client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         self.assertEqual(login_resp.status_code, 200)
         # Now try a state-changing request without CSRF header
@@ -44,7 +44,7 @@ class TestCSRFProtection(unittest.TestCase):
         client = TestClient(app)
         login_resp = client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         self.assertEqual(login_resp.status_code, 200)
         # Extract CSRF cookie
@@ -62,7 +62,7 @@ class TestCSRFProtection(unittest.TestCase):
         client = TestClient(app)
         client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         resp = client.post(
             "/admin/reset",
@@ -75,7 +75,7 @@ class TestCSRFProtection(unittest.TestCase):
         client = TestClient(app)
         resp = client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         self.assertEqual(resp.status_code, 200)
 
@@ -96,7 +96,7 @@ class TestCSRFProtection(unittest.TestCase):
         client = TestClient(app)
         resp = client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         self.assertEqual(resp.status_code, 200)
         csrf_cookie = client.cookies.get("aegisrange_csrf")
@@ -108,7 +108,7 @@ class TestCSRFProtection(unittest.TestCase):
         client = TestClient(app)
         client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         resp = client.post("/auth/logout")
         self.assertEqual(resp.status_code, 200)
@@ -176,7 +176,7 @@ class TestInputValidationHardening(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
                 "extra_field": "should_be_rejected",
             },
         )
@@ -312,7 +312,7 @@ class TestRequestSizeLimit(unittest.TestCase):
         client = TestClient(app)
         resp = client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         self.assertIn(resp.status_code, (200, 401))
 

@@ -84,7 +84,7 @@ class TestPublicEndpoints(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -278,9 +278,10 @@ class TestPasswordHashing(unittest.TestCase):
         self.assertNotEqual(h1, h2)  # hashes differ due to different salts
 
     def test_all_default_users_authenticate(self) -> None:
+        from app.services.auth_service import DEFAULT_PASSWORDS
         svc = AuthService()
         for username in ("admin", "soc_lead", "analyst1", "red_team1", "viewer1"):
-            success, token, _ = svc.authenticate(username, f"{username}_pass")
+            success, token, _, _mfa = svc.authenticate(username, DEFAULT_PASSWORDS[username])
             self.assertTrue(success, f"{username} should authenticate with PBKDF2")
             self.assertIsNotNone(token)
 
@@ -288,7 +289,7 @@ class TestPasswordHashing(unittest.TestCase):
         """The old plain-text password format should no longer work."""
         svc = AuthService()
         # Passwords are now PBKDF2-hashed; supplying the hash directly should fail
-        success, _, _ = svc.authenticate("admin", "admin_hash")
+        success, _, _, _ = svc.authenticate("admin", "Admin_Hash_Bad1!")
         self.assertFalse(success)
 
 
@@ -330,7 +331,7 @@ class TestTokenRevocationOnLogout(unittest.TestCase):
         client = TestClient(app)
         resp = client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         self.assertEqual(resp.status_code, 200)
         token = resp.cookies.get("aegisrange_token")
@@ -377,7 +378,7 @@ class TestTokenRevocationOnLogout(unittest.TestCase):
             STORE.save()
 
             # Reset in-memory state and reload
-            STORE.revoked_jtis = set()
+            STORE.revoked_jtis = {}
             self.assertFalse(STORE.is_jti_revoked(jti))
 
             STORE._persistence.load()

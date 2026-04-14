@@ -35,17 +35,17 @@ class TestRateLimiting(unittest.TestCase):
                 "/auth/login",
                 json={
                     "username": "admin",
-                    "password": "admin_pass",
+                    "password": "Admin_Pass_2025!",
                 },
             )
-            self.assertIn(resp.status_code, (200, 401))
+            self.assertIn(resp.status_code, (200, 401, 423))
 
         # Next request should be rate limited
         resp = self.client.post(
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 429)
@@ -65,7 +65,7 @@ class TestRateLimiting(unittest.TestCase):
                 "/auth/login",
                 json={
                     "username": "admin",
-                    "password": "admin_pass",
+                    "password": "Admin_Pass_2025!",
                 },
             )
 
@@ -75,7 +75,7 @@ class TestRateLimiting(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -87,7 +87,7 @@ class TestRateLimiting(unittest.TestCase):
                 "/auth/login",
                 json={
                     "username": "admin",
-                    "password": "admin_pass",
+                    "password": "Admin_Pass_2025!",
                 },
             )
 
@@ -98,27 +98,28 @@ class TestRateLimiting(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
 
     def test_429_response_format(self) -> None:
         """Rate limit response should have proper JSON body."""
-        for _ in range(_AUTH_RATE_LIMIT):
+        # Use different usernames to avoid account lockout (threshold=5)
+        for i in range(_AUTH_RATE_LIMIT):
             self.client.post(
                 "/auth/login",
                 json={
-                    "username": "x",
-                    "password": "y",
+                    "username": f"ratelimit_user_{i}",
+                    "password": "Wrong_Pass_9999!",
                 },
             )
 
         resp = self.client.post(
             "/auth/login",
             json={
-                "username": "x",
-                "password": "y",
+                "username": "ratelimit_final",
+                "password": "Wrong_Pass_9999!",
             },
         )
         self.assertEqual(resp.status_code, 429)

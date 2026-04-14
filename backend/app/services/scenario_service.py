@@ -44,7 +44,7 @@ class ScenarioEngine:
                 )
             )
 
-        success_result = self.identity.authenticate("alice", "correct-horse")
+        success_result = self.identity.authenticate("alice", "Correct_Horse_42!")
         self.pipeline.process(
             self._new_event(
                 event_type="authentication.login.success",
@@ -66,7 +66,7 @@ class ScenarioEngine:
         self, correlation_id: str, *, operated_by: str | None = None
     ) -> dict[str, object]:
         """SCN-SESSION-002: token reuse from conflicting origins."""
-        login = self.identity.authenticate("bob", "hunter2")
+        login = self.identity.authenticate("bob", "Hunter2_Strong_99!")
         session_id = login.session_id
         if session_id is None:
             raise RuntimeError("Scenario setup failed: expected valid session")
@@ -115,7 +115,7 @@ class ScenarioEngine:
         self, correlation_id: str, *, operated_by: str | None = None
     ) -> dict[str, object]:
         """SCN-DOC-003: abnormal bulk read access."""
-        login = self.identity.authenticate("bob", "hunter2")
+        login = self.identity.authenticate("bob", "Hunter2_Strong_99!")
         session_id = login.session_id
 
         for index in range(20):
@@ -150,7 +150,7 @@ class ScenarioEngine:
         self, correlation_id: str, *, operated_by: str | None = None
     ) -> dict[str, object]:
         """SCN-DOC-004: read-to-download exfiltration pattern."""
-        login = self.identity.authenticate("bob", "hunter2")
+        login = self.identity.authenticate("bob", "Hunter2_Strong_99!")
         session_id = login.session_id
         document_ids = ["doc-001", "doc-002", "doc-003"]
 
@@ -251,7 +251,7 @@ class ScenarioEngine:
                 )
             )
 
-        success_result = self.identity.authenticate("alice", "correct-horse")
+        success_result = self.identity.authenticate("alice", "Correct_Horse_42!")
         self.pipeline.process(
             self._new_event(
                 event_type="authentication.login.success",

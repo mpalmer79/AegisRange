@@ -15,6 +15,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.dependencies import auth_service, require_role
@@ -27,11 +28,40 @@ from app.schemas import (
 )
 from app.serializers import auth_user_to_dict
 from app.services import audit_service
+from app.services.totp_service import totp_service
 from app.store import STORE
 
 logger = logging.getLogger("aegisrange.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+# ---------------------------------------------------------------------------
+# MFA request schemas (local to this router)
+# ---------------------------------------------------------------------------
+
+
+class _StrictInput(BaseModel):
+    model_config = {"extra": "forbid"}
+
+
+class MFAVerifyRequest(_StrictInput):
+    username: str = Field(..., min_length=1, max_length=64)
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class MFAEnrollResponse(BaseModel):
+    secret: str
+    provisioning_uri: str
+
+
+class MFAStatusResponse(BaseModel):
+    status: str
+
+
+# ---------------------------------------------------------------------------
+# Cookie helpers
+# ---------------------------------------------------------------------------
 
 
 def _set_auth_cookie(response: JSONResponse, token: str) -> None:
@@ -87,6 +117,28 @@ def _clear_csrf_cookie(response: JSONResponse) -> None:
     )
 
 
+def _issue_token_response(username: str) -> JSONResponse:
+    """Create a JSONResponse with auth cookie and body for a successful login."""
+    user = auth_service.get_user(username)
+    token = auth_service.create_token(username, user.role if user else "viewer")
+    payload = auth_service.verify_token(token)
+    expires_at = payload.exp if payload else None
+    body = {
+        "username": username,
+        "role": user.role if user else "unknown",
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    }
+    response = JSONResponse(content=body)
+    _set_auth_cookie(response, token)
+    _set_csrf_cookie(response)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Auth routes
+# ---------------------------------------------------------------------------
+
+
 @router.post("/login", response_model=AuthLoginResponse)
 def platform_login(payload: LoginRequest, request: Request) -> JSONResponse:
     client_ip = request.client.host if request.client else None
@@ -106,14 +158,29 @@ def platform_login(payload: LoginRequest, request: Request) -> JSONResponse:
             detail="Account temporarily locked due to too many failed attempts",
         )
 
-    success, token, expires_at = auth_service.authenticate(
+    success, token, expires_at, mfa_status = auth_service.authenticate(
         payload.username, payload.password
     )
     audit_service.log_login_attempt(
         payload.username, success, client_ip=client_ip, correlation_id=correlation_id
     )
-    if not success or token is None:
+    if not success or (token is None and mfa_status is None):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # MFA required — password was correct but we need TOTP verification
+    if mfa_status == "mfa_required":
+        return JSONResponse(
+            status_code=200,
+            content={
+                "username": payload.username,
+                "role": auth_service.get_user(payload.username).role
+                if auth_service.get_user(payload.username)
+                else "unknown",
+                "mfa_required": True,
+            },
+        )
+
+    # Normal login — issue token
     user = auth_service.get_user(payload.username)
     body = {
         "username": payload.username,
@@ -168,3 +235,89 @@ def get_current_user(request: Request) -> dict:
 def list_platform_users() -> list[dict]:
     users = auth_service.list_users()
     return [auth_user_to_dict(u) for u in users]
+
+
+# ---------------------------------------------------------------------------
+# MFA / TOTP routes
+# ---------------------------------------------------------------------------
+
+
+@router.post("/mfa/enroll", dependencies=[Depends(require_role("viewer"))])
+def mfa_enroll(request: Request) -> MFAEnrollResponse:
+    """Enroll the authenticated user (or admin enrolling another user) in TOTP MFA."""
+    platform_user = getattr(request.state, "platform_user", None)
+    if platform_user is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    username = platform_user.sub
+
+    if username in STORE.totp_enabled:
+        raise HTTPException(status_code=409, detail="MFA already enrolled")
+
+    secret = totp_service.generate_secret()
+    STORE.totp_secrets[username] = secret
+    STORE.totp_enabled.add(username)
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    audit_service.log_mfa_enrollment(username, correlation_id=correlation_id)
+
+    return MFAEnrollResponse(
+        secret=secret,
+        provisioning_uri=totp_service.provisioning_uri(secret, username),
+    )
+
+
+@router.post("/mfa/verify")
+def mfa_verify(payload: MFAVerifyRequest, request: Request) -> JSONResponse:
+    """Verify a TOTP code after password authentication and issue a JWT token.
+
+    This endpoint is called when ``/auth/login`` returns ``mfa_required: true``.
+    """
+    username = payload.username
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    if username not in STORE.totp_enabled:
+        raise HTTPException(status_code=400, detail="MFA not enrolled for this user")
+
+    secret = STORE.totp_secrets.get(username)
+    if not secret:
+        raise HTTPException(status_code=400, detail="MFA not enrolled for this user")
+
+    if not totp_service.verify_code(secret, payload.code):
+        audit_service.log_mfa_verification(
+            username, False, correlation_id=correlation_id
+        )
+        raise HTTPException(status_code=401, detail="Invalid TOTP code")
+
+    audit_service.log_mfa_verification(
+        username, True, correlation_id=correlation_id
+    )
+
+    return _issue_token_response(username)
+
+
+@router.post("/mfa/disable", dependencies=[Depends(require_role("admin"))])
+def mfa_disable(request: Request) -> MFAStatusResponse:
+    """Disable MFA for a user (admin-only emergency removal).
+
+    Accepts a ``username`` query parameter specifying which user to disable.
+    """
+    target_username = request.query_params.get("username")
+    if not target_username:
+        raise HTTPException(status_code=422, detail="username query parameter required")
+
+    platform_user = getattr(request.state, "platform_user", None)
+    actor = platform_user.sub if platform_user else "unknown"
+
+    if target_username not in STORE.totp_enabled:
+        raise HTTPException(status_code=404, detail="MFA not enrolled for this user")
+
+    STORE.totp_enabled.discard(target_username)
+    STORE.totp_secrets.pop(target_username, None)
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    audit_service.log_mfa_disabled(
+        target_username, actor, correlation_id=correlation_id
+    )
+
+    return MFAStatusResponse(status="mfa_disabled")

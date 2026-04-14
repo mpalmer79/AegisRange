@@ -1,3 +1,10 @@
+"""Application configuration.
+
+All environment variables are read here and exposed via the ``Settings``
+class.  Import ``settings`` (the module-level singleton) in application
+code — never read ``os.getenv`` directly from services or routers.
+"""
+
 from __future__ import annotations
 
 import os
@@ -13,6 +20,7 @@ class Settings:
     APP_ENV: str = os.getenv("APP_ENV", "development")
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")
     JWT_SECRET_PREVIOUS: str = os.getenv("JWT_SECRET_PREVIOUS", "")
+    JWT_KEY_ID: str = os.getenv("JWT_KEY_ID", "k1")
     TOKEN_EXPIRY_HOURS: int = int(os.getenv("TOKEN_EXPIRY_HOURS", "24"))
     DB_PATH: str = os.getenv("DB_PATH", "aegisrange.db")
     AUTH_COOKIE_NAME: str = "aegisrange_token"
@@ -22,21 +30,19 @@ class Settings:
 
     # Account lockout (NIST 800-53 AC-7)
     LOCKOUT_THRESHOLD: int = int(os.getenv("LOCKOUT_THRESHOLD", "5"))
-    LOCKOUT_DURATION_MINUTES: int = int(os.getenv("LOCKOUT_DURATION_MINUTES", "15"))
+    LOCKOUT_WINDOW_SECONDS: int = int(os.getenv("LOCKOUT_WINDOW_SECONDS", "300"))
+    LOCKOUT_DURATION_SECONDS: int = int(os.getenv("LOCKOUT_DURATION_SECONDS", "900"))
 
     # Password complexity
-    PASSWORD_MIN_LENGTH: int = int(os.getenv("PASSWORD_MIN_LENGTH", "10"))
-    PASSWORD_REQUIRE_UPPERCASE: bool = (
-        os.getenv("PASSWORD_REQUIRE_UPPERCASE", "true").lower() == "true"
+    SKIP_PASSWORD_COMPLEXITY: bool = (
+        os.getenv("SKIP_PASSWORD_COMPLEXITY", "").lower() == "true"
+        if os.getenv("SKIP_PASSWORD_COMPLEXITY")
+        else os.getenv("APP_ENV", "development") != "production"
     )
-    PASSWORD_REQUIRE_LOWERCASE: bool = (
-        os.getenv("PASSWORD_REQUIRE_LOWERCASE", "true").lower() == "true"
-    )
-    PASSWORD_REQUIRE_DIGIT: bool = (
-        os.getenv("PASSWORD_REQUIRE_DIGIT", "true").lower() == "true"
-    )
-    PASSWORD_REQUIRE_SPECIAL: bool = (
-        os.getenv("PASSWORD_REQUIRE_SPECIAL", "true").lower() == "true"
+
+    # MFA / TOTP
+    MFA_REQUIRED_ROLES: set[str] = set(
+        os.getenv("MFA_REQUIRED_ROLES", "admin,soc_manager").split(",")
     )
 
     @property

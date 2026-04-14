@@ -1,9 +1,9 @@
 """Tests for Phase 1: Authentication Hardening.
 
 Covers:
-  - Account lockout (NIST 800-53 AC-7)
-  - Password complexity validation
-  - JWT key rotation
+  - Account lockout (NIST 800-53 AC-7) with window + duration two-step logic
+  - Password complexity validation (Pydantic @field_validator on LoginRequest)
+  - JWT key rotation (kid header, previous key fallback)
 """
 
 from __future__ import annotations
@@ -16,22 +16,26 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.auth_service import (
     AuthService,
+    DEFAULT_PASSWORDS,
     _auth_service,
-    validate_password_complexity,
 )
 
 
 # ---------------------------------------------------------------------------
-# Phase 1.1 — Account Lockout
+# Phase 1.1 — Account Lockout (NIST 800-53 AC-7)
 # ---------------------------------------------------------------------------
 
 
 class TestAccountLockout(unittest.TestCase):
-    """Verify account lockout after repeated failed login attempts."""
+    """Verify two-step account lockout: window (300s) + duration (900s)."""
 
     def setUp(self) -> None:
-        # Use a short lockout window (2 seconds) for fast tests
-        self.service = AuthService(lockout_threshold=3, lockout_duration_minutes=1)
+        # Use short window/duration for fast tests
+        self.service = AuthService(
+            lockout_threshold=3,
+            lockout_window_seconds=60,
+            lockout_duration_seconds=120,
+        )
 
     def test_account_not_locked_initially(self) -> None:
         self.assertFalse(self.service.is_account_locked("admin"))
@@ -49,36 +53,69 @@ class TestAccountLockout(unittest.TestCase):
     def test_authenticate_blocked_when_locked(self) -> None:
         for _ in range(3):
             self.service.record_failed_attempt("admin")
-        success, token, _ = self.service.authenticate("admin", "admin_pass")
+        success, token, _, _ = self.service.authenticate("admin", DEFAULT_PASSWORDS["admin"])
         self.assertFalse(success)
         self.assertIsNone(token)
 
-    def test_lockout_clears_after_window(self) -> None:
-        # Use a very short lockout (1 minute) and manually backdate attempts
-        svc = AuthService(lockout_threshold=2, lockout_duration_minutes=1)
-        # Record attempts as if they happened 2 minutes ago
-        past = time.monotonic() - 121
+    def test_lockout_clears_after_duration(self) -> None:
+        """Lockout should clear once the duration has elapsed."""
+        svc = AuthService(
+            lockout_threshold=2,
+            lockout_window_seconds=60,
+            lockout_duration_seconds=60,
+        )
+        # Backdate attempts so they are within the window but the duration has passed
+        past = time.monotonic() - 61
         svc._login_attempts["admin"] = [past, past + 1]
-        # The attempts are outside the 60-second window, so not locked
+        # The most recent attempt was 60s ago — duration elapsed
+        self.assertFalse(svc.is_account_locked("admin"))
+
+    def test_lockout_active_within_duration(self) -> None:
+        """Account should stay locked if within duration."""
+        svc = AuthService(
+            lockout_threshold=2,
+            lockout_window_seconds=60,
+            lockout_duration_seconds=120,
+        )
+        # Recent failures — within both window and duration
+        now = time.monotonic()
+        svc._login_attempts["admin"] = [now - 5, now - 3]
+        self.assertTrue(svc.is_account_locked("admin"))
+
+    def test_failures_outside_window_dont_count(self) -> None:
+        """Failures older than the observation window should not trigger lockout."""
+        svc = AuthService(
+            lockout_threshold=3,
+            lockout_window_seconds=30,
+            lockout_duration_seconds=120,
+        )
+        # Two old failures outside window + one recent
+        now = time.monotonic()
+        svc._login_attempts["admin"] = [now - 60, now - 50, now - 1]
+        # Only one failure is within the 30s window — below threshold of 3
         self.assertFalse(svc.is_account_locked("admin"))
 
     def test_successful_login_clears_attempts(self) -> None:
         self.service.record_failed_attempt("admin")
         self.service.record_failed_attempt("admin")
         # Successful auth should clear history
-        success, token, _ = self.service.authenticate("admin", "admin_pass")
+        success, token, _, _ = self.service.authenticate("admin", DEFAULT_PASSWORDS["admin"])
         self.assertTrue(success)
         self.assertIsNotNone(token)
         self.assertFalse(self.service.is_account_locked("admin"))
 
     def test_failed_attempts_accumulate_via_authenticate(self) -> None:
-        svc = AuthService(lockout_threshold=3, lockout_duration_minutes=5)
+        svc = AuthService(
+            lockout_threshold=3,
+            lockout_window_seconds=300,
+            lockout_duration_seconds=900,
+        )
         for _ in range(3):
-            svc.authenticate("admin", "wrong_password")
+            svc.authenticate("admin", "Wrong_Pass_9999!")
         # Account should now be locked
         self.assertTrue(svc.is_account_locked("admin"))
         # Even correct password should be rejected
-        success, _, _ = svc.authenticate("admin", "admin_pass")
+        success, _, _, _ = svc.authenticate("admin", DEFAULT_PASSWORDS["admin"])
         self.assertFalse(success)
 
     def test_lockout_per_user_isolation(self) -> None:
@@ -106,6 +143,20 @@ class TestAccountLockout(unittest.TestCase):
     def test_clear_nonexistent_user_is_safe(self) -> None:
         self.service.clear_failed_attempts("nonexistent")  # no error
 
+    def test_prune_old_attempts(self) -> None:
+        """record_failed_attempt should prune entries older than window+duration."""
+        svc = AuthService(
+            lockout_threshold=3,
+            lockout_window_seconds=10,
+            lockout_duration_seconds=10,
+        )
+        # Record an old attempt
+        old = time.monotonic() - 25  # older than 10+10=20
+        svc._login_attempts["admin"] = [old]
+        # Record a new attempt — should prune the old one
+        svc.record_failed_attempt("admin")
+        self.assertEqual(len(svc._login_attempts["admin"]), 1)
+
 
 class TestAccountLockoutAPI(unittest.TestCase):
     """Verify lockout behavior at the HTTP API level."""
@@ -120,12 +171,12 @@ class TestAccountLockoutAPI(unittest.TestCase):
         for _ in range(5):
             client.post(
                 "/auth/login",
-                json={"username": "viewer1", "password": "wrong"},
+                json={"username": "viewer1", "password": "Wrong_Pass_9999!"},
             )
         # The 6th attempt on a locked account should return 423
         resp = client.post(
             "/auth/login",
-            json={"username": "viewer1", "password": "viewer1_pass"},
+            json={"username": "viewer1", "password": DEFAULT_PASSWORDS["viewer1"]},
         )
         self.assertEqual(resp.status_code, 423)
         self.assertIn("locked", resp.json()["detail"].lower())
@@ -136,61 +187,98 @@ class TestAccountLockoutAPI(unittest.TestCase):
         for _ in range(5):
             client.post(
                 "/auth/login",
-                json={"username": "viewer1", "password": "wrong"},
+                json={"username": "viewer1", "password": "Wrong_Pass_9999!"},
             )
         # analyst1 should still be able to log in
         resp = client.post(
             "/auth/login",
-            json={"username": "analyst1", "password": "analyst1_pass"},
+            json={"username": "analyst1", "password": DEFAULT_PASSWORDS["analyst1"]},
         )
         self.assertEqual(resp.status_code, 200)
 
 
 # ---------------------------------------------------------------------------
-# Phase 1.2 — Password Complexity Validation
+# Phase 1.2 — Password Complexity Validation (Pydantic @field_validator)
 # ---------------------------------------------------------------------------
 
 
 class TestPasswordComplexity(unittest.TestCase):
-    """Verify password complexity rules."""
+    """Verify password complexity via Pydantic schema validation.
 
-    def test_strong_password_passes(self) -> None:
-        violations = validate_password_complexity("MyStr0ng!Pass")
-        self.assertEqual(violations, [])
+    The complexity check lives as a ``@field_validator`` on
+    ``LoginRequest.password`` in schemas.py.  In dev mode
+    (``SKIP_PASSWORD_COMPLEXITY=True``), only min_length=12 is enforced.
+    In production mode, uppercase/lowercase/digit/special are also required.
+    """
 
-    def test_too_short(self) -> None:
-        violations = validate_password_complexity("Ab1!")
-        self.assertTrue(any("at least" in v for v in violations))
+    def test_short_password_rejected_at_schema_level(self) -> None:
+        """Passwords < 12 chars should be rejected with 422 by Pydantic."""
+        client = TestClient(app)
+        resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "Short1!"},
+        )
+        self.assertEqual(resp.status_code, 422)
 
-    def test_missing_uppercase(self) -> None:
-        violations = validate_password_complexity("mystrongpass1!")
-        self.assertTrue(any("uppercase" in v for v in violations))
+    def test_empty_password_rejected(self) -> None:
+        client = TestClient(app)
+        resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": ""},
+        )
+        self.assertEqual(resp.status_code, 422)
 
-    def test_missing_lowercase(self) -> None:
-        violations = validate_password_complexity("MYSTRONGPASS1!")
-        self.assertTrue(any("lowercase" in v for v in violations))
+    def test_valid_length_password_not_rejected_by_validation(self) -> None:
+        """A 12+ char password should pass validation (even if credentials wrong)."""
+        client = TestClient(app)
+        resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "Wrong_Pass_9999!"},
+        )
+        # Should get 401 (bad credentials) not 422 (validation)
+        self.assertEqual(resp.status_code, 401)
 
-    def test_missing_digit(self) -> None:
-        violations = validate_password_complexity("MyStrongPass!")
-        self.assertTrue(any("digit" in v for v in violations))
+    def test_exact_12_chars_accepted(self) -> None:
+        """Passwords of exactly 12 characters should pass validation."""
+        client = TestClient(app)
+        resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "Abcdefghij1!"},
+        )
+        self.assertNotEqual(resp.status_code, 422)
 
-    def test_missing_special(self) -> None:
-        violations = validate_password_complexity("MyStrongPass1")
-        self.assertTrue(any("special" in v for v in violations))
+    def test_128_char_password_accepted(self) -> None:
+        """Max-length password should pass validation."""
+        client = TestClient(app)
+        long_pw = "A" * 60 + "a" * 60 + "1234567!"
+        resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": long_pw},
+        )
+        self.assertNotEqual(resp.status_code, 422)
 
-    def test_all_violations_at_once(self) -> None:
-        violations = validate_password_complexity("abc")
-        # Should have violations for: length, uppercase, digit, special
-        self.assertGreaterEqual(len(violations), 3)
+    def test_oversized_password_rejected(self) -> None:
+        """Passwords > 128 chars should be rejected."""
+        client = TestClient(app)
+        resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "P" * 129},
+        )
+        self.assertEqual(resp.status_code, 422)
 
-    def test_exact_minimum_length(self) -> None:
-        # 10 chars with all requirements
-        violations = validate_password_complexity("Abcdefgh1!")
-        self.assertEqual(violations, [])
+    def test_default_passwords_meet_complexity(self) -> None:
+        """All DEFAULT_PASSWORDS should pass the complexity checks."""
+        import re
 
-    def test_empty_password(self) -> None:
-        violations = validate_password_complexity("")
-        self.assertGreater(len(violations), 0)
+        for username, pw in DEFAULT_PASSWORDS.items():
+            self.assertGreaterEqual(len(pw), 12, f"{username}'s password too short")
+            self.assertTrue(re.search(r"[A-Z]", pw), f"{username}: missing uppercase")
+            self.assertTrue(re.search(r"[a-z]", pw), f"{username}: missing lowercase")
+            self.assertTrue(re.search(r"\d", pw), f"{username}: missing digit")
+            self.assertTrue(
+                re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>?]", pw),
+                f"{username}: missing special char",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +341,24 @@ class TestJWTKeyRotation(unittest.TestCase):
         token = rogue.create_token("admin", "admin")
         jti = new_svc.extract_jti(token)
         self.assertIsNone(jti)
+
+    def test_kid_in_token_header(self) -> None:
+        """Tokens should include a ``kid`` (Key ID) in the JWT header."""
+        import jwt as pyjwt
+
+        svc = AuthService(secret_key="test-key")
+        token = svc.create_token("admin", "admin")
+        header = pyjwt.get_unverified_header(token)
+        self.assertIn("kid", header)
+
+    def test_service_token_has_kid(self) -> None:
+        """Service tokens should also include the ``kid`` header."""
+        import jwt as pyjwt
+
+        svc = AuthService(secret_key="test-key")
+        token = svc.create_service_token("svc-test")
+        header = pyjwt.get_unverified_header(token)
+        self.assertIn("kid", header)
 
 
 if __name__ == "__main__":

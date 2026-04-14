@@ -1,0 +1,6 @@
+# Historical commits containing documentation examples that trigger
+# the generic-api-key heuristic. The "secrets" are placeholders
+# (<current-key>, <new-key>, k1/k2 identifiers) in KEY_ROTATION.md
+# code blocks, not real credentials.
+aa81d002e2772ab52122291270497bc4cb9c7384:docs/operations/KEY_ROTATION.md:generic-api-key:45
+aa81d002e2772ab52122291270497bc4cb9c7384:docs/operations/KEY_ROTATION.md:generic-api-key:50

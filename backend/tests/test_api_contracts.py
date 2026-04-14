@@ -174,7 +174,7 @@ class TestPlatformLoginContract(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -278,7 +278,7 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -295,7 +295,7 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         data = resp.json()
@@ -314,7 +314,7 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(login_resp.status_code, 200)
@@ -334,7 +334,7 @@ class TestHttpOnlyCookieAuth(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         resp = client.post("/auth/logout")
@@ -373,7 +373,7 @@ class TestSimulatedSourceIPInBody(unittest.TestCase):
             "/identity/login",
             json={
                 "username": "alice",
-                "password": "correct-horse",
+                "password": "Correct_Horse_42!",
                 "simulated_source_ip": "10.99.99.99",
             },
         )
@@ -405,7 +405,7 @@ class TestSimulatedSourceIPInBody(unittest.TestCase):
         client = authenticated_client("viewer")
         client.post(
             "/identity/login",
-            json={"username": "alice", "password": "correct-horse"},
+            json={"username": "alice", "password": "Correct_Horse_42!"},
             headers={"x-source-ip": "10.99.99.99"},
         )
         events = client.get("/events?event_type=authentication.login.success").json()[
@@ -442,7 +442,7 @@ class TestPlatformUserAttribution(unittest.TestCase):
         client = authenticated_client("viewer")
         client.post(
             "/identity/login",
-            json={"username": "alice", "password": "correct-horse"},
+            json={"username": "alice", "password": "Correct_Horse_42!"},
         )
         events = client.get("/events?event_type=authentication.login.success").json()[
             "items"
@@ -468,7 +468,7 @@ class TestPlatformUserAttribution(unittest.TestCase):
         viewer = authenticated_client("viewer")
         resp = viewer.post(
             "/identity/login",
-            json={"username": "alice", "password": "correct-horse"},
+            json={"username": "alice", "password": "Correct_Horse_42!"},
         )
         session_id = resp.json()["session_id"]
 

@@ -52,7 +52,7 @@ const SCENARIO_CARDS = [
     title: 'Correlated Multi-Stage Attack',
     description:
       'Simulates a sophisticated multi-stage attack combining authentication, session, and document access vectors.',
-    imageUrl: '/images/correlated-attack.jpg',
+    imageUrl: '/images/correlated-attack.png',
   },
 ] as const;
 

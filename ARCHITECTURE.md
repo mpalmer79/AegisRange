@@ -274,6 +274,10 @@ These are known and accepted for the current stage.
 - Bearer header fallback for API clients
 - Token revocation via JTI deny-list (persisted to SQLite)
 - Timing-safe comparison on all credential checks
+- Account lockout per NIST 800-53 AC-7 (two-step: observation window + lockout duration)
+- Password complexity enforcement via Pydantic field validator (min 12 chars, uppercase, lowercase, digit, special; skippable in dev mode via `SKIP_PASSWORD_COMPLEXITY`)
+- JWT key rotation with `kid` header and previous-key fallback (see `docs/operations/KEY_ROTATION.md`)
+- MFA/TOTP foundation: RFC 6238 TOTP using stdlib hmac/hashlib, enrollable per user, required for configurable roles (`MFA_REQUIRED_ROLES`)
 
 ### Authorization
 
