@@ -22,11 +22,11 @@ class IdentityService:
         self.store = store
         self._users = {
             "alice": {
-                "password": "correct-horse",
+                "password": "Correct_Horse_42!",
                 "role": "analyst",
                 "actor_id": "user-alice",
             },
-            "bob": {"password": "hunter2", "role": "admin", "actor_id": "user-bob"},
+            "bob": {"password": "Hunter2_Strong_99!", "role": "admin", "actor_id": "user-bob"},
         }
 
     def authenticate(self, username: str, password: str) -> AuthResult:

@@ -14,12 +14,12 @@ class TestLoginValidation(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_empty_username_rejected(self):
-        resp = self.client.post("/auth/login", json={"username": "", "password": "x"})
+        resp = self.client.post("/auth/login", json={"username": "", "password": "Valid_Pass_123!"})
         self.assertEqual(resp.status_code, 422)
 
     def test_oversized_username_rejected(self):
         resp = self.client.post(
-            "/auth/login", json={"username": "a" * 65, "password": "x"}
+            "/auth/login", json={"username": "a" * 65, "password": "Valid_Pass_123!"}
         )
         self.assertEqual(resp.status_code, 422)
 
@@ -29,16 +29,22 @@ class TestLoginValidation(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 422)
 
+    def test_short_password_rejected(self):
+        resp = self.client.post(
+            "/auth/login", json={"username": "admin", "password": "Short1!"}
+        )
+        self.assertEqual(resp.status_code, 422)
+
     def test_oversized_password_rejected(self):
         resp = self.client.post(
-            "/auth/login", json={"username": "admin", "password": "p" * 129}
+            "/auth/login", json={"username": "admin", "password": "P" * 129}
         )
         self.assertEqual(resp.status_code, 422)
 
     def test_valid_login_not_rejected_by_validation(self):
         # Should get 401 (bad credentials) not 422 (validation error)
         resp = self.client.post(
-            "/auth/login", json={"username": "admin", "password": "wrong"}
+            "/auth/login", json={"username": "admin", "password": "Wrong_Pass_9999!"}
         )
         self.assertNotEqual(resp.status_code, 422)
 
@@ -54,7 +60,7 @@ class TestSimulationLoginValidation(unittest.TestCase):
             "/identity/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
                 "simulated_source_ip": "x" * 46,
             },
         )

@@ -247,16 +247,16 @@ class TestIdentityServiceEdgeCases(unittest.TestCase):
         self.assertEqual(result.actor_role, "unknown")
 
     def test_session_uniqueness(self) -> None:
-        r1 = self.identity.authenticate("alice", "correct-horse")
-        r2 = self.identity.authenticate("alice", "correct-horse")
+        r1 = self.identity.authenticate("alice", "Correct_Horse_42!")
+        r2 = self.identity.authenticate("alice", "Correct_Horse_42!")
         self.assertNotEqual(r1.session_id, r2.session_id)
 
     def test_validate_session(self) -> None:
-        result = self.identity.authenticate("alice", "correct-horse")
+        result = self.identity.authenticate("alice", "Correct_Horse_42!")
         self.assertTrue(self.identity.validate_session(result.session_id))
 
     def test_validate_revoked_session(self) -> None:
-        result = self.identity.authenticate("alice", "correct-horse")
+        result = self.identity.authenticate("alice", "Correct_Horse_42!")
         self.store.revoked_sessions.add(result.session_id)
         self.assertFalse(self.identity.validate_session(result.session_id))
 

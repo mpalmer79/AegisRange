@@ -145,7 +145,7 @@ class TestAuthChannelTracking(unittest.TestCase):
         client = TestClient(app)
         client.post(
             "/auth/login",
-            json={"username": "admin", "password": "admin_pass"},
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
         )
         # Cookie-based request (GET exempt from CSRF)
         resp = client.get("/auth/me")

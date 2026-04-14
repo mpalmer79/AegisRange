@@ -476,6 +476,7 @@ class PersistenceLayer:
                 "policy_change_restricted_actors": sorted(
                     self.store.policy_change_restricted_actors
                 ),
+                "totp_enabled": sorted(self.store.totp_enabled),
             }
             for key, value in set_data.items():
                 conn.execute(
@@ -500,6 +501,7 @@ class PersistenceLayer:
                 "blocked_routes": {
                     k: sorted(v) for k, v in self.store.blocked_routes.items()
                 },
+                "totp_secrets": dict(self.store.totp_secrets),
             }
             for dkey, dvalue in dict_data.items():
                 conn.execute(
@@ -569,6 +571,7 @@ class PersistenceLayer:
                 "policy_change_restricted_actors": sorted(
                     self.store.policy_change_restricted_actors
                 ),
+                "totp_enabled": sorted(self.store.totp_enabled),
             }
             for key, value in set_data.items():
                 conn.execute(
@@ -594,6 +597,7 @@ class PersistenceLayer:
                 "blocked_routes": {
                     k: sorted(v) for k, v in self.store.blocked_routes.items()
                 },
+                "totp_secrets": dict(self.store.totp_secrets),
             }
             for dkey, dvalue in dict_data.items():
                 conn.execute(
@@ -687,6 +691,7 @@ class PersistenceLayer:
             # Dicts
             staged_risk_profiles: dict[str, object] = {}
             staged_blocked_routes: dict[str, set[str]] = {}
+            staged_dicts: dict[str, Any] = {}
             for row in conn.execute("SELECT key, data FROM state_dicts"):
                 key, raw = row[0], json.loads(row[1])
                 # actor_sessions is ephemeral — skip legacy persisted rows
@@ -708,6 +713,8 @@ class PersistenceLayer:
                         )
                 elif key == "blocked_routes":
                     staged_blocked_routes = {k: set(v) for k, v in raw.items()}
+                else:
+                    staged_dicts[key] = raw
 
             staged_scenario_history: list[dict] = []
             for row in conn.execute("SELECT data FROM scenario_history ORDER BY id"):
@@ -754,6 +761,10 @@ class PersistenceLayer:
             self.store.policy_change_restricted_actors = staged_sets.get(
                 "policy_change_restricted_actors", set()
             )
+            self.store.totp_enabled = staged_sets.get("totp_enabled", set())
+
+            # Restore TOTP secrets from dicts
+            self.store.totp_secrets = staged_dicts.get("totp_secrets", {})
 
             # Reset ephemeral state explicitly.
             self.store.actor_sessions = {}

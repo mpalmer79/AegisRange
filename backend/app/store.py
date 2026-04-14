@@ -41,6 +41,9 @@ class InMemoryStore:
         self.risk_profiles: dict[str, RiskProfile] = {}
         self.scenario_history: list[dict] = []
         self.incident_notes: defaultdict[str, list[dict]] = defaultdict(list)
+        # TOTP / MFA state
+        self.totp_secrets: dict[str, str] = {}  # username → base32 secret
+        self.totp_enabled: set[str] = set()  # usernames with MFA enabled
         # Secondary indices for O(actor_events) lookups
         self._events_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self._events_by_correlation: defaultdict[str, list[Event]] = defaultdict(list)

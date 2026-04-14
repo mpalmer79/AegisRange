@@ -128,7 +128,7 @@ class TestTokenExpirySingleSource(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -149,7 +149,7 @@ class TestTokenExpirySingleSource(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         data = resp.json()
@@ -162,18 +162,20 @@ class TestTokenExpirySingleSource(unittest.TestCase):
         returned_expiry = datetime.fromisoformat(data["expires_at"])
         self.assertEqual(returned_expiry, payload.exp)
 
-    def test_authenticate_returns_three_values(self) -> None:
-        success, token, expires_at = _auth_service.authenticate("admin", "admin_pass")
+    def test_authenticate_returns_four_values(self) -> None:
+        success, token, expires_at, mfa_status = _auth_service.authenticate("admin", "Admin_Pass_2025!")
         self.assertTrue(success)
         self.assertIsNotNone(token)
         self.assertIsNotNone(expires_at)
         self.assertIsInstance(expires_at, datetime)
+        self.assertIsNone(mfa_status)
 
     def test_authenticate_failure_returns_none_expiry(self) -> None:
-        success, token, expires_at = _auth_service.authenticate("admin", "wrong")
+        success, token, expires_at, mfa_status = _auth_service.authenticate("admin", "Wrong_Pass_9999!")
         self.assertFalse(success)
         self.assertIsNone(token)
         self.assertIsNone(expires_at)
+        self.assertIsNone(mfa_status)
 
 
 class TestIdentityBoundarySeparation(unittest.TestCase):
@@ -185,7 +187,7 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -196,7 +198,7 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
             "/identity/login",
             json={
                 "username": "alice",
-                "password": "correct-horse",
+                "password": "Correct_Horse_42!",
             },
         )
         self.assertEqual(resp.status_code, 401)
@@ -207,7 +209,7 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
             "/identity/login",
             json={
                 "username": "alice",
-                "password": "correct-horse",
+                "password": "Correct_Horse_42!",
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -224,7 +226,7 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
             "/auth/login",
             json={
                 "username": "admin",
-                "password": "admin_pass",
+                "password": "Admin_Pass_2025!",
             },
         )
         data = resp.json()

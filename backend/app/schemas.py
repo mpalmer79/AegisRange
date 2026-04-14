@@ -6,9 +6,10 @@ Route handlers import these instead of defining models inline.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 T = TypeVar("T")
 
@@ -379,7 +380,36 @@ class _StrictInput(BaseModel):
 
 class LoginRequest(_StrictInput):
     username: str = Field(..., min_length=1, max_length=64)
-    password: str = Field(..., min_length=1, max_length=128)
+    password: str = Field(..., min_length=12, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_complexity(cls, v: str) -> str:
+        """Enforce password complexity in production mode.
+
+        Always enforces min_length=12 (via Field).  In production
+        (``SKIP_PASSWORD_COMPLEXITY=False``), additionally requires
+        uppercase, lowercase, digit, and special character.
+        """
+        from app.config import settings
+
+        if settings.SKIP_PASSWORD_COMPLEXITY:
+            return v
+
+        violations: list[str] = []
+        if not re.search(r"[A-Z]", v):
+            violations.append("at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            violations.append("at least one lowercase letter")
+        if not re.search(r"\d", v):
+            violations.append("at least one digit")
+        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>?]", v):
+            violations.append("at least one special character")
+        if violations:
+            raise ValueError(
+                "Password must contain: " + ", ".join(violations)
+            )
+        return v
 
 
 class SimulationLoginRequest(LoginRequest):

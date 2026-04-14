@@ -2,6 +2,31 @@
 
 All notable changes to AegisRange are documented in this file.
 
+## [0.8.0] — 2026-04-14
+
+### Added
+- Account lockout per NIST 800-53 AC-7 with two-step logic: observation window (`LOCKOUT_WINDOW_SECONDS`) and lockout duration (`LOCKOUT_DURATION_SECONDS`)
+- Password complexity enforcement via Pydantic `@field_validator` on `LoginRequest` (min 12 chars, uppercase, lowercase, digit, special character)
+- `SKIP_PASSWORD_COMPLEXITY` config flag (auto-true in development, false in production)
+- JWT key rotation: `kid` header in all tokens, `JWT_KEY_ID` config, previous-key fallback via `JWT_SECRET_PREVIOUS`
+- MFA/TOTP foundation: `TOTPService` (RFC 6238, stdlib-only), `/auth/mfa/enroll`, `/auth/mfa/verify`, `/auth/mfa/disable` endpoints
+- `MFA_REQUIRED_ROLES` config for per-role MFA enforcement
+- `authenticate()` returns 4-tuple `(success, token, expires_at, mfa_status)` to support MFA intermediate state
+- TOTP state persistence: `totp_secrets` and `totp_enabled` stored in SQLite via `state_dicts`/`state_sets`
+- `docs/operations/KEY_ROTATION.md` — operational guide for zero-downtime JWT key rotation
+- Comprehensive test suites: `test_auth_hardening.py` (lockout, complexity, key rotation), `test_totp.py` (TOTP service, MFA endpoints, login flow, persistence)
+
+### Changed
+- Default user passwords upgraded to meet complexity requirements (12+ chars, mixed case, digits, special)
+- Simulation identity passwords (`identity_service.py`, `scenario_service.py`) upgraded to complex passwords
+- All test files updated with new password strings and 4-tuple `authenticate()` unpacking
+- `LoginRequest.password` field: `min_length` increased from 1 to 12, `max_length` set to 128
+- `.env.example` updated with new config keys: `JWT_KEY_ID`, `LOCKOUT_WINDOW_SECONDS`, `LOCKOUT_DURATION_SECONDS`, `SKIP_PASSWORD_COMPLEXITY`, `MFA_REQUIRED_ROLES`
+- ARCHITECTURE.md updated with Phase 1 authentication hardening details
+
+### Removed
+- Old config keys: `LOCKOUT_DURATION_MINUTES`, `PASSWORD_MIN_LENGTH`, `PASSWORD_REQUIRE_*`
+
 ## [0.7.0] — 2025-06-01
 
 ### Added

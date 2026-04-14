@@ -86,6 +86,7 @@ def log_login_attempt(
     success: bool,
     client_ip: str | None = None,
     correlation_id: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     _log(
         AuditCategory.AUTH,
@@ -94,6 +95,7 @@ def log_login_attempt(
         actor=username,
         client_ip=client_ip,
         correlation_id=correlation_id,
+        details=details,
     )
 
 
@@ -220,6 +222,46 @@ def log_account_lockout(
         client_ip=client_ip,
         correlation_id=correlation_id,
         details={"remaining_seconds": remaining_seconds},
+    )
+
+
+def log_mfa_enrollment(
+    username: str,
+    correlation_id: str | None = None,
+) -> None:
+    _log(
+        AuditCategory.AUTH,
+        "mfa_enrollment",
+        actor=username,
+        correlation_id=correlation_id,
+    )
+
+
+def log_mfa_verification(
+    username: str,
+    success: bool,
+    correlation_id: str | None = None,
+) -> None:
+    _log(
+        AuditCategory.AUTH,
+        "mfa_verification",
+        outcome="success" if success else "failure",
+        actor=username,
+        correlation_id=correlation_id,
+    )
+
+
+def log_mfa_disabled(
+    username: str,
+    actor: str,
+    correlation_id: str | None = None,
+) -> None:
+    _log(
+        AuditCategory.AUTH,
+        "mfa_disabled",
+        actor=actor,
+        target=username,
+        correlation_id=correlation_id,
     )
 
 

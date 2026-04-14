@@ -1,3 +1,10 @@
+"""JWT authentication and user management for the AegisRange simulation platform.
+
+Provides PBKDF2-HMAC-SHA256 password hashing, HS256 JWT token creation
+and verification, role-based access control, account lockout (NIST
+800-53 AC-7), and JWT key rotation support.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,6 +13,7 @@ import logging
 import os
 import re
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -119,44 +127,20 @@ def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Password complexity validation
-# ---------------------------------------------------------------------------
-
-
-def validate_password_complexity(password: str) -> list[str]:
-    """Validate a password against the configured complexity policy.
-
-    Returns a list of violation messages.  An empty list means the
-    password satisfies all requirements.
-    """
-    from app.config import settings
-
-    violations: list[str] = []
-
-    if len(password) < settings.PASSWORD_MIN_LENGTH:
-        violations.append(
-            f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters"
-        )
-    if settings.PASSWORD_REQUIRE_UPPERCASE and not re.search(r"[A-Z]", password):
-        violations.append("Password must contain at least one uppercase letter")
-    if settings.PASSWORD_REQUIRE_LOWERCASE and not re.search(r"[a-z]", password):
-        violations.append("Password must contain at least one lowercase letter")
-    if settings.PASSWORD_REQUIRE_DIGIT and not re.search(r"\d", password):
-        violations.append("Password must contain at least one digit")
-    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(
-        r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~]", password
-    ):
-        violations.append("Password must contain at least one special character")
-
-    return violations
-
-
-# ---------------------------------------------------------------------------
 # Default simulation users (in-memory only)
 #
-# Passwords follow the pattern {username}_pass.  Hashes are computed at
-# module load time so the plain-text passwords are never stored.
+# Passwords meet complexity requirements (uppercase, lowercase, digit,
+# special character, ≥12 characters).  Hashes are computed at module
+# load time so the plain-text passwords are never stored.
 # ---------------------------------------------------------------------------
+
+DEFAULT_PASSWORDS: dict[str, str] = {
+    "admin": "Admin_Pass_2025!",
+    "soc_lead": "SocLead_Pass_2025!",
+    "analyst1": "Analyst1_Pass_2025!",
+    "red_team1": "RedTeam1_Pass_2025!",
+    "viewer1": "Viewer1_Pass_2025!",
+}
 
 
 def _build_default_users() -> dict[str, dict[str, str]]:
@@ -170,7 +154,7 @@ def _build_default_users() -> dict[str, dict[str, str]]:
     ]
     result: dict[str, dict[str, str]] = {}
     for username, role, display_name in users_spec:
-        pw_hash, pw_salt = _hash_password(f"{username}_pass")
+        pw_hash, pw_salt = _hash_password(DEFAULT_PASSWORDS[username])
         result[username] = {
             "password_hash": pw_hash,
             "password_salt": pw_salt,
@@ -273,23 +257,23 @@ class AuthService:
         *,
         previous_secret_key: str | None = None,
         lockout_threshold: int | None = None,
-        lockout_duration_minutes: int | None = None,
+        lockout_window_seconds: int | None = None,
+        lockout_duration_seconds: int | None = None,
     ) -> None:
         from app.config import settings
 
         self._secret_key = secret_key or settings.jwt_secret_key
         self._previous_secret_key = previous_secret_key or settings.jwt_previous_secret_key
         self._token_expiry_hours = token_expiry_hours or settings.TOKEN_EXPIRY_HOURS
-        self._lockout_threshold = lockout_threshold or settings.LOCKOUT_THRESHOLD
-        self._lockout_duration_seconds = (
-            lockout_duration_minutes or settings.LOCKOUT_DURATION_MINUTES
-        ) * 60
+        self._lockout_threshold = lockout_threshold if lockout_threshold is not None else settings.LOCKOUT_THRESHOLD
+        self._lockout_window_seconds = lockout_window_seconds if lockout_window_seconds is not None else settings.LOCKOUT_WINDOW_SECONDS
+        self._lockout_duration_seconds = lockout_duration_seconds if lockout_duration_seconds is not None else settings.LOCKOUT_DURATION_SECONDS
         self._users: dict[str, AuthUser] = {}
         self._password_store: dict[
             str, tuple[str, str]
         ] = {}  # username -> (hash, salt)
         # Account lockout: track failed login attempt timestamps per username
-        self._login_attempts: dict[str, list[float]] = {}
+        self._login_attempts: dict[str, list[float]] = defaultdict(list)
         self._init_default_users()
 
     # -- bootstrap -----------------------------------------------------------
@@ -312,19 +296,38 @@ class AuthService:
     # -- account lockout (NIST 800-53 AC-7) -----------------------------------
 
     def is_account_locked(self, username: str) -> bool:
-        """Return True if the account has exceeded the failed-attempt threshold."""
+        """Return True if the account has exceeded the failed-attempt threshold.
+
+        Two-step check per NIST 800-53 AC-7:
+        1. Count failures within the lockout *window* (e.g. 5 min).
+        2. If >= threshold, check if the most recent failure is within
+           the lockout *duration* (e.g. 15 min).  If yes, account is locked.
+        """
         attempts = self._login_attempts.get(username)
         if not attempts:
             return False
         now = time.monotonic()
-        # Prune expired attempts outside the lockout window
-        recent = [t for t in attempts if now - t < self._lockout_duration_seconds]
-        self._login_attempts[username] = recent
-        return len(recent) >= self._lockout_threshold
+        # Count failures within the observation window
+        recent_in_window = [
+            t for t in attempts if now - t < self._lockout_window_seconds
+        ]
+        if len(recent_in_window) < self._lockout_threshold:
+            return False
+        # Threshold exceeded — check if lockout duration has elapsed
+        most_recent = max(attempts)
+        return (now - most_recent) < self._lockout_duration_seconds
 
     def record_failed_attempt(self, username: str) -> None:
-        """Record a failed login attempt for lockout tracking."""
-        self._login_attempts.setdefault(username, []).append(time.monotonic())
+        """Record a failed login attempt for lockout tracking.
+
+        Prunes entries older than ``window + duration`` to bound memory.
+        """
+        now = time.monotonic()
+        max_age = self._lockout_window_seconds + self._lockout_duration_seconds
+        self._login_attempts[username] = [
+            t for t in self._login_attempts[username] if now - t < max_age
+        ]
+        self._login_attempts[username].append(now)
 
     def clear_failed_attempts(self, username: str) -> None:
         """Clear failed-attempt history after a successful login."""
@@ -333,25 +336,31 @@ class AuthService:
     def get_lockout_remaining(self, username: str) -> int:
         """Return seconds remaining in the lockout window, or 0 if not locked."""
         attempts = self._login_attempts.get(username)
-        if not attempts or len(attempts) < self._lockout_threshold:
+        if not attempts:
             return 0
         now = time.monotonic()
-        oldest_relevant = attempts[-self._lockout_threshold]
-        remaining = self._lockout_duration_seconds - (now - oldest_relevant)
+        most_recent = max(attempts)
+        remaining = self._lockout_duration_seconds - (now - most_recent)
         return max(0, int(remaining))
 
     # -- public API ----------------------------------------------------------
 
     def authenticate(
         self, username: str, password: str
-    ) -> tuple[bool, str | None, datetime | None]:
-        """Authenticate a user and return ``(success, token | None, expires_at | None)``.
+    ) -> tuple[bool, str | None, datetime | None, str | None]:
+        """Authenticate a user and return ``(success, token, expires_at, mfa_status)``.
 
-        Returns ``(False, None, None)`` when:
+        The 4th return value is:
+        - ``None`` — normal login, no MFA required
+        - ``"mfa_required"`` — password OK but TOTP verification needed
+
+        Returns ``(False, None, None, None)`` when:
         - the account is locked (too many failed attempts)
         - the user does not exist
         - the password is incorrect
         """
+        from app.services import audit_service
+
         # Check lockout before any password work
         if self.is_account_locked(username):
             remaining = self.get_lockout_remaining(username)
@@ -360,27 +369,43 @@ class AuthService:
                 username,
                 remaining,
             )
-            return False, None, None
+            audit_service.log_login_attempt(
+                username, False, details={"locked_out": True, "remaining_seconds": remaining}
+            )
+            return False, None, None, None
 
         user = self._users.get(username)
         if user is None:
             _hash_password(password)
             logger.warning("Authentication failed: unknown user %s", username)
-            return False, None, None
+            return False, None, None, None
 
         stored_hash, stored_salt = self._password_store[username]
         if not _verify_password(password, stored_hash, stored_salt):
             self.record_failed_attempt(username)
             logger.warning("Authentication failed: bad password for %s", username)
-            return False, None, None
+            return False, None, None, None
 
-        # Success — clear any prior failed-attempt history
+        # Password correct — clear lockout history
         self.clear_failed_attempts(username)
+
+        # Check if MFA is required for this user
+        from app.config import settings
+        from app.store import STORE
+
+        if (
+            user.role in settings.MFA_REQUIRED_ROLES
+            and username in STORE.totp_enabled
+        ):
+            logger.info("User %s requires MFA verification", username)
+            return True, None, None, "mfa_required"
+
+        # No MFA needed — issue token
         token = self.create_token(username, user.role)
         payload = self.verify_token(token)
         expires_at = payload.exp if payload else None
         logger.info("User %s authenticated successfully", username)
-        return True, token, expires_at
+        return True, token, expires_at, None
 
     def create_token(
         self,
@@ -395,7 +420,10 @@ class AuthService:
 
         Standard claims: sub, role, exp, iat, jti, iss, aud.
         Extended claims: identity_type, scopes.
+        The ``kid`` (key ID) is included in the JWT header.
         """
+        from app.config import settings
+
         now = _utc_now()
         resolved_scopes = scopes if scopes is not None else ROLE_SCOPES.get(role, [])
         payload = {
@@ -409,7 +437,12 @@ class AuthService:
             "identity_type": identity_type,
             "scopes": resolved_scopes,
         }
-        return jwt.encode(payload, self._secret_key, algorithm=_JWT_ALGORITHM)
+        return jwt.encode(
+            payload,
+            self._secret_key,
+            algorithm=_JWT_ALGORITHM,
+            headers={"kid": settings.JWT_KEY_ID},
+        )
 
     def create_service_token(
         self,
@@ -421,6 +454,8 @@ class AuthService:
         Service tokens use ``identity_type=service`` and have a
         shorter expiry (1 hour) to limit blast radius.
         """
+        from app.config import settings
+
         now = _utc_now()
         payload = {
             "sub": service_id,
@@ -433,7 +468,12 @@ class AuthService:
             "identity_type": IdentityType.SERVICE,
             "scopes": scopes or ["internal"],
         }
-        return jwt.encode(payload, self._secret_key, algorithm=_JWT_ALGORITHM)
+        return jwt.encode(
+            payload,
+            self._secret_key,
+            algorithm=_JWT_ALGORITHM,
+            headers={"kid": settings.JWT_KEY_ID},
+        )
 
     def _decode_token(self, token: str, secret: str) -> dict | None:
         """Attempt to decode a JWT with the given secret.
@@ -473,12 +513,20 @@ class AuthService:
           - JTI revocation check
           - role membership check
 
-        Key rotation: tries the current secret first, then the previous
-        secret (if configured) to allow seamless rotation.
+        Key rotation: tries the current secret first.  If the current
+        key produces an ``InvalidSignatureError`` and a previous key is
+        configured, retries with the previous key.  This enables
+        zero-downtime key rotation.
         """
         raw = self._decode_token(token, self._secret_key)
         if raw is None and self._previous_secret_key:
+            # Only retry with previous key — this handles the rotation
+            # window where existing tokens are still signed with the old key.
             raw = self._decode_token(token, self._previous_secret_key)
+            if raw is not None:
+                logger.info(
+                    "Token verified with previous key (kid rotation in progress)"
+                )
         if raw is None:
             return None
 
