@@ -5,6 +5,7 @@ import hmac
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -115,6 +116,39 @@ def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
         dklen=_PBKDF2_DK_LEN,
     )
     return hmac.compare_digest(dk.hex(), stored_hash)
+
+
+# ---------------------------------------------------------------------------
+# Password complexity validation
+# ---------------------------------------------------------------------------
+
+
+def validate_password_complexity(password: str) -> list[str]:
+    """Validate a password against the configured complexity policy.
+
+    Returns a list of violation messages.  An empty list means the
+    password satisfies all requirements.
+    """
+    from app.config import settings
+
+    violations: list[str] = []
+
+    if len(password) < settings.PASSWORD_MIN_LENGTH:
+        violations.append(
+            f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters"
+        )
+    if settings.PASSWORD_REQUIRE_UPPERCASE and not re.search(r"[A-Z]", password):
+        violations.append("Password must contain at least one uppercase letter")
+    if settings.PASSWORD_REQUIRE_LOWERCASE and not re.search(r"[a-z]", password):
+        violations.append("Password must contain at least one lowercase letter")
+    if settings.PASSWORD_REQUIRE_DIGIT and not re.search(r"\d", password):
+        violations.append("Password must contain at least one digit")
+    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(
+        r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~]", password
+    ):
+        violations.append("Password must contain at least one special character")
+
+    return violations
 
 
 # ---------------------------------------------------------------------------
@@ -236,15 +270,26 @@ class AuthService:
         self,
         secret_key: str | None = None,
         token_expiry_hours: int | None = None,
+        *,
+        previous_secret_key: str | None = None,
+        lockout_threshold: int | None = None,
+        lockout_duration_minutes: int | None = None,
     ) -> None:
         from app.config import settings
 
         self._secret_key = secret_key or settings.jwt_secret_key
+        self._previous_secret_key = previous_secret_key or settings.jwt_previous_secret_key
         self._token_expiry_hours = token_expiry_hours or settings.TOKEN_EXPIRY_HOURS
+        self._lockout_threshold = lockout_threshold or settings.LOCKOUT_THRESHOLD
+        self._lockout_duration_seconds = (
+            lockout_duration_minutes or settings.LOCKOUT_DURATION_MINUTES
+        ) * 60
         self._users: dict[str, AuthUser] = {}
         self._password_store: dict[
             str, tuple[str, str]
         ] = {}  # username -> (hash, salt)
+        # Account lockout: track failed login attempt timestamps per username
+        self._login_attempts: dict[str, list[float]] = {}
         self._init_default_users()
 
     # -- bootstrap -----------------------------------------------------------
@@ -264,12 +309,59 @@ class AuthService:
                 info["password_salt"],
             )
 
+    # -- account lockout (NIST 800-53 AC-7) -----------------------------------
+
+    def is_account_locked(self, username: str) -> bool:
+        """Return True if the account has exceeded the failed-attempt threshold."""
+        attempts = self._login_attempts.get(username)
+        if not attempts:
+            return False
+        now = time.monotonic()
+        # Prune expired attempts outside the lockout window
+        recent = [t for t in attempts if now - t < self._lockout_duration_seconds]
+        self._login_attempts[username] = recent
+        return len(recent) >= self._lockout_threshold
+
+    def record_failed_attempt(self, username: str) -> None:
+        """Record a failed login attempt for lockout tracking."""
+        self._login_attempts.setdefault(username, []).append(time.monotonic())
+
+    def clear_failed_attempts(self, username: str) -> None:
+        """Clear failed-attempt history after a successful login."""
+        self._login_attempts.pop(username, None)
+
+    def get_lockout_remaining(self, username: str) -> int:
+        """Return seconds remaining in the lockout window, or 0 if not locked."""
+        attempts = self._login_attempts.get(username)
+        if not attempts or len(attempts) < self._lockout_threshold:
+            return 0
+        now = time.monotonic()
+        oldest_relevant = attempts[-self._lockout_threshold]
+        remaining = self._lockout_duration_seconds - (now - oldest_relevant)
+        return max(0, int(remaining))
+
     # -- public API ----------------------------------------------------------
 
     def authenticate(
         self, username: str, password: str
     ) -> tuple[bool, str | None, datetime | None]:
-        """Authenticate a user and return ``(success, token | None, expires_at | None)``."""
+        """Authenticate a user and return ``(success, token | None, expires_at | None)``.
+
+        Returns ``(False, None, None)`` when:
+        - the account is locked (too many failed attempts)
+        - the user does not exist
+        - the password is incorrect
+        """
+        # Check lockout before any password work
+        if self.is_account_locked(username):
+            remaining = self.get_lockout_remaining(username)
+            logger.warning(
+                "Authentication blocked: account %s is locked (%ds remaining)",
+                username,
+                remaining,
+            )
+            return False, None, None
+
         user = self._users.get(username)
         if user is None:
             _hash_password(password)
@@ -278,9 +370,12 @@ class AuthService:
 
         stored_hash, stored_salt = self._password_store[username]
         if not _verify_password(password, stored_hash, stored_salt):
+            self.record_failed_attempt(username)
             logger.warning("Authentication failed: bad password for %s", username)
             return False, None, None
 
+        # Success — clear any prior failed-attempt history
+        self.clear_failed_attempts(username)
         token = self.create_token(username, user.role)
         payload = self.verify_token(token)
         expires_at = payload.exp if payload else None
@@ -340,6 +435,29 @@ class AuthService:
         }
         return jwt.encode(payload, self._secret_key, algorithm=_JWT_ALGORITHM)
 
+    def _decode_token(self, token: str, secret: str) -> dict | None:
+        """Attempt to decode a JWT with the given secret.
+
+        Returns the raw claims dict on success, or None on failure.
+        """
+        try:
+            return jwt.decode(
+                token,
+                secret,
+                algorithms=_JWT_ALLOWED_ALGORITHMS,
+                options={
+                    "require": ["sub", "role", "exp", "iat", "jti"],
+                    "verify_exp": True,
+                    "verify_iat": True,
+                    "verify_signature": True,
+                    "verify_aud": False,
+                },
+            )
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.InvalidTokenError:
+            return None
+
     def verify_token(self, token: str) -> TokenPayload | None:
         """Verify a JWT token and return the decoded payload, or ``None``.
 
@@ -354,23 +472,14 @@ class AuthService:
           - audience (reject mismatches; accept missing for legacy tokens)
           - JTI revocation check
           - role membership check
+
+        Key rotation: tries the current secret first, then the previous
+        secret (if configured) to allow seamless rotation.
         """
-        try:
-            raw = jwt.decode(
-                token,
-                self._secret_key,
-                algorithms=_JWT_ALLOWED_ALGORITHMS,
-                options={
-                    "require": ["sub", "role", "exp", "iat", "jti"],
-                    "verify_exp": True,
-                    "verify_iat": True,
-                    "verify_signature": True,
-                    "verify_aud": False,
-                },
-            )
-        except jwt.ExpiredSignatureError:
-            return None
-        except jwt.InvalidTokenError:
+        raw = self._decode_token(token, self._secret_key)
+        if raw is None and self._previous_secret_key:
+            raw = self._decode_token(token, self._previous_secret_key)
+        if raw is None:
             return None
 
         # Validate issuer/audience at application level.
@@ -427,22 +536,27 @@ class AuthService:
         """Extract the JTI from a token without full verification.
 
         Used during logout to revoke the token.  The cookie was set
-        by us, but we still guard against malformed input.
+        by us, but we still guard against malformed input.  Tries
+        both current and previous secret keys for key rotation.
         """
-        try:
-            raw = jwt.decode(
-                token,
-                self._secret_key,
-                algorithms=_JWT_ALLOWED_ALGORITHMS,
-                options={
-                    "verify_exp": False,
-                    "verify_iat": False,
-                    "verify_aud": False,
-                },
-            )
-            return raw.get("jti")
-        except jwt.InvalidTokenError:
-            return None
+        for secret in (self._secret_key, self._previous_secret_key):
+            if not secret:
+                continue
+            try:
+                raw = jwt.decode(
+                    token,
+                    secret,
+                    algorithms=_JWT_ALLOWED_ALGORITHMS,
+                    options={
+                        "verify_exp": False,
+                        "verify_iat": False,
+                        "verify_aud": False,
+                    },
+                )
+                return raw.get("jti")
+            except jwt.InvalidTokenError:
+                continue
+        return None
 
 
 # ---------------------------------------------------------------------------

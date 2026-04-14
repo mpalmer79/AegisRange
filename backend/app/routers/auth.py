@@ -89,11 +89,26 @@ def _clear_csrf_cookie(response: JSONResponse) -> None:
 
 @router.post("/login", response_model=AuthLoginResponse)
 def platform_login(payload: LoginRequest, request: Request) -> JSONResponse:
+    client_ip = request.client.host if request.client else None
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    # Check lockout before attempting authentication
+    if auth_service.is_account_locked(payload.username):
+        remaining = auth_service.get_lockout_remaining(payload.username)
+        audit_service.log_account_lockout(
+            payload.username,
+            remaining,
+            client_ip=client_ip,
+            correlation_id=correlation_id,
+        )
+        raise HTTPException(
+            status_code=423,
+            detail="Account temporarily locked due to too many failed attempts",
+        )
+
     success, token, expires_at = auth_service.authenticate(
         payload.username, payload.password
     )
-    client_ip = request.client.host if request.client else None
-    correlation_id = getattr(request.state, "correlation_id", None)
     audit_service.log_login_attempt(
         payload.username, success, client_ip=client_ip, correlation_id=correlation_id
     )

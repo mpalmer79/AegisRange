@@ -114,6 +114,23 @@ describe('LoginPage', () => {
     expect(screen.queryByText(/API 401/)).not.toBeInTheDocument();
   });
 
+  it('shows lockout error on 423', async () => {
+    mockLogin.mockRejectedValue(new ApiError(423, 'Account locked'));
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText(/username/i), {
+      target: { value: 'x' },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: 'y' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/account temporarily locked/i)).toBeInTheDocument();
+    });
+  });
+
   it('shows rate-limit error on 429', async () => {
     mockLogin.mockRejectedValue(new ApiError(429, 'Too Many Requests'));
 
