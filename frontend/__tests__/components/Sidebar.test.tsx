@@ -38,6 +38,8 @@ jest.mock('@/lib/auth-context', () => ({
     username: null,
     role: null,
     loading: false,
+    demoMode: false,
+    expiresAt: null,
     login: jest.fn(),
     logout: jest.fn(),
   }),

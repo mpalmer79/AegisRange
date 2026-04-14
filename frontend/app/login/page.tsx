@@ -1,21 +1,28 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, FormEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { ApiError } from '@/lib/api';
 
-export default function LoginPage() {
+/**
+ * Inner form component — uses useSearchParams() which requires
+ * a Suspense boundary in Next.js 14 for static generation.
+ */
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || '/';
   const { login, isAuthenticated } = useAuth();
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // If already authenticated, redirect to dashboard.
+  // If already authenticated, redirect immediately.
   if (isAuthenticated) {
-    router.replace('/');
+    router.replace(redirectTo);
     return null;
   }
 
@@ -25,7 +32,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(username, password);
-      router.replace('/');
+      router.replace(redirectTo);
     } catch (err) {
       if (err instanceof ApiError) {
         switch (err.status) {
@@ -167,5 +174,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Login page — wrapped in Suspense because LoginForm uses
+ * useSearchParams (required by Next.js 14 for static gen).
+ */
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

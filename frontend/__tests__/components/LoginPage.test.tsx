@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api';
 // ---------------------------------------------------------------------------
 const mockLogin = jest.fn();
 const mockReplace = jest.fn();
+const mockSearchParams = new URLSearchParams();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -17,6 +18,7 @@ jest.mock('next/navigation', () => ({
     refresh: jest.fn(),
     prefetch: jest.fn(),
   }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('@/lib/auth-context', () => ({
@@ -25,6 +27,8 @@ jest.mock('@/lib/auth-context', () => ({
     username: null,
     role: null,
     loading: false,
+    demoMode: false,
+    expiresAt: null,
     login: mockLogin,
     logout: jest.fn(),
   }),
@@ -32,6 +36,8 @@ jest.mock('@/lib/auth-context', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Reset search params between tests.
+  mockSearchParams.delete('redirect');
 });
 
 describe('LoginPage', () => {
@@ -53,7 +59,7 @@ describe('LoginPage', () => {
     expect(screen.getByText('viewer')).toBeInTheDocument();
   });
 
-  it('calls login and redirects on success', async () => {
+  it('calls login and redirects to / by default on success', async () => {
     mockLogin.mockResolvedValue(undefined);
 
     render(<LoginPage />);
@@ -68,6 +74,24 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith('red_team1', 'red_team1_pass');
       expect(mockReplace).toHaveBeenCalledWith('/');
+    });
+  });
+
+  it('redirects to ?redirect= target after login', async () => {
+    mockSearchParams.set('redirect', '/scenarios');
+    mockLogin.mockResolvedValue(undefined);
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText(/username/i), {
+      target: { value: 'red_team1' },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: 'red_team1_pass' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/scenarios');
     });
   });
 

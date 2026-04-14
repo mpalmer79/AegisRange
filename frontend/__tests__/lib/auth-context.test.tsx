@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { AuthProvider, useAuth, canRunScenarios } from '@/lib/auth-context';
+import { AuthProvider, useAuth, canRunScenarios, DEMO_MODE } from '@/lib/auth-context';
 
 // ---------------------------------------------------------------------------
 // Mocks — intercept the real api.ts functions so tests run without a backend.
@@ -20,6 +20,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   // Default: no existing session.
   mockGetCurrentUser.mockResolvedValue(null);
+  // Clear sessionStorage between tests.
+  sessionStorage.clear();
 });
 
 describe('AuthProvider', () => {
@@ -28,14 +30,18 @@ describe('AuthProvider', () => {
       wrapper: AuthProvider,
     });
 
-    // Initially loading.
-    expect(result.current.loading).toBe(true);
+    // Initially loading (unless demo mode).
+    if (!DEMO_MODE) {
+      expect(result.current.loading).toBe(true);
+    }
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.isAuthenticated).toBe(false);
-    expect(result.current.username).toBeNull();
-    expect(result.current.role).toBeNull();
+    if (!DEMO_MODE) {
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.username).toBeNull();
+      expect(result.current.role).toBeNull();
+    }
   });
 
   it('hydrates auth state from existing backend session', async () => {
@@ -52,8 +58,8 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.username).toBe('red_team1');
-    expect(result.current.role).toBe('red_team');
+    expect(result.current.username).toBe(DEMO_MODE ? 'demo-operator' : 'red_team1');
+    expect(result.current.role).toBe(DEMO_MODE ? 'red_team' : 'red_team');
   });
 
   it('login() sets auth state from backend response', async () => {
@@ -68,19 +74,46 @@ describe('AuthProvider', () => {
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.isAuthenticated).toBe(false);
 
     await act(async () => {
       await result.current.login('analyst1', 'analyst1_pass');
     });
 
-    expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.username).toBe('analyst1');
-    expect(result.current.role).toBe('analyst');
-    expect(mockResetBackendProbe).toHaveBeenCalled();
+    if (!DEMO_MODE) {
+      expect(result.current.isAuthenticated).toBe(true);
+      expect(result.current.username).toBe('analyst1');
+      expect(result.current.role).toBe('analyst');
+      expect(result.current.expiresAt).toBeTruthy();
+      expect(mockResetBackendProbe).toHaveBeenCalled();
+    }
+  });
+
+  it('login() persists expiresAt to sessionStorage', async () => {
+    const expiry = new Date(Date.now() + 3_600_000).toISOString();
+    mockPlatformLogin.mockResolvedValue({
+      username: 'analyst1',
+      role: 'analyst',
+      expires_at: expiry,
+    });
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: AuthProvider,
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.login('analyst1', 'analyst1_pass');
+    });
+
+    if (!DEMO_MODE) {
+      expect(sessionStorage.getItem('aegisrange_session_expires')).toBe(expiry);
+    }
   });
 
   it('login() propagates errors on invalid credentials', async () => {
+    if (DEMO_MODE) return; // demo mode login is a no-op
+
     const apiError = new Error('API 401: Unauthorized');
     mockPlatformLogin.mockRejectedValue(apiError);
 
@@ -113,17 +146,22 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
 
-    await act(async () => {
-      await result.current.logout();
-    });
+    if (!DEMO_MODE) {
+      await act(async () => {
+        await result.current.logout();
+      });
 
-    expect(result.current.isAuthenticated).toBe(false);
-    expect(result.current.username).toBeNull();
-    expect(result.current.role).toBeNull();
-    expect(mockResetBackendProbe).toHaveBeenCalled();
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.username).toBeNull();
+      expect(result.current.role).toBeNull();
+      expect(result.current.expiresAt).toBeNull();
+      expect(mockResetBackendProbe).toHaveBeenCalled();
+    }
   });
 
   it('logout() clears state even when backend call fails', async () => {
+    if (DEMO_MODE) return; // demo mode logout is a no-op
+
     mockGetCurrentUser.mockResolvedValue({
       username: 'admin',
       role: 'admin',
@@ -145,6 +183,40 @@ describe('AuthProvider', () => {
     expect(result.current.isAuthenticated).toBe(false);
   });
 
+  it('logout() clears sessionStorage expiry', async () => {
+    if (DEMO_MODE) return;
+
+    sessionStorage.setItem('aegisrange_session_expires', '2099-01-01T00:00:00Z');
+    mockGetCurrentUser.mockResolvedValue({
+      username: 'admin',
+      role: 'admin',
+      display_name: 'Admin',
+    });
+    mockPlatformLogout.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: AuthProvider,
+    });
+
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(sessionStorage.getItem('aegisrange_session_expires')).toBeNull();
+  });
+
+  it('exposes demoMode flag', async () => {
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: AuthProvider,
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.demoMode).toBe(DEMO_MODE);
+  });
+
   it('returns expected context shape', async () => {
     const { result } = renderHook(() => useAuth(), {
       wrapper: AuthProvider,
@@ -156,6 +228,8 @@ describe('AuthProvider', () => {
     expect(result.current).toHaveProperty('role');
     expect(result.current).toHaveProperty('isAuthenticated');
     expect(result.current).toHaveProperty('loading');
+    expect(result.current).toHaveProperty('demoMode');
+    expect(result.current).toHaveProperty('expiresAt');
     expect(result.current).toHaveProperty('login');
     expect(result.current).toHaveProperty('logout');
     expect(typeof result.current.login).toBe('function');

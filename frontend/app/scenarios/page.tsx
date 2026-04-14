@@ -65,7 +65,7 @@ export default function ScenariosPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
           </svg>
           <span>
-            <Link href="/login" className="font-medium underline hover:text-amber-900 dark:hover:text-amber-200">Sign in</Link>{' '}
+            <Link href="/login?redirect=%2Fscenarios" className="font-medium underline hover:text-amber-900 dark:hover:text-amber-200">Sign in</Link>{' '}
             to run scenarios against the live detection pipeline.
           </span>
         </div>
