@@ -263,11 +263,25 @@ class AuthService:
         from app.config import settings
 
         self._secret_key = secret_key or settings.jwt_secret_key
-        self._previous_secret_key = previous_secret_key or settings.jwt_previous_secret_key
+        self._previous_secret_key = (
+            previous_secret_key or settings.jwt_previous_secret_key
+        )
         self._token_expiry_hours = token_expiry_hours or settings.TOKEN_EXPIRY_HOURS
-        self._lockout_threshold = lockout_threshold if lockout_threshold is not None else settings.LOCKOUT_THRESHOLD
-        self._lockout_window_seconds = lockout_window_seconds if lockout_window_seconds is not None else settings.LOCKOUT_WINDOW_SECONDS
-        self._lockout_duration_seconds = lockout_duration_seconds if lockout_duration_seconds is not None else settings.LOCKOUT_DURATION_SECONDS
+        self._lockout_threshold = (
+            lockout_threshold
+            if lockout_threshold is not None
+            else settings.LOCKOUT_THRESHOLD
+        )
+        self._lockout_window_seconds = (
+            lockout_window_seconds
+            if lockout_window_seconds is not None
+            else settings.LOCKOUT_WINDOW_SECONDS
+        )
+        self._lockout_duration_seconds = (
+            lockout_duration_seconds
+            if lockout_duration_seconds is not None
+            else settings.LOCKOUT_DURATION_SECONDS
+        )
         self._users: dict[str, AuthUser] = {}
         self._password_store: dict[
             str, tuple[str, str]
@@ -370,7 +384,9 @@ class AuthService:
                 remaining,
             )
             audit_service.log_login_attempt(
-                username, False, details={"locked_out": True, "remaining_seconds": remaining}
+                username,
+                False,
+                details={"locked_out": True, "remaining_seconds": remaining},
             )
             return False, None, None, None
 
@@ -393,10 +409,7 @@ class AuthService:
         from app.config import settings
         from app.store import STORE
 
-        if (
-            user.role in settings.MFA_REQUIRED_ROLES
-            and username in STORE.totp_enabled
-        ):
+        if user.role in settings.MFA_REQUIRED_ROLES and username in STORE.totp_enabled:
             logger.info("User %s requires MFA verification", username)
             return True, None, None, "mfa_required"
 

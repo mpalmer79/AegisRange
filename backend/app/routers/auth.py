@@ -169,13 +169,12 @@ def platform_login(payload: LoginRequest, request: Request) -> JSONResponse:
 
     # MFA required — password was correct but we need TOTP verification
     if mfa_status == "mfa_required":
+        mfa_user = auth_service.get_user(payload.username)
         return JSONResponse(
             status_code=200,
             content={
                 "username": payload.username,
-                "role": auth_service.get_user(payload.username).role
-                if auth_service.get_user(payload.username)
-                else "unknown",
+                "role": mfa_user.role if mfa_user else "unknown",
                 "mfa_required": True,
             },
         )
@@ -188,6 +187,8 @@ def platform_login(payload: LoginRequest, request: Request) -> JSONResponse:
         "expires_at": expires_at.isoformat() if expires_at else None,
     }
     response = JSONResponse(content=body)
+    if token is None:
+        raise HTTPException(status_code=500, detail="Token issuance failed")
     _set_auth_cookie(response, token)
     _set_csrf_cookie(response)
     return response
@@ -289,9 +290,7 @@ def mfa_verify(payload: MFAVerifyRequest, request: Request) -> JSONResponse:
         )
         raise HTTPException(status_code=401, detail="Invalid TOTP code")
 
-    audit_service.log_mfa_verification(
-        username, True, correlation_id=correlation_id
-    )
+    audit_service.log_mfa_verification(username, True, correlation_id=correlation_id)
 
     return _issue_token_response(username)
 

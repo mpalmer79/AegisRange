@@ -406,9 +406,7 @@ class LoginRequest(_StrictInput):
         if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>?]", v):
             violations.append("at least one special character")
         if violations:
-            raise ValueError(
-                "Password must contain: " + ", ".join(violations)
-            )
+            raise ValueError("Password must contain: " + ", ".join(violations))
         return v
 
 

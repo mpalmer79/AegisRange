@@ -279,9 +279,12 @@ class TestPasswordHashing(unittest.TestCase):
 
     def test_all_default_users_authenticate(self) -> None:
         from app.services.auth_service import DEFAULT_PASSWORDS
+
         svc = AuthService()
         for username in ("admin", "soc_lead", "analyst1", "red_team1", "viewer1"):
-            success, token, _, _mfa = svc.authenticate(username, DEFAULT_PASSWORDS[username])
+            success, token, _, _mfa = svc.authenticate(
+                username, DEFAULT_PASSWORDS[username]
+            )
             self.assertTrue(success, f"{username} should authenticate with PBKDF2")
             self.assertIsNotNone(token)
 

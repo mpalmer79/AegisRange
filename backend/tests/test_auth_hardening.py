@@ -53,7 +53,9 @@ class TestAccountLockout(unittest.TestCase):
     def test_authenticate_blocked_when_locked(self) -> None:
         for _ in range(3):
             self.service.record_failed_attempt("admin")
-        success, token, _, _ = self.service.authenticate("admin", DEFAULT_PASSWORDS["admin"])
+        success, token, _, _ = self.service.authenticate(
+            "admin", DEFAULT_PASSWORDS["admin"]
+        )
         self.assertFalse(success)
         self.assertIsNone(token)
 
@@ -99,7 +101,9 @@ class TestAccountLockout(unittest.TestCase):
         self.service.record_failed_attempt("admin")
         self.service.record_failed_attempt("admin")
         # Successful auth should clear history
-        success, token, _, _ = self.service.authenticate("admin", DEFAULT_PASSWORDS["admin"])
+        success, token, _, _ = self.service.authenticate(
+            "admin", DEFAULT_PASSWORDS["admin"]
+        )
         self.assertTrue(success)
         self.assertIsNotNone(token)
         self.assertFalse(self.service.is_account_locked("admin"))

@@ -14,7 +14,9 @@ class TestLoginValidation(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_empty_username_rejected(self):
-        resp = self.client.post("/auth/login", json={"username": "", "password": "Valid_Pass_123!"})
+        resp = self.client.post(
+            "/auth/login", json={"username": "", "password": "Valid_Pass_123!"}
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_oversized_username_rejected(self):
