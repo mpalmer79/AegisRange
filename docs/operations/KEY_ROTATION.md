@@ -42,13 +42,13 @@ secret as `JWT_SECRET`. Update `JWT_KEY_ID` to a new identifier
 
 ```bash
 # Before rotation
-JWT_SECRET=<current-key>
-JWT_KEY_ID=k1
+JWT_SECRET=<current-key>  # gitleaks:allow
+JWT_KEY_ID=k1             # gitleaks:allow
 
 # After rotation
-JWT_SECRET=<new-key>
-JWT_SECRET_PREVIOUS=<current-key>
-JWT_KEY_ID=k2
+JWT_SECRET=<new-key>              # gitleaks:allow
+JWT_SECRET_PREVIOUS=<current-key> # gitleaks:allow
+JWT_KEY_ID=k2                     # gitleaks:allow
 ```
 
 ### 3. Deploy the application
@@ -72,9 +72,9 @@ Once the rotation window has passed (at least `TOKEN_EXPIRY_HOURS`
 after deployment), you can safely remove `JWT_SECRET_PREVIOUS`:
 
 ```bash
-JWT_SECRET=<new-key>
-JWT_SECRET_PREVIOUS=
-JWT_KEY_ID=k2
+JWT_SECRET=<new-key>    # gitleaks:allow
+JWT_SECRET_PREVIOUS=    # gitleaks:allow
+JWT_KEY_ID=k2           # gitleaks:allow
 ```
 
 Redeploy to apply.

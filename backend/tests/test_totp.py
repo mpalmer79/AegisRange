@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-import time
 import unittest
 
 from fastapi.testclient import TestClient
