@@ -28,7 +28,7 @@ const SCENARIO_CARDS = [
     title: 'Unauthorized Document Access',
     description:
       'Simulates an unauthorized user attempting to access restricted documents, triggering access control alerts.',
-    imageUrl: '/images/unauthorized-document-access.jpg',
+    imageUrl: '/images/unauthorized-document-access.png',
   },
   {
     id: 'scn-doc-004',
@@ -44,7 +44,7 @@ const SCENARIO_CARDS = [
     title: 'Service Account Abuse',
     description:
       'Simulates misuse of a service account for unauthorized operations outside its normal scope.',
-    imageUrl: '/images/service-account-abuse.jpg',
+    imageUrl: '/images/service-account-abuse.png',
   },
   {
     id: 'scn-corr-006',
