@@ -3,7 +3,6 @@
 import { useParams, notFound } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { runScenario, getScenarioErrorMessage, ApiError } from '@/lib/api';
-import { useAuth, canRunScenarios } from '@/lib/auth-context';
 import { SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
 import {
   DIFFICULTIES,
@@ -53,10 +52,6 @@ export default function ScenarioDetailPage() {
   const sc = scenario!;
   const ct = content!;
   const accent = ACCENTS[sc.id] ?? DEFAULT_ACCENT;
-
-  // ---------- auth ----------
-  const { isAuthenticated, role } = useAuth();
-  const hasAccess = isAuthenticated && canRunScenarios(role);
 
   // ---------- state ----------
   const [perspective, setPerspective] = useState<Perspective>('blue');
@@ -176,18 +171,6 @@ export default function ScenarioDetailPage() {
 
   // ---------- actions ----------
   const launch = async () => {
-    if (!isAuthenticated) {
-      setErrorMsg('Please sign in to run scenarios.');
-      setErrorDetail(null);
-      setStatus('error');
-      return;
-    }
-    if (!hasAccess) {
-      setErrorMsg('Your account does not have permission to run scenarios.');
-      setErrorDetail(null);
-      setStatus('error');
-      return;
-    }
     setStatus('running');
     setErrorMsg(null);
     setErrorDetail(null);
@@ -315,9 +298,6 @@ export default function ScenarioDetailPage() {
             streakReached={streakReached}
             rankUp={rankUp}
             newAchievements={newAchievements}
-            isAuthenticated={isAuthenticated}
-            hasAccess={hasAccess}
-            role={role}
             onLaunch={launch}
             onReset={reset}
           />

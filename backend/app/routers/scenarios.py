@@ -4,23 +4,38 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
-from app.dependencies import require_role, scenario_engine
+from app.dependencies import scenario_engine
 from app.schemas import ScenarioSummaryResponse
+from app.services.auth_service import _auth_service, _extract_bearer_token
 
 logger = logging.getLogger("aegisrange")
 router = APIRouter(
     prefix="/scenarios",
     tags=["scenarios"],
-    dependencies=[Depends(require_role("red_team"))],
-    responses={401: {"description": "Missing or invalid token"}},
 )
 
 
-def _run_scenario(request: Request, scenario_id: str, run_fn):
+def _resolve_operator(request: Request) -> str | None:
+    """Attribute the run to an authenticated caller when a valid token is
+    present, otherwise allow anonymous execution."""
     platform_user = getattr(request.state, "platform_user", None)
-    operated_by = platform_user.sub if platform_user else None
+    if platform_user is not None:
+        return platform_user.sub
+    token, channel = _extract_bearer_token(request)
+    if token is None:
+        return None
+    payload = _auth_service.verify_token(token)
+    if payload is None:
+        return None
+    request.state.platform_user = payload
+    request.state.auth_channel = channel
+    return payload.sub
+
+
+def _run_scenario(request: Request, scenario_id: str, run_fn):
+    operated_by = _resolve_operator(request)
     logger.info(
         "Scenario execution started",
         extra={
