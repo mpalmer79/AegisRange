@@ -28,7 +28,7 @@ const SCENARIO_CARDS = [
     title: 'Unauthorized Document Access',
     description:
       'Simulates an unauthorized user attempting to access restricted documents, triggering access control alerts.',
-    imageUrl: '/images/unauthorized-document-access.jpg',
+    imageUrl: '/images/unauthorized-document-access.png',
   },
   {
     id: 'scn-doc-004',
