@@ -2,7 +2,8 @@
 
 import { useParams, notFound } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { runScenario } from '@/lib/api';
+import { runScenario, getScenarioErrorMessage, ApiError } from '@/lib/api';
+import { useAuth, canRunScenarios } from '@/lib/auth-context';
 import { SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
 import {
   DIFFICULTIES,
@@ -53,12 +54,17 @@ export default function ScenarioDetailPage() {
   const ct = content!;
   const accent = ACCENTS[sc.id] ?? DEFAULT_ACCENT;
 
+  // ---------- auth ----------
+  const { isAuthenticated, role } = useAuth();
+  const hasAccess = isAuthenticated && canRunScenarios(role);
+
   // ---------- state ----------
   const [perspective, setPerspective] = useState<Perspective>('blue');
   const [difficultyId, setDifficultyId] = useState<DifficultyId>('analyst');
   const [status, setStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle');
   const [result, setResult] = useState<ScenarioResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [launchedAt, setLaunchedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
 
@@ -170,8 +176,21 @@ export default function ScenarioDetailPage() {
 
   // ---------- actions ----------
   const launch = async () => {
+    if (!isAuthenticated) {
+      setErrorMsg('Please sign in to run scenarios.');
+      setErrorDetail(null);
+      setStatus('error');
+      return;
+    }
+    if (!hasAccess) {
+      setErrorMsg('Your account does not have permission to run scenarios.');
+      setErrorDetail(null);
+      setStatus('error');
+      return;
+    }
     setStatus('running');
     setErrorMsg(null);
+    setErrorDetail(null);
     setResult(null);
     setElapsedSec(0);
     setNewAchievements([]);
@@ -187,7 +206,8 @@ export default function ScenarioDetailPage() {
       setElapsedSec(Math.floor((Date.now() - started) / 1000));
       setStatus('complete');
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Unknown error');
+      setErrorMsg(getScenarioErrorMessage(err));
+      setErrorDetail(err instanceof ApiError ? err.detail ?? null : null);
       setStatus('error');
     }
   };
@@ -196,6 +216,7 @@ export default function ScenarioDetailPage() {
     setStatus('idle');
     setResult(null);
     setErrorMsg(null);
+    setErrorDetail(null);
     setLaunchedAt(null);
     setElapsedSec(0);
     setNewAchievements([]);
@@ -278,6 +299,7 @@ export default function ScenarioDetailPage() {
             status={status}
             result={result}
             errorMsg={errorMsg}
+            errorDetail={errorDetail}
             accent={accent}
             allComplete={allComplete}
             perspectiveRole={perspectiveMeta.role}
@@ -293,6 +315,9 @@ export default function ScenarioDetailPage() {
             streakReached={streakReached}
             rankUp={rankUp}
             newAchievements={newAchievements}
+            isAuthenticated={isAuthenticated}
+            hasAccess={hasAccess}
+            role={role}
             onLaunch={launch}
             onReset={reset}
           />

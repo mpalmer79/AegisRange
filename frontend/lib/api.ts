@@ -57,13 +57,17 @@ import {
 // ------------------------------------------------------------
 // Typed API error — carries the HTTP status code so callers
 // can distinguish 401 / 403 / 5xx without parsing strings.
+// The optional `detail` is pulled from a JSON `{ "detail": "..." }`
+// body when the backend supplies one, so UI surfaces can render
+// the real reason instead of a bare status line.
 // ------------------------------------------------------------
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     statusText: string,
+    public readonly detail?: string,
   ) {
-    super(`API ${status}: ${statusText}`);
+    super(`API ${status}: ${detail ?? statusText}`);
     this.name = 'ApiError';
   }
 }
@@ -174,6 +178,23 @@ function getCsrfToken(): string | undefined {
   return match ? decodeURIComponent(match[1]) : undefined;
 }
 
+async function extractErrorDetail(res: Response): Promise<string | undefined> {
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) return undefined;
+  try {
+    const body = (await res.json()) as unknown;
+    if (body && typeof body === 'object' && 'detail' in body) {
+      const detail = (body as { detail: unknown }).detail;
+      if (typeof detail === 'string' && detail.trim().length > 0) {
+        return detail;
+      }
+    }
+  } catch {
+    // Body was advertised as JSON but didn't parse — ignore.
+  }
+  return undefined;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -198,7 +219,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       headers,
     });
     if (!res.ok) {
-      throw new ApiError(res.status, res.statusText);
+      throw new ApiError(res.status, res.statusText, await extractErrorDetail(res));
     }
     return (await res.json()) as T;
   } finally {

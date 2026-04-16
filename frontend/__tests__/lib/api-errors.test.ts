@@ -7,6 +7,18 @@ describe('ApiError', () => {
     expect(err.message).toBe('API 401: Unauthorized');
     expect(err.name).toBe('ApiError');
     expect(err).toBeInstanceOf(Error);
+    expect(err.detail).toBeUndefined();
+  });
+
+  it('prefers the backend detail in the message when provided', () => {
+    const err = new ApiError(401, 'Unauthorized', 'Missing authentication token');
+    expect(err.detail).toBe('Missing authentication token');
+    expect(err.message).toBe('API 401: Missing authentication token');
+  });
+
+  it('falls back to statusText when detail is absent', () => {
+    const err = new ApiError(500, 'Internal Server Error');
+    expect(err.message).toBe('API 500: Internal Server Error');
   });
 });
 
