@@ -36,7 +36,7 @@ const SCENARIO_CARDS = [
     title: 'Bulk Document Exfiltration',
     description:
       'Simulates rapid downloading of multiple sensitive documents, indicating potential data exfiltration.',
-    imageUrl: '/images/bulk-document-exfiltration.jpg',
+    imageUrl: '/images/bulk-document-exfiltration.png',
   },
   {
     id: 'scn-svc-005',
