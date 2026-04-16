@@ -394,4 +394,9 @@ export const SCENARIO_DEFINITIONS = [
     name: 'Correlated Multi-Stage Attack',
     description: 'Simulates a sophisticated multi-stage attack combining authentication, session, and document access vectors.',
   },
+  {
+    id: 'scn-pol-007',
+    name: 'Policy Tampering',
+    description: 'Simulates an insider weakening security policy (firewall egress, retention, detection rules) to enable a longer-running campaign.',
+  },
 ];

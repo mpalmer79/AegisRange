@@ -3207,10 +3207,8 @@ export const MOCK_RULE_EFFECTIVENESS: RuleEffectiveness[] = [
 // Scenario history
 //
 // One historical run per correlation chain. Each entry is a
-// past execution of a scenario (or an invented policy-change
-// exercise for POLICY_CHANGE, which has no matching entry in
-// SCENARIO_DEFINITIONS). The counts below are derived directly
-// from MOCK_EVENTS and MOCK_ALERTS so a recruiter comparing
+// past execution of a scenario. The counts below are derived
+// directly from MOCK_EVENTS and MOCK_ALERTS so a recruiter comparing
 // tabs sees consistent numbers:
 //
 //   chain          events  alerts  incident   scenario_id     status

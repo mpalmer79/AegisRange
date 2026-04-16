@@ -311,6 +311,41 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       ],
     },
   },
+
+  'scn-pol-007': {
+    tagline: 'Rewrite the rules before anyone reads them.',
+    backstory:
+      'A platform admin starts relaxing egress firewall rules and detection thresholds at 3 a.m. The policy diff reads like a cleanup, but the timing lines up with an open incident next door — someone is quietly widening the blast radius before the next move.',
+    attacker: 'Insider with platform-admin rights',
+    target: 'Firewall egress, retention, and detection policy',
+    mitreTechniques: [
+      { id: 'T1562', name: 'Impair Defenses' },
+      { id: 'T1554', name: 'Compromise Host Software Binary' },
+    ],
+    stages: [
+      { id: 'access', label: 'Privileged Access', killChainPhase: 'initial-access', description: 'Authenticate with platform-admin scope.' },
+      { id: 'modify', label: 'Policy Modification', killChainPhase: 'defense-evasion', description: 'Loosen egress, retention, or detection rules.' },
+      { id: 'impact', label: 'Impact', killChainPhase: 'impact', description: 'Leave the environment weaker for the next stage.' },
+    ],
+    red: {
+      role: 'Policy Saboteur',
+      summary: 'You are already inside with admin rights. Quietly weaken the guardrails without tripping the change-control alarm.',
+      objectives: [
+        { id: 'red-1', title: 'Change a protected policy', description: 'Drive at least one policy-change event.', xp: 20, check: redFoothold },
+        { id: 'red-2', title: 'Sustain the edit spree', description: 'Drive three or more policy-change events.', xp: 30, check: redVolume(3) },
+        { id: 'red-3', title: 'Force a containment action', description: 'Trip step-up, session revocation, or policy-change restriction.', xp: 50, check: redTrippedDefense },
+      ],
+    },
+    blue: {
+      role: 'Platform Security Engineer',
+      summary: 'You own change control for the platform. Catch the unauthorized edit and reverse it before it enables the next intrusion.',
+      objectives: [
+        { id: 'blue-1', title: 'Detect the policy edit', description: 'Fire a policy-change or impair-defenses alert.', xp: 25, check: blueDetect },
+        { id: 'blue-2', title: 'Open change-control incident', description: 'Promote the alert into a tracked incident.', xp: 35, check: blueCorrelate },
+        { id: 'blue-3', title: 'Restrict the admin', description: 'Restrict further policy changes or revoke the session.', xp: 50, check: blueRespond },
+      ],
+    },
+  },
 };
 
 export function getScenarioContent(id: string): ScenarioContent | undefined {
