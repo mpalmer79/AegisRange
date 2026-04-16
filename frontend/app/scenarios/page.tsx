@@ -2,34 +2,15 @@
 
 import { useState } from 'react';
 import { runScenario, getScenarioErrorMessage } from '@/lib/api';
-import { useAuth, canRunScenarios } from '@/lib/auth-context';
 import { SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
 import Link from 'next/link';
 
 export default function ScenariosPage() {
-  const { isAuthenticated, role } = useAuth();
-  const hasAccess = isAuthenticated && canRunScenarios(role);
-
   const [results, setResults] = useState<Record<string, ScenarioResult>>({});
   const [running, setRunning] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleRun = async (scenarioId: string) => {
-    if (!isAuthenticated) {
-      setErrors((prev) => ({
-        ...prev,
-        [scenarioId]: 'Please sign in to run scenarios.',
-      }));
-      return;
-    }
-    if (!hasAccess) {
-      setErrors((prev) => ({
-        ...prev,
-        [scenarioId]: 'Your account does not have permission to run scenarios.',
-      }));
-      return;
-    }
-
     setRunning(scenarioId);
     setErrors((prev) => {
       const next = { ...prev };
@@ -57,27 +38,6 @@ export default function ScenariosPage() {
           Run cybersecurity attack simulations and observe the detection pipeline
         </p>
       </div>
-
-      {/* Auth status banner */}
-      {!isAuthenticated && (
-        <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-          <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-          </svg>
-          <span>
-            <Link href="/login?redirect=%2Fscenarios" className="font-medium underline hover:text-amber-900 dark:hover:text-amber-200">Sign in</Link>{' '}
-            to run scenarios against the live detection pipeline.
-          </span>
-        </div>
-      )}
-      {isAuthenticated && !hasAccess && (
-        <div className="mb-6 flex items-center gap-3 rounded-lg border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50 px-4 py-3 text-sm text-slate-600 dark:text-gray-400">
-          <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-          </svg>
-          <span>Your role (<strong>{role}</strong>) does not have permission to execute scenarios.</span>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {SCENARIO_DEFINITIONS.map((scenario) => {
@@ -114,21 +74,12 @@ export default function ScenariosPage() {
                   </Link>
                   <button
                     onClick={() => handleRun(scenario.id)}
-                    disabled={running !== null || !hasAccess}
-                    title={
-                      !isAuthenticated
-                        ? 'Sign in to run scenarios'
-                        : !hasAccess
-                          ? 'Insufficient permissions'
-                          : undefined
-                    }
+                    disabled={running !== null}
                     aria-label={`Run ${scenario.name} in place`}
                     className={`shrink-0 px-4 py-2 rounded text-sm font-mono font-medium transition-all ${
                       isRunning
                         ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 animate-pulse cursor-wait'
-                        : hasAccess
-                          ? 'bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-40 disabled:cursor-not-allowed'
-                          : 'bg-slate-200 dark:bg-gray-800 text-slate-400 dark:text-gray-600 cursor-not-allowed'
+                        : 'bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-40 disabled:cursor-not-allowed'
                     }`}
                   >
                     {isRunning ? 'RUNNING...' : 'RUN'}

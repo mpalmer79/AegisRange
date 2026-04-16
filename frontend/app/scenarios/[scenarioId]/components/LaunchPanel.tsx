@@ -29,9 +29,6 @@ interface LaunchPanelProps {
   streakReached: number | null;
   rankUp: Rank | null;
   newAchievements: Achievement[];
-  isAuthenticated: boolean;
-  hasAccess: boolean;
-  role: string | null;
   onLaunch: () => void;
   onReset: () => void;
 }
@@ -56,9 +53,6 @@ export default function LaunchPanel({
   streakReached,
   rankUp,
   newAchievements,
-  isAuthenticated,
-  hasAccess,
-  role,
   onLaunch,
   onReset,
 }: LaunchPanelProps) {
@@ -72,44 +66,9 @@ export default function LaunchPanel({
           <p className="text-sm text-slate-600 dark:text-gray-400 mb-4">
             Launch the scenario to execute it on the backend and auto-evaluate objectives.
           </p>
-          {!isAuthenticated && (
-            <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-              <svg className="h-4 w-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-              </svg>
-              <span>
-                <Link
-                  href={`/login?redirect=${encodeURIComponent(
-                    typeof window !== 'undefined' ? window.location.pathname : '/scenarios'
-                  )}`}
-                  className="font-medium underline hover:text-amber-900 dark:hover:text-amber-200"
-                >
-                  Sign in
-                </Link>{' '}
-                to launch this mission against the live backend.
-              </span>
-            </div>
-          )}
-          {isAuthenticated && !hasAccess && (
-            <div className="mb-3 rounded-lg border border-slate-300 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/60 px-3 py-2 text-xs text-slate-700 dark:text-gray-300">
-              Your role ({role ?? 'unknown'}) does not have permission to execute scenarios.
-            </div>
-          )}
           <button
             onClick={onLaunch}
-            disabled={!hasAccess}
-            title={
-              !isAuthenticated
-                ? 'Sign in to launch this mission'
-                : !hasAccess
-                  ? 'Insufficient permissions'
-                  : undefined
-            }
-            className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm tracking-wider uppercase text-white transition-all ${
-              hasAccess
-                ? `bg-gradient-to-r ${accent.title} shadow-lg ${accent.glow} hover:brightness-110 ar-pulse-ring`
-                : 'bg-slate-300 dark:bg-gray-800 text-slate-500 dark:text-gray-500 cursor-not-allowed'
-            }`}
+            className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm tracking-wider uppercase text-white transition-all bg-gradient-to-r ${accent.title} shadow-lg ${accent.glow} hover:brightness-110 ar-pulse-ring`}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8 5v14l11-7z" />
