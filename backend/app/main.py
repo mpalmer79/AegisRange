@@ -147,6 +147,7 @@ async def request_size_limit_middleware(request: Request, call_next):
 
 _CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 _CSRF_EXEMPT_PATHS = {"/auth/login", "/auth/logout", "/health"}
+_CSRF_EXEMPT_PREFIXES = ("/scenarios/",)
 
 
 @app.middleware("http")
@@ -156,6 +157,9 @@ async def csrf_middleware(request: Request, call_next):
         return await call_next(request)
 
     if request.url.path in _CSRF_EXEMPT_PATHS:
+        return await call_next(request)
+
+    if request.url.path.startswith(_CSRF_EXEMPT_PREFIXES):
         return await call_next(request)
 
     # Requests using Bearer header are not vulnerable to CSRF
