@@ -16,7 +16,8 @@ import AnalystNotes from './components/AnalystNotes';
 export default function IncidentDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const correlationId = typeof params?.id === 'string' ? params.id : null;
+  const correlationId =
+    typeof params?.correlationId === 'string' ? params.correlationId : null;
 
   const {
     incident,
