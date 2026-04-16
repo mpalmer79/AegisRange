@@ -40,9 +40,11 @@ class TestUnauthenticatedAccess(unittest.TestCase):
         resp = self.client.get("/incidents")
         self.assertEqual(resp.status_code, 401)
 
-    def test_scenarios_requires_auth(self) -> None:
+    def test_scenarios_allow_anonymous(self) -> None:
+        STORE.reset()
         resp = self.client.post("/scenarios/scn-auth-001")
-        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.json().get("operated_by"))
 
     def test_admin_reset_requires_auth(self) -> None:
         resp = self.client.post("/admin/reset")
@@ -93,12 +95,14 @@ class TestPublicEndpoints(unittest.TestCase):
 class TestRoleLevelEnforcement(unittest.TestCase):
     """Verify that role levels are enforced correctly."""
 
-    def test_viewer_cannot_run_scenarios(self) -> None:
+    def test_viewer_can_run_scenarios(self) -> None:
+        STORE.reset()
         client = TestClient(app)
         token = get_viewer_token()
         client.headers["Authorization"] = f"Bearer {token}"
         resp = client.post("/scenarios/scn-auth-001")
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json().get("operated_by"), "viewer1")
 
     def test_viewer_cannot_access_analytics(self) -> None:
         client = TestClient(app)
