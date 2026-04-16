@@ -20,7 +20,7 @@ const SCENARIO_CARDS = [
     title: 'Session Hijacking',
     description:
       'Simulates session token theft and reuse from a different IP address, triggering session anomaly detection.',
-    imageUrl: '/images/session-hijacking.jpg',
+    imageUrl: '/images/session-hijacking.png',
   },
   {
     id: 'scn-doc-003',
