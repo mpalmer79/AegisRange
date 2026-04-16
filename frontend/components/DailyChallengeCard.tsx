@@ -28,6 +28,15 @@ const PERSPECTIVE_STYLE = {
   },
 } as const;
 
+const SCENARIO_IMAGES: Record<string, string> = {
+  'scn-auth-001': '/images/brute-force.png',
+  'scn-session-002': '/images/session-hijacking.png',
+  'scn-doc-003': '/images/unauthorized-document-access.png',
+  'scn-doc-004': '/images/bulk-document-exfiltration.png',
+  'scn-svc-005': '/images/service-account-abuse.png',
+  'scn-corr-006': '/images/correlated-attack.png',
+};
+
 const DIFFICULTY_LABEL: Record<string, string> = {
   recruit: 'Recruit',
   analyst: 'Analyst',
@@ -61,6 +70,7 @@ export default function DailyChallengeCard() {
 
   const perspectiveStyle = PERSPECTIVE_STYLE[daily.perspective];
   const difficultyLabel = DIFFICULTY_LABEL[daily.difficulty] ?? daily.difficulty;
+  const bgImage = SCENARIO_IMAGES[daily.scenarioId];
 
   return (
     <Link
@@ -68,6 +78,12 @@ export default function DailyChallengeCard() {
       aria-label={`Open today's daily challenge: ${daily.scenarioName}`}
       className="group block w-full sm:w-[20rem] rounded-2xl border-2 border-fuchsia-300 dark:border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-purple-50 dark:from-fuchsia-500/10 dark:via-violet-500/10 dark:to-purple-500/10 p-4 shadow-sm dark:shadow-none hover:shadow-lg hover:shadow-fuchsia-400/20 dark:hover:shadow-fuchsia-500/10 hover:border-fuchsia-500 dark:hover:border-fuchsia-400 transition-all ar-card-hover relative overflow-hidden"
     >
+      {bgImage && (
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-20 dark:opacity-15"
+          style={{ backgroundImage: `url(${bgImage})` }}
+        />
+      )}
       <div aria-hidden className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-fuchsia-200/50 dark:bg-fuchsia-500/10 blur-2xl ar-drift" />
       <div className="relative">
         <div className="flex items-center justify-between gap-2 mb-2">
