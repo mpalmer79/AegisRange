@@ -44,7 +44,7 @@ const SCENARIO_CARDS = [
     title: 'Service Account Abuse',
     description:
       'Simulates misuse of a service account for unauthorized operations outside its normal scope.',
-    imageUrl: '/images/service-account-abuse.jpg',
+    imageUrl: '/images/service-account-abuse.png',
   },
   {
     id: 'scn-corr-006',
