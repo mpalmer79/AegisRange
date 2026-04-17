@@ -147,6 +147,24 @@ const REQUEST_TIMEOUT_MS = 5000;
 
 let backendAvailablePromise: Promise<boolean> | null = null;
 
+/**
+ * @internal — test-only escape hatch.
+ *
+ * Tests that exercise API functions (``startMission``, ``runScenario``,
+ * etc.) need ``liveOrThrow`` to proceed past the health probe without
+ * actually hitting ``/health``. Calling this with ``true`` preseeds the
+ * cached probe promise so subsequent calls skip the real fetch; calling
+ * with ``null`` clears the cache so the next probe will fire for real.
+ *
+ * Not intended for production code. Keep in this module rather than a
+ * separate test helper because it needs direct access to module state.
+ */
+export function __setBackendAvailableForTests(
+  available: boolean | null,
+): void {
+  backendAvailablePromise = available === null ? null : Promise.resolve(available);
+}
+
 function probeBackend(): Promise<boolean> {
   if (backendAvailablePromise) return backendAvailablePromise;
   backendAvailablePromise = (async () => {

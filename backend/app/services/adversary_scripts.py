@@ -258,7 +258,9 @@ def _handle_document_read(params: dict[str, Any], ctx: ScriptContext) -> None:
         doc = ctx.documents.documents[doc_id]
 
     logical_id = (
-        f"{doc.document_id}-{label_suffix}" if label_suffix is not None else doc.document_id
+        f"{doc.document_id}-{label_suffix}"
+        if label_suffix is not None
+        else doc.document_id
     )
     session_id = params.get("session_id") or (ctx.state or {}).get("session_id")
     ctx.pipeline.process(

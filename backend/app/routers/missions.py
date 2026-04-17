@@ -141,9 +141,7 @@ def get_mission_incident(run_id: str) -> dict:
     if run is None:
         raise HTTPException(status_code=404, detail="Mission not found")
     if incident is None:
-        raise HTTPException(
-            status_code=404, detail="No incident yet for this mission"
-        )
+        raise HTTPException(status_code=404, detail="No incident yet for this mission")
     notes = STORE.get_incident_notes_for(incident.correlation_id)
     return incident_to_dict(incident, notes=notes)
 
@@ -153,9 +151,7 @@ def get_mission_incident(run_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def _sse_event_stream(
-    run_id: str, hub: MissionStreamHub
-) -> AsyncIterator[bytes]:
+async def _sse_event_stream(run_id: str, hub: MissionStreamHub) -> AsyncIterator[bytes]:
     """Yield SSE-formatted frames until the mission ends."""
     queue = await hub.subscribe(run_id)
     try:
@@ -206,12 +202,8 @@ async def stream_mission(run_id: str) -> StreamingResponse:
     "/{run_id}/commands",
     response_model=SubmitCommandResponse,
 )
-async def submit_command(
-    run_id: str, payload: SubmitCommandRequest
-) -> dict:
-    run, response = await mission_service.submit_command(
-        run_id, payload.command
-    )
+async def submit_command(run_id: str, payload: SubmitCommandRequest) -> dict:
+    run, response = await mission_service.submit_command(run_id, payload.command)
     if run is None:
         raise HTTPException(status_code=404, detail="Mission not found")
     return {

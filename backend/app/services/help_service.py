@@ -97,9 +97,7 @@ class HelpService:
         lines.append("Press F1 (or the Help button) for the full Ops Manual.")
         return lines
 
-    def verb_help(
-        self, verb_token: str, perspective: Perspective
-    ) -> list[str] | None:
+    def verb_help(self, verb_token: str, perspective: Perspective) -> list[str] | None:
         # Accept both "alerts" (verb only) and "alerts list" (with sub).
         parts = verb_token.strip().split()
         if not parts:
@@ -109,9 +107,7 @@ class HelpService:
         spec: VerbSpec | None = find_verb(name, sub, perspective)
         if spec is None and sub is None:
             # Show all variants of this verb.
-            matches = [
-                v for v in verbs_for(perspective) if v.name == name
-            ]
+            matches = [v for v in verbs_for(perspective) if v.name == name]
             if not matches:
                 return None
             lines: list[str] = []
@@ -163,14 +159,8 @@ class HelpService:
             lines.append("Flags:")
             for f in spec.flags:
                 required = " (required)" if f.required else ""
-                ch = (
-                    f" choices: {', '.join(f.choices)}"
-                    if f.choices
-                    else ""
-                )
-                lines.append(
-                    f"  --{f.name:<12} {f.type}{required}{ch}"
-                )
+                ch = f" choices: {', '.join(f.choices)}" if f.choices else ""
+                lines.append(f"  --{f.name:<12} {f.type}{required}{ch}")
                 if f.description:
                     lines.append(f"      {f.description}")
         return lines

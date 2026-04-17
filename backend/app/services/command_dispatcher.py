@@ -109,14 +109,10 @@ def _handler_status(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
     return CommandResult.ok(*lines)
 
 
-def _handler_alerts_list(
-    cmd: ParsedCommand, ctx: DispatchContext
-) -> CommandResult:
+def _handler_alerts_list(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
     corr = ctx.run.correlation_id
     severity = cmd.flags.get("severity")
-    alerts = [
-        a for a in ctx.store.get_alerts() if a.correlation_id == corr
-    ]
+    alerts = [a for a in ctx.store.get_alerts() if a.correlation_id == corr]
     if severity:
         alerts = [a for a in alerts if a.severity.value == severity]
     if not alerts:
@@ -124,15 +120,12 @@ def _handler_alerts_list(
     lines = [f"{len(alerts)} alert(s):"]
     for a in alerts:
         lines.append(
-            f"  {a.alert_id}  {a.rule_id:<14} {a.severity.value:<8} "
-            f"actor={a.actor_id}"
+            f"  {a.alert_id}  {a.rule_id:<14} {a.severity.value:<8} actor={a.actor_id}"
         )
     return CommandResult.ok(*lines)
 
 
-def _handler_alerts_show(
-    cmd: ParsedCommand, ctx: DispatchContext
-) -> CommandResult:
+def _handler_alerts_show(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
     target_id = cmd.positional["alert_id"]
     corr = ctx.run.correlation_id
     alert = next(
@@ -160,16 +153,14 @@ def _handler_alerts_show(
     return CommandResult.ok(*lines)
 
 
-def _handler_events_tail(
-    cmd: ParsedCommand, ctx: DispatchContext
-) -> CommandResult:
+def _handler_events_tail(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
     corr = ctx.run.correlation_id
     last = cmd.flags.get("last", 10) or 10
     user = cmd.flags.get("user")
     events = [e for e in ctx.store.get_events() if e.correlation_id == corr]
     if user:
         events = [e for e in events if e.actor_id == user]
-    events = events[-int(last):]
+    events = events[-int(last) :]
     if not events:
         return CommandResult.ok("No matching events yet.")
     lines = [f"{len(events)} event(s):"]
@@ -181,9 +172,7 @@ def _handler_events_tail(
     return CommandResult.ok(*lines)
 
 
-def _handler_correlate(
-    cmd: ParsedCommand, ctx: DispatchContext
-) -> CommandResult:
+def _handler_correlate(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
     corr = ctx.run.correlation_id
     incident = ctx.store.get_incident(corr)
     if incident is None:
@@ -203,9 +192,7 @@ def _handler_correlate(
     )
 
 
-def _handler_contain_session(
-    cmd: ParsedCommand, ctx: DispatchContext
-) -> CommandResult:
+def _handler_contain_session(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
     user = cmd.flags["user"]
     action = cmd.flags["action"]
     # The detection pipeline's auto-response may have already revoked
@@ -235,9 +222,7 @@ def _handler_contain_session(
             ]
     else:  # stepup
         ctx.store.require_step_up(user)
-        lines = [
-            f"Step-up authentication now required for {user} on next request."
-        ]
+        lines = [f"Step-up authentication now required for {user} on next request."]
     return CommandResult.ok(
         *lines,
         effects={
