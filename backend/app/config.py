@@ -45,6 +45,13 @@ class Settings:
         os.getenv("MFA_REQUIRED_ROLES", "admin,soc_manager").split(",")
     )
 
+    # Horizontal scaling — opt-in (see docs/operations/SCALING.md Phase 1).
+    # When set, InMemoryStore backs JTI revocations and TOTP state with
+    # Redis instead of process-local dicts, enabling multi-worker
+    # deployments to share ephemeral auth state. Requires the `redis`
+    # package to be installed.
+    REDIS_URL: str = os.getenv("REDIS_URL", "")
+
     @property
     def auth_cookie_secure(self) -> bool:
         """Only set Secure flag in production (requires HTTPS)."""

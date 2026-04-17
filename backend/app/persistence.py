@@ -793,14 +793,16 @@ class PersistenceLayer:
             self.store.incident_notes = staged_incident_notes
 
             self.store.revoked_sessions = staged_sets.get("revoked_sessions", set())
-            # revoked_jtis is now a dict[str, float]; loaded JTIs get current
-            # monotonic timestamp (conservative — they won't be pruned too early)
+            # revoked_jtis + TOTP state flow through the auth cache so the
+            # abstraction stays intact when Redis is the backend. Loaded
+            # JTIs get the current monotonic timestamp — conservative,
+            # they won't be pruned too early.
             import time as _time
 
             _now_mono = _time.monotonic()
-            self.store.revoked_jtis = {
-                jti: _now_mono for jti in staged_sets.get("revoked_jtis", set())
-            }
+            self.store.auth_cache.load_revoked_jtis(
+                {jti: _now_mono for jti in staged_sets.get("revoked_jtis", set())}
+            )
             self.store.step_up_required = staged_sets.get("step_up_required", set())
             self.store.download_restricted_actors = staged_sets.get(
                 "download_restricted_actors", set()
@@ -812,10 +814,10 @@ class PersistenceLayer:
             self.store.policy_change_restricted_actors = staged_sets.get(
                 "policy_change_restricted_actors", set()
             )
-            self.store.totp_enabled = staged_sets.get("totp_enabled", set())
-
-            # Restore TOTP secrets from dicts
-            self.store.totp_secrets = staged_dicts.get("totp_secrets", {})
+            self.store.auth_cache.load_totp_state(
+                staged_dicts.get("totp_secrets", {}),
+                staged_sets.get("totp_enabled", set()),
+            )
 
             # Reset ephemeral state explicitly.
             self.store.actor_sessions = {}

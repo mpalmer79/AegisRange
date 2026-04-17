@@ -5,6 +5,11 @@ All notable changes to AegisRange are documented in this file.
 ## [0.10.0]
 
 ### Added
+- **AuthCache abstraction** (`app/services/auth_cache.py`) — ships SCALING.md Phase 1. Defines the `AuthCache` protocol for ephemeral auth state (JTI revocations + TOTP secrets/enrollment) and two implementations: `InMemoryAuthCache` (default; shares references with the store's legacy dicts so existing direct-attribute reads stay consistent) and `RedisAuthCache` (opt-in via `REDIS_URL`; JTI revocations use native Redis TTL so pruning is automatic). A `build_auth_cache()` factory chooses the backend and falls back to in-memory if Redis is unreachable.
+- `InMemoryStore` delegates `revoke_jti`, `is_jti_revoked`, `prune_expired_revocations` through the configured auth cache, and exposes the cache via `STORE.auth_cache`.
+- `PersistenceLayer.load()` routes JTI + TOTP restore through `auth_cache.load_*` so the abstraction remains coherent across SQLite round-trips.
+- `REDIS_URL` config key (reads from env; empty string means "use in-memory"). Documented in `DEPLOY.md`.
+- `tests/test_auth_cache.py` — 18 contract tests against the in-memory cache plus an opt-in Redis suite that activates when `AEGISRANGE_TEST_REDIS_URL` is set.
 - **Three new detection rules** in `app/services/detection/rules.py`:
   - **DET-GEO-011 — Impossible Travel Between Authentications** (HIGH / HIGH, critical): two successful authentications from distinct `geo_region` payload values within 60 minutes. MITRE T1078 / TA0001.
   - **DET-EXFIL-012 — Large-Volume Data Exfiltration** (CRITICAL / HIGH, critical): cumulative `bytes_downloaded` by a single actor exceeds 500 MB within 10 minutes. MITRE T1048, T1567 / TA0010.

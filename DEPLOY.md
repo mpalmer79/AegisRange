@@ -27,6 +27,7 @@ AegisRange consists of two services:
 | `LOG_LEVEL`          | No       | `INFO`                 | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `LOG_FORMAT`         | No       | `json`                 | `json` or `text` |
 | `DEFAULT_PASSWORD_<USERNAME>` | No | *source default*       | Override the seeded password for a simulation user. Example: `DEFAULT_PASSWORD_ADMIN=Prod_Override_Pass_2026!` replaces the admin account's baked-in password. When `APP_ENV=production` and any default is still in use, the backend emits a WARNING at startup with the list of usernames still on source defaults. Usernames: `admin`, `soc_lead`, `analyst1`, `red_team1`, `viewer1`. |
+| `REDIS_URL`          | No       | *(empty)*              | **0.10.0 scaling opt-in.** When set (e.g. `redis://redis:6379/0`), JWT revocations and TOTP state move from process-local dicts into Redis, enabling multi-worker deployments to share ephemeral auth state. Falls back to the in-memory cache silently if the `redis` package is missing or the connection fails. See `docs/operations/SCALING.md` for the full multi-worker roadmap. |
 
 ### Frontend
 
