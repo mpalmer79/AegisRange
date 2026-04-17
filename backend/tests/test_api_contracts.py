@@ -203,6 +203,12 @@ class TestScenarioResultContract(unittest.TestCase):
         "quarantined_artifacts",
         "policy_change_restricted_actors",
         "operated_by",
+        # Phase 1 added run_id so clients can follow up with per-run
+        # reads (e.g. GET /missions/{run_id}/incident).
+        "run_id",
+        # Phase 3 added command-history state exposed on the summary.
+        "commands_issued",
+        "xp_delta",
     }
 
     def test_scenario_result_fields(self) -> None:
