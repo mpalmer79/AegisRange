@@ -19,34 +19,57 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+// ---------------------------------------------------------------------------
+// Social preview metadata
+//
+// LinkedIn, Slack, and Twitter/X pull a thumbnail from the `og:image` tag
+// (with `twitter:image` as fallback). All three require:
+//   - an absolute image URL (relative paths fail silently)
+//   - the image reachable anonymously (no auth)
+//   - the image under ~5 MB
+//
+// Next.js resolves relative image paths in the metadata below against
+// `metadataBase`, so we keep the image reference relative here and let
+// the build pick the right absolute host. Override the origin per
+// environment via NEXT_PUBLIC_SITE_URL (e.g. your Railway custom domain).
+//
+// After changing any OG tag, re-scrape via LinkedIn Post Inspector
+// (https://www.linkedin.com/post-inspector/) — LinkedIn caches results
+// for ~7 days and will keep showing the old preview otherwise.
+// ---------------------------------------------------------------------------
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://aegis-range.up.railway.app";
+const SITE_TITLE = "AegisRange - Cybersecurity Simulation Platform";
+const SITE_DESCRIPTION =
+  "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.";
+const OG_IMAGE_PATH = "/images/aegisrange-og.jpg";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://aegis-range.up.railway.app"),
-  title: "AegisRange - Cybersecurity Simulation Platform",
-  description:
-    "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.",
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   openGraph: {
-    title: "AegisRange - Cybersecurity Simulation Platform",
-    description:
-      "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.",
-    url: "https://aegis-range.up.railway.app",
+    type: "website",
+    url: SITE_URL,
     siteName: "AegisRange",
+    locale: "en_US",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     images: [
       {
-        url: "/images/aegisrange-og.jpg",
+        url: OG_IMAGE_PATH,
         width: 1200,
         height: 630,
         alt: "AegisRange cybersecurity simulation platform preview",
+        type: "image/jpeg",
       },
     ],
-    locale: "en_US",
-    type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AegisRange - Cybersecurity Simulation Platform",
-    description:
-      "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.",
-    images: ["/images/aegisrange-og.jpg"],
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE_PATH],
   },
 };
 
