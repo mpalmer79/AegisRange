@@ -151,9 +151,7 @@ class TestSnapshotExposesCommandHistory(CommandApiBase):
         )
         self.client.post(
             f"/missions/{self.run_id}/commands",
-            json={
-                "command": "contain session --user user-alice --action revoke"
-            },
+            json={"command": "contain session --user user-alice --action revoke"},
         )
         snap = self.client.get(f"/missions/{self.run_id}").json()
         self.assertIn("alerts list", snap["commands_issued"])

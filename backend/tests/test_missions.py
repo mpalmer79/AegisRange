@@ -89,9 +89,7 @@ class TestStartMission(MissionApiTestBase):
                 "/missions",
                 json={"scenario_id": scenario_id, "mode": "sync"},
             )
-            self.assertEqual(
-                resp.status_code, 200, f"{scenario_id}: {resp.text}"
-            )
+            self.assertEqual(resp.status_code, 200, f"{scenario_id}: {resp.text}")
             self.assertTrue(resp.json()["run_id"])
             self.assertEqual(resp.json()["status"], "complete")
 

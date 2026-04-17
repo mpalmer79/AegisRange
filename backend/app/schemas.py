@@ -171,9 +171,7 @@ class ScenarioSummaryResponse(BaseModel):
 
 Perspective = Literal["red", "blue"]
 Difficulty = Literal["recruit", "analyst", "operator"]
-MissionStatusLiteral = Literal[
-    "active", "complete", "failed", "aborted", "timed_out"
-]
+MissionStatusLiteral = Literal["active", "complete", "failed", "aborted", "timed_out"]
 
 
 MissionExecutionMode = Literal["async", "sync"]

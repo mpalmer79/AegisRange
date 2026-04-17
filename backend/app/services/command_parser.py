@@ -107,8 +107,7 @@ def parse(raw: str, *, perspective: Perspective) -> ParseOutcome:
             err=ParseError(
                 kind="unknown_subcommand",
                 message=(
-                    f"'{tokens[1]}' is not a subcommand of '{name}'. "
-                    f"Try `help {name}`."
+                    f"'{tokens[1]}' is not a subcommand of '{name}'. Try `help {name}`."
                 ),
             )
         )
@@ -192,21 +191,16 @@ def _parse_args(
         return ParseOutcome(
             err=ParseError(
                 kind="missing_positional",
-                message=(
-                    f"Missing argument: <{missing_pos[0]}>. Usage: {spec.usage}"
-                ),
+                message=(f"Missing argument: <{missing_pos[0]}>. Usage: {spec.usage}"),
             )
         )
-    missing_flags = [
-        f.name for f in spec.flags if f.required and f.name not in flags
-    ]
+    missing_flags = [f.name for f in spec.flags if f.required and f.name not in flags]
     if missing_flags:
         return ParseOutcome(
             err=ParseError(
                 kind="missing_flag",
                 message=(
-                    f"Missing required flag: --{missing_flags[0]}. "
-                    f"Usage: {spec.usage}"
+                    f"Missing required flag: --{missing_flags[0]}. Usage: {spec.usage}"
                 ),
             )
         )
@@ -216,9 +210,7 @@ def _parse_args(
             flags[f.name] = f.default
 
     return ParseOutcome(
-        ok=ParsedCommand(
-            verb=spec, positional=positional, flags=flags, raw=raw
-        )
+        ok=ParsedCommand(verb=spec, positional=positional, flags=flags, raw=raw)
     )
 
 

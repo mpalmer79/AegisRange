@@ -60,7 +60,9 @@ class VerbSpec:
 
     @property
     def key(self) -> str:
-        return self.name if self.subcommand is None else f"{self.name} {self.subcommand}"
+        return (
+            self.name if self.subcommand is None else f"{self.name} {self.subcommand}"
+        )
 
     def effective_summary(self) -> str:
         if self.summary:
@@ -103,9 +105,7 @@ _UNIVERSAL_VERBS: tuple[VerbSpec, ...] = (
         handler="status",
         perspective="both",
         usage="status",
-        description=(
-            "Show mission status, elapsed time, and objective progress."
-        ),
+        description=("Show mission status, elapsed time, and objective progress."),
     ),
 )
 

@@ -56,9 +56,7 @@ class MissionScheduler:
         existing = self._tasks.get(run.run_id)
         if existing is not None and not existing.done():
             return existing
-        task = asyncio.create_task(
-            self._play(run), name=f"mission-{run.run_id}"
-        )
+        task = asyncio.create_task(self._play(run), name=f"mission-{run.run_id}")
         self._tasks[run.run_id] = task
         return task
 
@@ -98,11 +96,14 @@ class MissionScheduler:
                 try:
                     apply_beat(beat, ctx)
                 except Exception as exc:  # noqa: BLE001
-                    logger.exception("Adversary beat failed", extra={
-                        "run_id": run.run_id,
-                        "beat_index": index,
-                        "beat_kind": beat.kind.value,
-                    })
+                    logger.exception(
+                        "Adversary beat failed",
+                        extra={
+                            "run_id": run.run_id,
+                            "beat_index": index,
+                            "beat_kind": beat.kind.value,
+                        },
+                    )
                     run.status = "failed"
                     run.summary = None
                     self.mission_store.put(run)
@@ -175,9 +176,7 @@ class MissionScheduler:
             1 for a in store.get_alerts() if a.correlation_id == run.correlation_id
         )
         responses_count = sum(
-            1
-            for r in store.get_responses()
-            if r.correlation_id == run.correlation_id
+            1 for r in store.get_responses() if r.correlation_id == run.correlation_id
         )
         incident = store.get_incident(run.correlation_id)
         return {
@@ -192,9 +191,7 @@ class MissionScheduler:
             "incident_id": incident.incident_id if incident else None,
             "step_up_required": store.is_step_up_required("user-alice"),
             "revoked_sessions": sorted(store.get_all_revoked_sessions()),
-            "download_restricted_actors": sorted(
-                store.get_all_download_restricted()
-            ),
+            "download_restricted_actors": sorted(store.get_all_download_restricted()),
             "disabled_services": sorted(store.get_all_disabled_services()),
             "quarantined_artifacts": sorted(store.get_all_quarantined_artifacts()),
             "policy_change_restricted_actors": sorted(

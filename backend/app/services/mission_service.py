@@ -239,7 +239,11 @@ class MissionService:
                 verb_key="<parse-error>",
                 kind="error",
                 lines=[outcome.err.message]
-                + ([f"Did you mean: {outcome.err.suggestion}?"] if outcome.err.suggestion else []),
+                + (
+                    [f"Did you mean: {outcome.err.suggestion}?"]
+                    if outcome.err.suggestion
+                    else []
+                ),
             )
             run.command_history.append(record)
             self.missions.put(run)

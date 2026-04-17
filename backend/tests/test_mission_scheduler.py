@@ -51,7 +51,9 @@ def _make_engine():
     )
 
 
-def _make_run(scenario_id: str = "scn-auth-001", difficulty: str = "operator") -> MissionRun:
+def _make_run(
+    scenario_id: str = "scn-auth-001", difficulty: str = "operator"
+) -> MissionRun:
     return MissionRun(
         run_id=f"run-{uuid4()}",
         scenario_id=scenario_id,

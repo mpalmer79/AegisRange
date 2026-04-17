@@ -102,9 +102,7 @@ class ParserErrors(unittest.TestCase):
         self.assertEqual(out.err.kind, "invalid_flag_value")
 
     def test_flag_without_value(self) -> None:
-        out = parse(
-            "contain session --user --action revoke", perspective="blue"
-        )
+        out = parse("contain session --user --action revoke", perspective="blue")
         assert out.err is not None
         self.assertEqual(out.err.kind, "invalid_flag_value")
 

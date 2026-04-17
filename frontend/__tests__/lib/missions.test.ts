@@ -7,7 +7,12 @@
  * mock, no dynamic imports, so there's nothing timing-sensitive.
  */
 
-import { startMission, getMissionIncident, submitMissionCommand } from '@/lib/api';
+import {
+  startMission,
+  getMissionIncident,
+  submitMissionCommand,
+  __setBackendAvailableForTests,
+} from '@/lib/api';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -75,25 +80,30 @@ describe('missions API client', () => {
   let fetchMock: jest.Mock;
   const ORIGINAL_FETCH = global.fetch;
 
+  beforeAll(() => {
+    // Skip the real /health probe — we're only asserting request shape,
+    // not reachability. Keeps the test deterministic regardless of
+    // jsdom fetch polyfills.
+    __setBackendAvailableForTests(true);
+  });
+
+  afterAll(() => {
+    __setBackendAvailableForTests(null);
+    global.fetch = ORIGINAL_FETCH;
+  });
+
   beforeEach(() => {
     fetchMock = jest.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
-      // Health probe — must always succeed so liveOrThrow proceeds.
-      if (url.endsWith('/health')) return jsonResponse({ status: 'ok' });
-      // Default: return a mission snapshot for any /missions POST,
-      // an incident for /missions/<id>/incident, and a command
-      // response for /missions/<id>/commands. Individual tests can
-      // override by reassigning fetchMock.
+      // Return an incident for /missions/<id>/incident, a command
+      // response for /missions/<id>/commands, and a mission snapshot
+      // for anything else under /missions.
       if (url.endsWith('/incident')) return jsonResponse(incidentFixture());
       if (url.endsWith('/commands')) return jsonResponse(commandResponseFixture());
       if (/\/missions(?:\/.*)?$/.test(url)) return jsonResponse(snapshotFixture());
       return jsonResponse({}, 404);
     });
     global.fetch = fetchMock as unknown as typeof fetch;
-  });
-
-  afterAll(() => {
-    global.fetch = ORIGINAL_FETCH;
   });
 
   it('startMission POSTs to /missions with the expected body', async () => {
