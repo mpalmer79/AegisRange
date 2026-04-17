@@ -117,6 +117,28 @@ export interface ScenarioResult {
   quarantined_artifacts: string[];
   policy_change_restricted_actors: string[];
   operated_by: string | null;
+  run_id?: string | null;
+}
+
+export type MissionPerspective = 'red' | 'blue';
+export type MissionDifficulty = 'recruit' | 'analyst' | 'operator';
+export type MissionStatus =
+  | 'active'
+  | 'complete'
+  | 'failed'
+  | 'aborted'
+  | 'timed_out';
+
+export interface MissionSnapshot {
+  run_id: string;
+  scenario_id: string;
+  perspective: MissionPerspective;
+  difficulty: MissionDifficulty;
+  correlation_id: string;
+  status: MissionStatus;
+  created_at: string;
+  operated_by: string | null;
+  summary: ScenarioResult | null;
 }
 
 export interface LoginRequest {

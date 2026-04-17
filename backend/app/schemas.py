@@ -157,6 +157,37 @@ class ScenarioSummaryResponse(BaseModel):
     quarantined_artifacts: list[str]
     policy_change_restricted_actors: list[str]
     operated_by: str | None = None
+    run_id: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Mission (Phase 1 scaffolding)
+# ---------------------------------------------------------------------------
+
+
+Perspective = Literal["red", "blue"]
+Difficulty = Literal["recruit", "analyst", "operator"]
+MissionStatusLiteral = Literal[
+    "active", "complete", "failed", "aborted", "timed_out"
+]
+
+
+class StartMissionRequest(BaseModel):
+    scenario_id: str
+    perspective: Perspective = "blue"
+    difficulty: Difficulty = "analyst"
+
+
+class MissionSnapshot(BaseModel):
+    run_id: str
+    scenario_id: str
+    perspective: Perspective
+    difficulty: Difficulty
+    correlation_id: str
+    status: MissionStatusLiteral
+    created_at: str
+    operated_by: str | None = None
+    summary: ScenarioSummaryResponse | None = None
 
 
 # ---------------------------------------------------------------------------

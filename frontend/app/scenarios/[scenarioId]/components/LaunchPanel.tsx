@@ -234,7 +234,11 @@ export default function LaunchPanel({
           <div className="flex flex-col gap-2">
             {result.incident_id && (
               <Link
-                href={`/incidents/${result.correlation_id}`}
+                href={
+                  result.run_id
+                    ? `/incidents/${result.correlation_id}?run=${result.run_id}`
+                    : `/incidents/${result.correlation_id}`
+                }
                 className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-mono font-bold tracking-wider uppercase text-white bg-gradient-to-r from-rose-500 to-red-600 hover:brightness-110 transition"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />

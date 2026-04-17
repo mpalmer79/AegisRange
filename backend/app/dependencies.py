@@ -25,6 +25,7 @@ from app.services.report_service import ReportService
 from app.services.response_service import ResponseOrchestrator
 from app.services.risk_service import RiskScoringService
 from app.services.scenario_service import ScenarioEngine
+from app.services.mission_service import MissionService, MissionStore
 from app.services.stream_service import StreamService
 from app.store import STORE
 
@@ -52,6 +53,13 @@ scenario_engine = ScenarioEngine(
     documents=document_service,
     pipeline=pipeline,
     store=STORE,
+)
+
+mission_store = MissionStore()
+mission_service = MissionService(
+    scenario_engine=scenario_engine,
+    incident_store=STORE,
+    mission_store=mission_store,
 )
 
 mitre_service = MitreAttackService()

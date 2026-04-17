@@ -25,6 +25,7 @@ router = APIRouter(
     response_model=AdminResetResponse,
 )
 def admin_reset(request: Request) -> dict[str, str]:
+    from app.dependencies import mission_store
     from app.main import reset_rate_limits
 
     platform_user = getattr(request.state, "platform_user", None)
@@ -33,6 +34,7 @@ def admin_reset(request: Request) -> dict[str, str]:
     logger.warning("Store reset initiated", extra={"reset_by": reset_by})
     STORE.reset()
     reset_rate_limits()
+    mission_store.reset()
     audit_service.log_admin_action(
         "store_reset", reset_by, correlation_id=correlation_id
     )
