@@ -5,6 +5,10 @@ All notable changes to AegisRange are documented in this file.
 ## [0.10.0]
 
 ### Added
+- **Observability**: `/health` now emits a `subsystems` block (per-subsystem reachability for SQLite, auth cache, JWT secret) plus `uptime_seconds` and `version`. The new block makes `/health` a meaningful readiness probe for load balancers / deploy-gate checks. The three new fields are optional on the response model, so existing clients reading the 0.8.x shape don't break.
+- New admin-gated `GET /metrics/prometheus` endpoint emitting OpenMetrics text exposition for Prometheus scraping. Covers events/alerts/responses/incidents totals, alerts-by-severity, active containments by kind, per-rule trigger counts, and incidents-by-status. Hand-rolled serializer — no new dependency.
+- `tests/test_observability.py`: 10 new cases covering the health enrichment and the Prometheus endpoint (auth gate, content shape, label escaping, label presence for new rules).
+- `README.md` Roadmap rewritten to reflect 0.10.0 shipping all four "Next Steps" items from 0.9.x: expanded detection, advanced persistence strategy (Phase 1), analytics depth, and architecture refinements.
 - **Analytics depth**: new `AnalyticsService` (`app/services/analytics_service.py`) deriving four new metric groups from the existing event/alert/response/incident graph — no new authoritative state.
   - **MTTD / MTTR / time-to-close**: `mttd_mttr_summary()` returns aggregate means plus per-correlation breakdown. Aggregates exclude in-flight investigations so in-progress work doesn't skew the mean.
   - **Actor risk trajectory**: `risk_trajectory(actor_id, since=…)` returns the time-series of score changes driven by `RiskProfile.score_history`, with an optional cutoff.

@@ -414,12 +414,33 @@ class HealthStatsResponse(BaseModel):
     responses: int
 
 
+class HealthSubsystemsResponse(BaseModel):
+    """Per-subsystem reachability snapshot — 0.10.0 addition.
+
+    ``status`` is ``"ok"`` when the subsystem is reachable and
+    functioning, ``"disabled"`` when the subsystem is intentionally
+    not in use for this deployment, or ``"degraded"`` when something
+    is wrong. Callers (load balancer readiness probes, Railway
+    deploy-gate checks) should parse this block before deciding
+    whether the instance can take traffic.
+    """
+
+    persistence_sqlite: dict[str, object]
+    auth_cache: dict[str, object]
+    jwt_secret_configured: bool
+
+
 class HealthResponse(BaseModel):
     status: str
     timestamp: str
     stats: HealthStatsResponse
     containment: dict[str, int]
     persistence: bool
+    # 0.10.0 additions — optional so existing HealthResponse consumers
+    # that were written against 0.9.x don't break on the new fields.
+    subsystems: HealthSubsystemsResponse | None = None
+    uptime_seconds: float | None = None
+    version: str | None = None
 
 
 # ---------------------------------------------------------------------------

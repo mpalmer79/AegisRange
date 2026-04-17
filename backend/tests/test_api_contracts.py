@@ -17,9 +17,22 @@ class TestHealthContract(unittest.TestCase):
         client = authenticated_client()
         resp = client.get("/health")
         data = resp.json()
+        # 0.8.x shipped the first five fields. 0.10.0 added `subsystems`,
+        # `uptime_seconds`, `version` — all optional on the response model
+        # so older clients parsing this endpoint don't break, but they
+        # must be present in a normal response.
         self.assertEqual(
             set(data.keys()),
-            {"status", "timestamp", "stats", "containment", "persistence"},
+            {
+                "status",
+                "timestamp",
+                "stats",
+                "containment",
+                "persistence",
+                "subsystems",
+                "uptime_seconds",
+                "version",
+            },
         )
 
 
