@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { useState } from 'react';
+import { getMissionTranscript } from '@/lib/api';
 import type { ScenarioResult } from '@/lib/types';
 import type { Achievement, Rank } from '@/lib/player-progress';
 import type { Accent } from './accents';
@@ -7,6 +9,34 @@ function formatElapsed(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+async function copyTranscript(
+  runId: string,
+  setStatus: (s: 'idle' | 'copied' | 'error') => void,
+) {
+  try {
+    const text = await getMissionTranscript(runId);
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback: shove text into a temporary textarea and copy.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('aria-hidden', 'true');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setStatus('copied');
+    window.setTimeout(() => setStatus('idle'), 2000);
+  } catch {
+    setStatus('error');
+    window.setTimeout(() => setStatus('idle'), 2000);
+  }
 }
 
 interface LaunchPanelProps {
@@ -245,6 +275,9 @@ export default function LaunchPanel({
                 Open Incident
               </Link>
             )}
+            {result.run_id && (
+              <TranscriptCopyButton runId={result.run_id} />
+            )}
             <button
               onClick={onReset}
               className="w-full px-4 py-2.5 rounded-lg text-xs font-mono font-bold tracking-wider uppercase text-slate-700 dark:text-gray-300 border border-slate-300 dark:border-gray-700 hover:bg-slate-100 dark:hover:bg-gray-800 transition"
@@ -275,5 +308,25 @@ export default function LaunchPanel({
         </>
       )}
     </div>
+  );
+}
+
+function TranscriptCopyButton({ runId }: { runId: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const label =
+    state === 'copied'
+      ? 'Copied!'
+      : state === 'error'
+        ? 'Copy failed'
+        : 'Copy Transcript';
+  return (
+    <button
+      type="button"
+      onClick={() => copyTranscript(runId, setState)}
+      className="w-full px-4 py-2.5 rounded-lg text-xs font-mono font-bold tracking-wider uppercase text-slate-700 dark:text-gray-300 border border-slate-300 dark:border-gray-700 hover:bg-slate-100 dark:hover:bg-gray-800 transition"
+      aria-live="polite"
+    >
+      {label}
+    </button>
   );
 }

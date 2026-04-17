@@ -23,7 +23,7 @@ import logging
 from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.dependencies import (
     mission_help_service,
@@ -236,3 +236,36 @@ def mission_help(run_id: str, topic: str | None = None) -> dict:
             if page is not None:
                 verb_help[v.key] = page
     return {"overview": overview, "verb_help": verb_help}
+
+
+@router.get("/{run_id}/transcript", response_class=PlainTextResponse)
+def mission_transcript(run_id: str) -> str:
+    """Plain-text transcript of the mission, suitable for paste-into-bug-report.
+
+    Header lines describe the run (scenario, perspective, difficulty,
+    correlation_id), followed by every command the player typed plus
+    its response, in order. Used by the frontend "Copy transcript"
+    button after a mission ends.
+    """
+    run = mission_service.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    lines: list[str] = [
+        "# AegisRange mission transcript",
+        f"# run_id        {run.run_id}",
+        f"# scenario      {run.scenario_id}",
+        f"# perspective   {run.perspective}",
+        f"# difficulty    {run.difficulty}",
+        f"# correlation   {run.correlation_id}",
+        f"# status        {run.status}",
+        f"# started_at    {run.created_at.isoformat()}",
+        "",
+    ]
+    if not run.command_history:
+        lines.append("(no commands issued)")
+    for record in run.command_history:
+        ts = record.ts.strftime("%H:%M:%S")
+        lines.append(f"[{ts}] ops> {record.raw}")
+        for output in record.lines:
+            lines.append(f"          {output}")
+    return "\n".join(lines) + "\n"

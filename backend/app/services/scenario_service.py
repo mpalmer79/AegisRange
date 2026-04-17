@@ -23,6 +23,38 @@ class ScenarioEngine:
         self.pipeline = pipeline
         self.store = store
 
+    def run_tutorial_000(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
+        """SCN-TUTORIAL-000: training-wheels intro.
+
+        Emits a single failed login so the player has at least one
+        event to inspect with `events tail`. No alerts, no incidents
+        — the goal is to teach the console without overwhelming the
+        first-run experience.
+        """
+        self.identity.authenticate("alice", "wrong")
+        self.pipeline.process(
+            self._new_event(
+                event_type="authentication.login.failure",
+                category="authentication",
+                actor_id="user-alice",
+                actor_role="analyst",
+                correlation_id=correlation_id,
+                target_id="alice",
+                status="failure",
+                status_code="401",
+                error_message="invalid_credentials",
+                payload={
+                    "username": "alice",
+                    "authentication_method": "password",
+                },
+            )
+        )
+        return self._summary(
+            "SCN-TUTORIAL-000", correlation_id, operated_by=operated_by
+        )
+
     def run_auth_001(
         self, correlation_id: str, *, operated_by: str | None = None
     ) -> dict[str, object]:

@@ -9,6 +9,7 @@ import MetricCards from '@/app/components/dashboard/MetricCards';
 import ScenarioGrid from '@/app/components/dashboard/ScenarioGrid';
 import TopRiskActors from '@/app/components/dashboard/TopRiskActors';
 import MetricsBreakdown from '@/app/components/dashboard/MetricsBreakdown';
+import TutorialBanner from '@/app/components/dashboard/TutorialBanner';
 
 export default function DashboardPage() {
   const { data: metrics, loading: mLoading, error: mError, refetch: refetchMetrics } = useApi<Metrics>(getMetrics);
@@ -43,6 +44,8 @@ export default function DashboardPage() {
           <div className="text-cyan-600 dark:text-cyan-400 font-mono text-sm animate-pulse">Loading dashboard...</div>
         </div>
       )}
+
+      <TutorialBanner />
 
       <MetricCards metrics={metrics} />
 

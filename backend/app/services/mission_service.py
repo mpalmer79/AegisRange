@@ -27,6 +27,7 @@ Difficulty = Literal["recruit", "analyst", "operator"]
 MissionStatus = Literal["active", "complete", "failed", "aborted", "timed_out"]
 
 SCENARIO_LABEL: dict[str, str] = {
+    "scn-tutorial-000": "SCN-TUTORIAL-000",
     "scn-auth-001": "SCN-AUTH-001",
     "scn-session-002": "SCN-SESSION-002",
     "scn-doc-003": "SCN-DOC-003",
@@ -37,6 +38,7 @@ SCENARIO_LABEL: dict[str, str] = {
 
 
 SUPPORTED_SCENARIOS: dict[str, str] = {
+    "scn-tutorial-000": "run_tutorial_000",
     "scn-auth-001": "run_auth_001",
     "scn-session-002": "run_session_002",
     "scn-doc-003": "run_doc_003",

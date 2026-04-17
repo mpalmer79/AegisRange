@@ -38,6 +38,49 @@ HINT_COST_BY_DIFFICULTY: dict[str, int] = {
 # one surfaced by ``next_hint``. For Phase 3a we ship the scn-auth-001
 # Blue playbook. Other scenarios fall back to a generic message.
 _PLAYBOOKS: dict[tuple[str, str], list[dict]] = {
+    # -----------------------------------------------------------------
+    # scn-tutorial-000 — first-run training. Hand-holding intent: each
+    # step names the verb and what it teaches.
+    # -----------------------------------------------------------------
+    ("scn-tutorial-000", "blue"): [
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("alerts list") for v in issued
+            ),
+            "lines": [
+                "Welcome. Type `alerts list` and press Enter. This queries",
+                "the simulated SIEM for any alerts the detection pipeline",
+                "has produced for this run.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("events tail") for v in issued
+            ),
+            "lines": [
+                "Now type `events tail` to see the raw events. The tutorial",
+                "scenario emits one failed login so you can confirm the",
+                "console is working end-to-end.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(v == "status" for v in issued),
+            "lines": [
+                "Type `status` to see your mission state at a glance —",
+                "events captured, alerts, command count, run id.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("contain session") for v in issued
+            ),
+            "lines": [
+                "Last step: practice the containment verb. Type",
+                "`contain session --user user-alice --action revoke`.",
+                "That's the same shape you'll use in real scenarios. Done!",
+            ],
+        },
+    ],
     ("scn-auth-001", "red"): [
         {
             "satisfied_when": lambda issued: any(v == "recon users" for v in issued),

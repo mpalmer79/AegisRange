@@ -170,6 +170,7 @@ export default function OpsManual({
   const [help, setHelp] = useState<MissionHelp | null>(null);
   const [loadingHelp, setLoadingHelp] = useState(false);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Fetch help content on open (and when the run changes).
   useEffect(() => {
@@ -194,9 +195,19 @@ export default function OpsManual({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  // Focus the close button when opening so screen readers anchor.
+  // Capture the caller's focus on open so we can restore it on close;
+  // focus the close button inside the overlay so screen readers anchor.
   useEffect(() => {
-    if (open) closeRef.current?.focus();
+    if (open) {
+      previousFocusRef.current = (document.activeElement as HTMLElement) ?? null;
+      closeRef.current?.focus();
+    } else if (previousFocusRef.current) {
+      // Closing: restore focus to the trigger element (e.g. the "Help"
+      // button in the console header) so keyboard users don't end up
+      // at <body>.
+      previousFocusRef.current.focus();
+      previousFocusRef.current = null;
+    }
   }, [open]);
 
   if (!open) return null;
