@@ -223,11 +223,86 @@ _BLUE_VERBS: tuple[VerbSpec, ...] = (
 
 
 # ---------------------------------------------------------------------------
-# Red team verbs — stub; full set lands in Phase 3b.
+# Red team verbs (intruder)
+#
+# Phase 3b ships the verb set needed to complete scn-auth-001 from the
+# attacker seat: recon, attempt login, and the universal help/hint/
+# status. Later phases add `doc read` / `doc download` / `session
+# reuse` / `svc call` to support the remaining five scenarios.
 # ---------------------------------------------------------------------------
 
 
-_RED_VERBS: tuple[VerbSpec, ...] = ()
+_RED_VERBS: tuple[VerbSpec, ...] = (
+    VerbSpec(
+        name="recon",
+        subcommand="users",
+        handler="recon.users",
+        perspective="red",
+        usage="recon users",
+        description=(
+            "Enumerate identities visible on the target platform. "
+            "Returns user ids, roles, and the authenticator surface "
+            "you'll be spraying against. Free action — no event emitted."
+        ),
+    ),
+    VerbSpec(
+        name="attempt",
+        subcommand="login",
+        handler="attempt.login",
+        perspective="red",
+        usage=("attempt login --user <id> --from <ip> [--password <str>]"),
+        description=(
+            "Try a credential against the SSO endpoint. If --password "
+            "matches the real secret, a login.success event lands and "
+            "you have a valid session. Otherwise a login.failure event "
+            "lands — repeat them to trigger the brute-force detector."
+        ),
+        flags=(
+            FlagSpec(
+                name="user",
+                type="str",
+                required=True,
+                description="Target username (alice, bob, ...).",
+            ),
+            FlagSpec(
+                name="from",
+                type="str",
+                required=True,
+                description="Source IP the attempt originates from.",
+            ),
+            FlagSpec(
+                name="password",
+                type="str",
+                description=(
+                    "Credential to try. Omit to guarantee a failure "
+                    "(useful for seeding the counter without getting "
+                    "access)."
+                ),
+            ),
+        ),
+    ),
+    VerbSpec(
+        name="session",
+        subcommand="reuse",
+        handler="session.reuse",
+        perspective="red",
+        usage="session reuse --from <ip>",
+        description=(
+            "Replay the current session token from a different IP. "
+            "Requires that you already have a session (from a prior "
+            "successful `attempt login`). Triggers session-anomaly "
+            "detection."
+        ),
+        flags=(
+            FlagSpec(
+                name="from",
+                type="str",
+                required=True,
+                description="Source IP the replay originates from.",
+            ),
+        ),
+    ),
+)
 
 
 # ---------------------------------------------------------------------------

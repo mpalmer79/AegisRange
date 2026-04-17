@@ -26,6 +26,16 @@ Perspective = Literal["red", "blue"]
 Difficulty = Literal["recruit", "analyst", "operator"]
 MissionStatus = Literal["active", "complete", "failed", "aborted", "timed_out"]
 
+SCENARIO_LABEL: dict[str, str] = {
+    "scn-auth-001": "SCN-AUTH-001",
+    "scn-session-002": "SCN-SESSION-002",
+    "scn-doc-003": "SCN-DOC-003",
+    "scn-doc-004": "SCN-DOC-004",
+    "scn-svc-005": "SCN-SVC-005",
+    "scn-corr-006": "SCN-CORR-006",
+}
+
+
 SUPPORTED_SCENARIOS: dict[str, str] = {
     "scn-auth-001": "run_auth_001",
     "scn-session-002": "run_session_002",
@@ -44,6 +54,42 @@ class CommandRecord:
     kind: Literal["ok", "error"]
     lines: list[str] = field(default_factory=list)
     effects: dict[str, Any] = field(default_factory=dict)
+
+
+def build_run_snapshot(run: "MissionRun", store) -> dict[str, Any]:
+    """Build the legacy-compatible summary dict for a run against the
+    given store. Shared between :class:`MissionScheduler` (for beat
+    snapshots) and :class:`MissionService.submit_command` (so player
+    beats carry the same shape) so both paths stay in lockstep."""
+    scenario_label = SCENARIO_LABEL.get(run.scenario_id, run.scenario_id.upper())
+    corr = run.correlation_id
+    events_count = sum(1 for e in store.get_events() if e.correlation_id == corr)
+    alerts_count = sum(1 for a in store.get_alerts() if a.correlation_id == corr)
+    responses_count = sum(1 for r in store.get_responses() if r.correlation_id == corr)
+    incident = store.get_incident(corr)
+    return {
+        "scenario_id": scenario_label,
+        "correlation_id": corr,
+        "events_total": events_count,
+        "events_generated": events_count,
+        "alerts_total": alerts_count,
+        "alerts_generated": alerts_count,
+        "responses_total": responses_count,
+        "responses_generated": responses_count,
+        "incident_id": incident.incident_id if incident else None,
+        "step_up_required": store.is_step_up_required("user-alice"),
+        "revoked_sessions": sorted(store.get_all_revoked_sessions()),
+        "download_restricted_actors": sorted(store.get_all_download_restricted()),
+        "disabled_services": sorted(store.get_all_disabled_services()),
+        "quarantined_artifacts": sorted(store.get_all_quarantined_artifacts()),
+        "policy_change_restricted_actors": sorted(
+            store.get_all_policy_change_restricted()
+        ),
+        "operated_by": run.operated_by,
+        "run_id": run.run_id,
+        "commands_issued": [r.verb_key for r in run.command_history],
+        "xp_delta": run.xp_delta,
+    }
 
 
 @dataclass
@@ -140,9 +186,29 @@ class MissionService:
         correlation_id: str,
         operated_by: str | None = None,
     ) -> MissionRun:
-        runner_name = SUPPORTED_SCENARIOS.get(scenario_id)
-        if runner_name is None:
+        if scenario_id not in SUPPORTED_SCENARIOS:
             raise ValueError(f"Unsupported scenario: {scenario_id}")
+
+        # Red-team missions are player-driven — the adversary script is
+        # NOT pre-run. The mission starts 'active' with an empty world;
+        # the player's commands (`attempt login` etc.) will mutate it.
+        if perspective == "red":
+            run = MissionRun(
+                run_id=f"run-{uuid4()}",
+                scenario_id=scenario_id,
+                perspective=perspective,
+                difficulty=difficulty,
+                correlation_id=correlation_id,
+                created_at=utc_now(),
+                status="active",
+                operated_by=operated_by,
+                summary=None,
+            )
+            run.summary = build_run_snapshot(run, self.incident_store)
+            self.missions.put(run)
+            return run
+
+        runner_name = SUPPORTED_SCENARIOS[scenario_id]
         run_fn = getattr(self.scenario_engine, runner_name)
         summary = run_fn(correlation_id, operated_by=operated_by)
 
@@ -284,9 +350,14 @@ class MissionService:
 
         # Surface the command on the SSE stream so observers (Ops
         # Manual, transcript, replays) see it in-order with adversary
-        # beats.
+        # beats. Inject the current world snapshot so the frontend's
+        # objective checks update live on each player action — the
+        # same contract the scheduler publishes on auto-beats.
         if self.stream_hub is not None and result.stream_event is not None:
-            await self.stream_hub.publish(run.run_id, result.stream_event)
+            stream_event = dict(result.stream_event)
+            if "snapshot" not in stream_event:
+                stream_event["snapshot"] = build_run_snapshot(run, self.incident_store)
+            await self.stream_hub.publish(run.run_id, stream_event)
 
         return run, {
             "kind": result.kind,

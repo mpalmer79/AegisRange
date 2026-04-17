@@ -38,6 +38,52 @@ HINT_COST_BY_DIFFICULTY: dict[str, int] = {
 # one surfaced by ``next_hint``. For Phase 3a we ship the scn-auth-001
 # Blue playbook. Other scenarios fall back to a generic message.
 _PLAYBOOKS: dict[tuple[str, str], list[dict]] = {
+    ("scn-auth-001", "red"): [
+        {
+            "satisfied_when": lambda issued: any(v == "recon users" for v in issued),
+            "lines": [
+                "Start with `recon users` to see who's targetable.",
+                "No event fires — it's free intel, use it liberally.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: (
+                sum(1 for v in issued if v == "attempt login") >= 1
+            ),
+            "lines": [
+                "Run `attempt login --user alice --from 203.0.113.10` to",
+                "fire your first authentication event. Omit --password to",
+                "guarantee a 401 — exactly what you want to seed the",
+                "brute-force counter.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: (
+                sum(1 for v in issued if v == "attempt login") >= 5
+            ),
+            "lines": [
+                "You need ~5 attempts from the same IP before DET-AUTH-001",
+                "trips. Keep running `attempt login --user alice --from",
+                "203.0.113.10` (no --password) until the counter pops.",
+            ],
+        },
+        {
+            # After 6+ attempts the counter has tripped and the auto-
+            # response has fired — the attacker has effectively won
+            # the scenario. Surface the final hint before that.
+            "satisfied_when": lambda issued: (
+                sum(1 for v in issued if v == "attempt login") >= 6
+            ),
+            "lines": [
+                "Finish with a successful login — pass the real password:",
+                "`attempt login --user alice --from 203.0.113.10",
+                "--password Correct_Horse_42!`. DET-AUTH-002 flags the",
+                "suspicious-origin success and the defender's auto-response",
+                "will containment-trip your own session. That's what satisfies",
+                "the 'Force a defensive response' objective.",
+            ],
+        },
+    ],
     ("scn-auth-001", "blue"): [
         {
             "satisfied_when": lambda issued: any(
