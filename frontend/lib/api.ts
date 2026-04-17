@@ -55,6 +55,7 @@ import {
   MissionDifficulty,
   MissionPerspective,
   MissionSnapshot,
+  MissionStatus,
   MissionCommandResponse,
   MissionHelp,
 } from './types';
@@ -402,6 +403,53 @@ export async function getMissionIncident(runId: string): Promise<Incident> {
 /** URL for the mission SSE stream. Use with ``new EventSource(...)``. */
 export function missionStreamUrl(runId: string): string {
   return `${BASE_URL}/missions/${runId}/stream`;
+}
+
+export async function reportMissionScore(
+  runId: string,
+  payload: { score: number; duration_seconds?: number },
+): Promise<MissionSnapshot> {
+  return liveOrThrow(
+    () =>
+      request<MissionSnapshot>(`/missions/${runId}/score`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    `unknown run_id: ${runId}`,
+  );
+}
+
+export interface LeaderboardEntry {
+  run_id: string;
+  scenario_id: string;
+  perspective: MissionPerspective;
+  difficulty: MissionDifficulty;
+  status: MissionStatus;
+  score: number;
+  duration_seconds: number | null;
+  operated_by: string | null;
+  created_at: string;
+}
+
+export async function getMissionLeaderboard(params: {
+  scenario_id?: string;
+  perspective?: MissionPerspective;
+  difficulty?: MissionDifficulty;
+  limit?: number;
+}): Promise<LeaderboardEntry[]> {
+  const qs = new URLSearchParams();
+  if (params.scenario_id) qs.set('scenario_id', params.scenario_id);
+  if (params.perspective) qs.set('perspective', params.perspective);
+  if (params.difficulty) qs.set('difficulty', params.difficulty);
+  if (params.limit != null) qs.set('limit', String(params.limit));
+  const query = qs.toString();
+  return liveOrThrow(
+    () =>
+      request<{ entries: LeaderboardEntry[] }>(
+        `/missions/leaderboard${query ? `?${query}` : ''}`,
+      ).then((r) => r.entries),
+    'leaderboard requires a live backend',
+  );
 }
 
 /** Plain-text transcript of a run. Used by the "Copy transcript" button. */

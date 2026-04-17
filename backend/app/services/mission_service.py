@@ -115,6 +115,17 @@ class MissionRun:
     # `attempt login`. Persisted alongside the run so a worker restart
     # mid-attack doesn't lose the session.
     scratch_state: dict[str, Any] = field(default_factory=dict)
+    # Phase 8: final XP awarded for this run. Populated by the
+    # frontend (which knows about difficulty multipliers, daily-bonus
+    # multipliers, achievement bonuses) via POST /missions/{run_id}/score
+    # once the mission terminates. Drives the leaderboard endpoint.
+    # ``None`` means "no score reported yet" — completed runs without
+    # a score don't appear on the leaderboard.
+    score: int | None = None
+    # Wall-clock duration in seconds, also reported by the client when
+    # it knows the run has terminated. Used for tie-breaking on the
+    # leaderboard (lower duration wins).
+    duration_seconds: int | None = None
 
 
 def mission_run_to_dict(run: MissionRun) -> dict[str, Any]:
@@ -131,6 +142,8 @@ def mission_run_to_dict(run: MissionRun) -> dict[str, Any]:
         "summary": run.summary,
         "xp_delta": run.xp_delta,
         "scratch_state": run.scratch_state,
+        "score": run.score,
+        "duration_seconds": run.duration_seconds,
         "command_history": [
             {
                 "ts": record.ts.isoformat(),
@@ -159,6 +172,8 @@ def mission_run_from_dict(data: dict[str, Any]) -> MissionRun:
         summary=data.get("summary"),
         xp_delta=data.get("xp_delta", 0),
         scratch_state=data.get("scratch_state", {}) or {},
+        score=data.get("score"),
+        duration_seconds=data.get("duration_seconds"),
         command_history=[
             CommandRecord(
                 ts=datetime.fromisoformat(entry["ts"]),
@@ -500,6 +515,50 @@ class MissionService:
             "effects": result.effects,
             "verb_key": verb_key,
         }
+
+    # -- score reporting (Phase 8) ------------------------------------------
+
+    def report_score(
+        self, run_id: str, *, score: int, duration_seconds: int | None = None
+    ) -> MissionRun | None:
+        """Record the final XP score for a terminated run. Returns the
+        updated run, or ``None`` if the run is unknown."""
+        run = self.missions.get(run_id)
+        if run is None:
+            return None
+        run.score = int(score)
+        if duration_seconds is not None:
+            run.duration_seconds = int(duration_seconds)
+        self.missions.put(run)
+        return run
+
+    def leaderboard(
+        self,
+        *,
+        scenario_id: str | None = None,
+        perspective: str | None = None,
+        difficulty: str | None = None,
+        limit: int = 10,
+    ) -> list[MissionRun]:
+        """Top scoring runs, filtered by any of scenario / perspective /
+        difficulty. Sort by score descending; tie-break by smaller
+        duration. Only completed runs that have actually reported a
+        score appear."""
+        runs = [r for r in self.missions.all() if r.score is not None]
+        if scenario_id is not None:
+            runs = [r for r in runs if r.scenario_id == scenario_id]
+        if perspective is not None:
+            runs = [r for r in runs if r.perspective == perspective]
+        if difficulty is not None:
+            runs = [r for r in runs if r.difficulty == difficulty]
+
+        def sort_key(r: MissionRun) -> tuple[int, int]:
+            # Negative score so higher scores sort first.
+            duration = r.duration_seconds if r.duration_seconds is not None else 10**9
+            return (-(r.score or 0), duration)
+
+        runs.sort(key=sort_key)
+        return runs[: max(0, limit)]
 
     # -- reads ---------------------------------------------------------------
 

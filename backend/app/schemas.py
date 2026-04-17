@@ -221,6 +221,52 @@ class MissionHelpResponse(BaseModel):
     verb_help: dict[str, list[str]] = {}
 
 
+# -- Phase 8: scores, leaderboard, replay ----------------------------------
+
+
+class ReportScoreRequest(BaseModel):
+    score: int
+    duration_seconds: int | None = None
+
+
+class LeaderboardEntry(BaseModel):
+    run_id: str
+    scenario_id: str
+    perspective: Perspective
+    difficulty: Difficulty
+    status: MissionStatusLiteral
+    score: int
+    duration_seconds: int | None = None
+    operated_by: str | None = None
+    created_at: str
+
+
+class LeaderboardResponse(BaseModel):
+    entries: list[LeaderboardEntry]
+
+
+class ReplayCommand(BaseModel):
+    ts: str
+    raw: str
+    verb_key: str
+    kind: Literal["ok", "error"]
+    lines: list[str]
+    effects: dict[str, Any] = {}
+
+
+class ReplayResponse(BaseModel):
+    run_id: str
+    scenario_id: str
+    perspective: Perspective
+    difficulty: Difficulty
+    status: MissionStatusLiteral
+    created_at: str
+    score: int | None = None
+    duration_seconds: int | None = None
+    summary: ScenarioSummaryResponse | None = None
+    commands: list[ReplayCommand]
+
+
 # ---------------------------------------------------------------------------
 # Analytics response models
 # ---------------------------------------------------------------------------
