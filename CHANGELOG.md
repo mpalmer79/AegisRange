@@ -2,6 +2,18 @@
 
 All notable changes to AegisRange are documented in this file.
 
+## [0.9.0]
+
+### Changed
+- CSRF middleware: `/scenarios/*` prefix is no longer exempt. Cookie-authenticated scenario execution now requires a matching `X-CSRF-Token` header, closing a silent hole where any future POST/PATCH/DELETE under `/scenarios/*` would have been unprotected against cross-origin cookie-driven calls.
+- Every remaining entry in `_CSRF_EXEMPT_PATHS` / `_CSRF_EXEMPT_PREFIXES` now carries an inline comment naming why it is exempt.
+
+### Added
+- `backend/tests/test_security_hardening.py`: new cases pinning the CSRF model — cookie-authed POSTs to each `/scenarios/*` route are rejected without a token, accepted with a matching token, `/missions/*` remains capability-exempt, and Bearer-authed requests bypass CSRF regardless of path.
+
+### Documentation
+- `docs/threat-model/CSRF_MODEL.md`: new threat-model document describing the three trust surfaces (cookie / capability / bearer) and the rule that must be answered before any new route is added to the CSRF exempt list. Linked from ARCHITECTURE.md §15.
+
 ## [0.8.0] — 2026-04-14
 
 ### Added

@@ -160,8 +160,19 @@ async def request_size_limit_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 _CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-_CSRF_EXEMPT_PATHS = {"/auth/login", "/auth/logout", "/health", "/missions"}
-_CSRF_EXEMPT_PREFIXES = ("/scenarios/", "/missions/")
+# Each entry must document why it is exempt. Adding a route here is a
+# threat-model decision — see docs/threat-model/CSRF_MODEL.md.
+_CSRF_EXEMPT_PATHS = {
+    "/auth/login",  # pre-auth: no cookie yet, CSRF model doesn't apply
+    "/auth/logout",  # idempotent teardown of the cookie it depends on
+    "/health",  # unauthenticated readiness probe
+    "/missions",  # mission creation — capability-only surface (see below)
+}
+# /missions/* is exempt because the run_id UUID in the URL IS the capability;
+# no cookie is trusted on that surface (see routers/missions.py). /scenarios/*
+# is NOT exempt: it is cookie-authed from the browser and must carry a
+# matching CSRF token like any other state-changing request.
+_CSRF_EXEMPT_PREFIXES = ("/missions/",)
 
 
 @app.middleware("http")

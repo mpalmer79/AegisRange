@@ -113,6 +113,86 @@ class TestCSRFProtection(unittest.TestCase):
         resp = client.post("/auth/logout")
         self.assertEqual(resp.status_code, 200)
 
+    # ------------------------------------------------------------------
+    # Section 1 (0.9.0): /scenarios/* is cookie-authed surface and must
+    # require a CSRF token. /missions/* stays exempt because holding the
+    # run_id UUID is the capability (see routers/missions.py).
+    # ------------------------------------------------------------------
+
+    _SCENARIO_ROUTES = (
+        "/scenarios/scn-auth-001",
+        "/scenarios/scn-session-002",
+        "/scenarios/scn-doc-003",
+        "/scenarios/scn-doc-004",
+        "/scenarios/scn-svc-005",
+        "/scenarios/scn-corr-006",
+    )
+
+    def test_cookie_auth_scenario_routes_require_csrf(self) -> None:
+        """Cookie-authed POST to any /scenarios/* route must be rejected
+        without a CSRF token. Exempting the whole prefix leaves future
+        cookie-driven callers unprotected against cross-origin attacks."""
+        for path in self._SCENARIO_ROUTES:
+            with self.subTest(path=path):
+                client = TestClient(app)
+                login_resp = client.post(
+                    "/auth/login",
+                    json={"username": "admin", "password": "Admin_Pass_2025!"},
+                )
+                self.assertEqual(login_resp.status_code, 200)
+                resp = client.post(path)
+                self.assertEqual(
+                    resp.status_code,
+                    403,
+                    f"{path} should require CSRF when cookie-authed",
+                )
+                self.assertIn("CSRF", resp.json()["detail"])
+
+    def test_cookie_auth_scenario_routes_accept_valid_csrf(self) -> None:
+        """Cookie-authed POST with a matching CSRF token still runs the scenario."""
+        client = TestClient(app)
+        login_resp = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "Admin_Pass_2025!"},
+        )
+        self.assertEqual(login_resp.status_code, 200)
+        csrf_token = client.cookies.get("aegisrange_csrf")
+        self.assertIsNotNone(csrf_token)
+        resp = client.post(
+            "/scenarios/scn-auth-001",
+            headers={"X-CSRF-Token": csrf_token},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_missions_prefix_remains_csrf_exempt(self) -> None:
+        """/missions/* is capability-gated (run_id UUID in the URL) — no cookie
+        trust, so CSRF has nothing to protect. This exemption stays."""
+        # Start a mission anonymously (no cookie, no CSRF) — should succeed.
+        client = TestClient(app)
+        start = client.post(
+            "/missions",
+            json={"scenario_id": "scn-auth-001"},
+        )
+        self.assertEqual(start.status_code, 200)
+        run_id = start.json()["run_id"]
+        # A subsequent state-changing call under /missions/{run_id}/ must not
+        # be blocked by CSRF. Hit a known POST surface (submit command).
+        resp = client.post(
+            f"/missions/{run_id}/commands",
+            json={"command": "help"},
+        )
+        # Capability path — not a 403 CSRF rejection. Any 2xx or 4xx other
+        # than 403-CSRF is acceptable for this test; we only assert that
+        # CSRF middleware didn't intercept.
+        if resp.status_code == 403:
+            self.assertNotIn("CSRF", resp.json().get("detail", ""))
+
+    def test_bearer_auth_bypasses_csrf_on_scenarios(self) -> None:
+        """Bearer-authed clients (CLI, tests) never need CSRF, regardless of path."""
+        client = authenticated_client("red_team")
+        resp = client.post("/scenarios/scn-auth-001")
+        self.assertEqual(resp.status_code, 200)
+
 
 class TestSecurityHeaders(unittest.TestCase):
     """Verify security headers are present on all responses."""

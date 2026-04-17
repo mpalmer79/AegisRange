@@ -287,7 +287,7 @@ These are known and accepted for the current stage.
 
 ### Browser Trust Boundaries
 
-- CSRF protection: double-submit cookie pattern on state-changing requests
+- CSRF protection: double-submit cookie pattern on state-changing requests (see [docs/threat-model/CSRF_MODEL.md](docs/threat-model/CSRF_MODEL.md) for the cookie-vs-capability-vs-bearer model and the rule for adding a new exempt route)
 - SameSite=Lax cookies with Secure flag in production
 - Security headers on all responses:
   - Content-Security-Policy
