@@ -2,6 +2,20 @@
 
 All notable changes to AegisRange are documented in this file.
 
+## [0.10.0]
+
+### Added
+- **Three new detection rules** in `app/services/detection/rules.py`:
+  - **DET-GEO-011 — Impossible Travel Between Authentications** (HIGH / HIGH, critical): two successful authentications from distinct `geo_region` payload values within 60 minutes. MITRE T1078 / TA0001.
+  - **DET-EXFIL-012 — Large-Volume Data Exfiltration** (CRITICAL / HIGH, critical): cumulative `bytes_downloaded` by a single actor exceeds 500 MB within 10 minutes. MITRE T1048, T1567 / TA0010.
+  - **DET-HOUR-013 — Off-Hours Privileged Action** (MEDIUM / MEDIUM): admin-role privileged write (policy change, admin config, service disable) between 22:00–06:00 UTC. MITRE T1098 / TA0003.
+- **Two new scenarios** exercising the new rules end-to-end:
+  - **SCN-GEO-007** — impossible-travel authentication (fires DET-GEO-011).
+  - **SCN-EXFIL-008** — twelve 50 MB downloads in rapid succession (fires DET-EXFIL-012).
+- Scenario engine (`run_geo_007`, `run_exfil_008`) + adversary scripts (`_script_geo_007`, `_script_exfil_008`) + `POST /scenarios/scn-geo-007` / `POST /scenarios/scn-exfil-008` routes.
+- Adversary beat handlers extended with optional `geo_region` (on successful-login beats) and `bytes_downloaded` (on download beats) payload fields — additive, backwards-compatible.
+- Unit tests for each of the three new rules (`TestDETGEO011`, `TestDETEXFIL012`, `TestDETHOUR013`) plus end-to-end scenario tests (`TestSCNGEO007`, `TestSCNEXFIL008`).
+
 ## [0.9.0]
 
 ### Changed

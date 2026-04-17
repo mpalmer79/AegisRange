@@ -1,9 +1,9 @@
 """Detection rule evaluate functions and registry.
 
-All ten built-in detection rules (DET-AUTH-001 through DET-CORR-010)
-live here along with the module-level ``RULE_REGISTRY``. Rules are
-registered at import time; the detection service iterates enabled
-rules for each incoming event.
+Built-in detection rules (DET-AUTH-001 through DET-HOUR-013) live here
+along with the module-level ``RULE_REGISTRY``. Rules are registered at
+import time; the detection service iterates enabled rules for each
+incoming event.
 """
 
 from __future__ import annotations
@@ -287,6 +287,134 @@ def _eval_det_corr_010(event: Event, ctx: RuleContext) -> Alert | None:
 
 
 # ---------------------------------------------------------------------------
+# 0.10.0 additions — deeper scenario coverage
+# ---------------------------------------------------------------------------
+
+
+def _eval_det_geo_011(event: Event, ctx: RuleContext) -> Alert | None:
+    """Impossible-travel: two successful authentications for the same actor
+    from two different ``geo_region`` payload values within 60 minutes.
+
+    The pipeline's ingest layer is expected to populate ``geo_region`` from
+    the source IP (production) or a scenario's script (simulation). We do
+    not attempt to reason about IP-level geolocation inside this rule —
+    that's an enrichment concern."""
+    if event.event_type != "authentication.login.success":
+        return None
+    current_region = event.payload.get("geo_region")
+    if not current_region:
+        return None
+    recent = ctx.lookup_events(
+        actor_id=event.actor_id,
+        event_types={"authentication.login.success"},
+        since_minutes=60,
+    )
+    distinct_regions: dict[str, Event] = {}
+    for past in recent:
+        region = past.payload.get("geo_region")
+        if region and region not in distinct_regions:
+            distinct_regions[region] = past
+    if len(distinct_regions) < 2:
+        return None
+    rule = RULE_REGISTRY["DET-GEO-011"]
+    contributing = [e.event_id for e in distinct_regions.values()]
+    if event.event_id not in contributing:
+        contributing.append(event.event_id)
+    return _build_alert(
+        rule,
+        event,
+        contributing,
+        (
+            f"Impossible travel: {event.actor_id} authenticated from "
+            f"{len(distinct_regions)} distinct regions within 60 minutes."
+        ),
+        {
+            "regions_observed": sorted(distinct_regions.keys()),
+            "current_region": current_region,
+        },
+    )
+
+
+def _eval_det_exfil_012(event: Event, ctx: RuleContext) -> Alert | None:
+    """Large-volume exfiltration: cumulative ``bytes_downloaded`` by a single
+    actor exceeds 500 MB within 10 minutes across any number of downloads.
+
+    Uses the ``bytes_downloaded`` payload field written by download events.
+    An actor that downloads many small files triggers this just as readily
+    as an actor grabbing one huge archive — the threshold is on volume, not
+    request count."""
+    if event.event_type != "document.download.success":
+        return None
+    downloads = ctx.lookup_events(
+        actor_id=event.actor_id,
+        event_types={"document.download.success"},
+        since_minutes=10,
+    )
+    total_bytes = 0
+    for e in downloads:
+        value = e.payload.get("bytes_downloaded", 0)
+        if isinstance(value, (int, float)):
+            total_bytes += int(value)
+    threshold_bytes = 500 * 1024 * 1024  # 500 MB
+    if total_bytes < threshold_bytes:
+        return None
+    rule = RULE_REGISTRY["DET-EXFIL-012"]
+    return _build_alert(
+        rule,
+        event,
+        [e.event_id for e in downloads],
+        (
+            f"Large-volume exfiltration: {event.actor_id} downloaded "
+            f"{total_bytes / 1024 / 1024:.0f} MB across {len(downloads)} "
+            "requests in 10 minutes."
+        ),
+        {
+            "total_bytes": total_bytes,
+            "download_count": len(downloads),
+            "threshold_bytes": threshold_bytes,
+        },
+    )
+
+
+def _eval_det_hour_013(event: Event, ctx: RuleContext) -> Alert | None:
+    """Off-hours privileged action: a privileged write (policy change,
+    admin configuration, service disable) by an ``admin``-role actor
+    between 22:00 and 06:00 UTC.
+
+    Off-hours alerting is a well-known noisy heuristic — we scope it
+    tightly to privileged admins taking *write* actions so it stays
+    useful and doesn't drown out the more discriminating rules."""
+    privileged_event_types = {
+        "policy.change.executed",
+        "admin.configuration.changed",
+        "service.disabled",
+    }
+    if event.event_type not in privileged_event_types:
+        return None
+    if event.actor_role != "admin":
+        return None
+    hour = event.timestamp.hour
+    off_hours = hour >= 22 or hour < 6
+    if not off_hours:
+        return None
+    rule = RULE_REGISTRY["DET-HOUR-013"]
+    return _build_alert(
+        rule,
+        event,
+        [event.event_id],
+        (
+            f"Off-hours privileged action by {event.actor_id} at "
+            f"{event.timestamp.strftime('%H:%M')} UTC ({event.event_type})."
+        ),
+        {
+            "event_type": event.event_type,
+            "hour_utc": hour,
+            "actor_role": event.actor_role,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Rule registry — all rules defined here with full metadata
 # ---------------------------------------------------------------------------
 
@@ -450,6 +578,68 @@ _register(
         mitre_tactic_ids=["TA0001", "TA0003", "TA0004", "TA0005"],
         evaluate=_eval_det_corr_010,
         critical=True,
+    )
+)
+
+_register(
+    DetectionRule(
+        rule_id="DET-GEO-011",
+        name="Impossible Travel Between Authentications",
+        description=(
+            "Detects successful authentications from 2+ distinct geo regions "
+            "for the same actor within 60 minutes."
+        ),
+        version="1.0.0",
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        enabled=True,
+        # T1078 Valid Accounts — specifically the "anomalous login from a new
+        # location" sub-behavior. TA0001 Initial Access covers the tactic.
+        mitre_technique_ids=["T1078"],
+        mitre_tactic_ids=["TA0001"],
+        evaluate=_eval_det_geo_011,
+        critical=True,
+    )
+)
+
+_register(
+    DetectionRule(
+        rule_id="DET-EXFIL-012",
+        name="Large-Volume Data Exfiltration",
+        description=(
+            "Detects cumulative downloads exceeding 500 MB by a single actor "
+            "within 10 minutes."
+        ),
+        version="1.0.0",
+        severity=Severity.CRITICAL,
+        confidence=Confidence.HIGH,
+        enabled=True,
+        # T1048 Exfiltration Over Alternative Protocol / T1567 Exfiltration
+        # Over Web Service. Tactic: TA0010 Exfiltration.
+        mitre_technique_ids=["T1048", "T1567"],
+        mitre_tactic_ids=["TA0010"],
+        evaluate=_eval_det_exfil_012,
+        critical=True,
+    )
+)
+
+_register(
+    DetectionRule(
+        rule_id="DET-HOUR-013",
+        name="Off-Hours Privileged Action",
+        description=(
+            "Detects privileged writes (policy change, admin config, service "
+            "disable) by admin-role actors between 22:00 and 06:00 UTC."
+        ),
+        version="1.0.0",
+        severity=Severity.MEDIUM,
+        confidence=Confidence.MEDIUM,
+        enabled=True,
+        # T1098 Account Manipulation (off-hours admin changes are a classic
+        # manipulation indicator). Tactic TA0003 Persistence.
+        mitre_technique_ids=["T1098"],
+        mitre_tactic_ids=["TA0003"],
+        evaluate=_eval_det_hour_013,
     )
 )
 

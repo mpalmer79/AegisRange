@@ -391,6 +391,98 @@ class ScenarioEngine:
 
         return self._summary("SCN-CORR-006", correlation_id, operated_by=operated_by)
 
+    def run_geo_007(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
+        """SCN-GEO-007: Impossible-travel authentication.
+
+        Emits two ``authentication.login.success`` events for the same actor
+        from distinct ``geo_region`` values within a short window, exercising
+        ``DET-GEO-011``. The scenario intentionally doesn't also trigger the
+        credential-abuse rules — it's a clean, single-signal demo of the
+        geography-based detection.
+        """
+        # First login — home region.
+        first = self.identity.authenticate("alice", "Correct_Horse_42!")
+        self.pipeline.process(
+            self._new_event(
+                event_type="authentication.login.success",
+                category="authentication",
+                actor_id=first.actor_id,
+                actor_role=first.actor_role,
+                correlation_id=correlation_id,
+                target_id="alice",
+                source_ip="203.0.113.10",
+                status="success",
+                status_code="200",
+                session_id=first.session_id,
+                payload={
+                    "username": "alice",
+                    "authentication_method": "password",
+                    "geo_region": "us-east-1",
+                },
+            )
+        )
+        # Second login — impossible-travel region minutes later.
+        second = self.identity.authenticate("alice", "Correct_Horse_42!")
+        self.pipeline.process(
+            self._new_event(
+                event_type="authentication.login.success",
+                category="authentication",
+                actor_id=second.actor_id,
+                actor_role=second.actor_role,
+                correlation_id=correlation_id,
+                target_id="alice",
+                source_ip="185.60.216.35",
+                status="success",
+                status_code="200",
+                session_id=second.session_id,
+                payload={
+                    "username": "alice",
+                    "authentication_method": "password",
+                    "geo_region": "ap-south-1",
+                },
+            )
+        )
+        return self._summary("SCN-GEO-007", correlation_id, operated_by=operated_by)
+
+    def run_exfil_008(
+        self, correlation_id: str, *, operated_by: str | None = None
+    ) -> dict[str, object]:
+        """SCN-EXFIL-008: Large-volume data exfiltration.
+
+        Emits a burst of ``document.download.success`` events with
+        ``bytes_downloaded`` payloads totalling > 500 MB, exercising
+        ``DET-EXFIL-012``. Access-control is intentionally bypassed at the
+        event layer because the scenario is about the detection pattern,
+        not the authorization gate (see scn-doc-004 for the same pattern).
+        """
+        result = self.identity.authenticate("bob", "Hunter2_Strong_99!")
+        # 12 × 50 MB = 600 MB across twelve downloads.
+        for idx in range(12):
+            self.pipeline.process(
+                self._new_event(
+                    event_type="document.download.success",
+                    category="document",
+                    actor_id=result.actor_id,
+                    actor_role=result.actor_role,
+                    correlation_id=correlation_id,
+                    target_type="document",
+                    target_id=f"doc-bulk-{idx:02d}",
+                    session_id=result.session_id,
+                    source_ip="198.51.100.10",
+                    status="success",
+                    status_code="200",
+                    payload={
+                        "document_id": f"doc-bulk-{idx:02d}",
+                        "classification": "confidential",
+                        "sensitivity_score": 85,
+                        "bytes_downloaded": 50 * 1024 * 1024,
+                    },
+                )
+            )
+        return self._summary("SCN-EXFIL-008", correlation_id, operated_by=operated_by)
+
     def _summary(
         self, scenario_id: str, correlation_id: str, *, operated_by: str | None = None
     ) -> dict[str, object]:
