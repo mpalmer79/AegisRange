@@ -12,6 +12,7 @@ const geistSans = localFont({
   variable: "--font-geist-sans",
   weight: "100 900",
 });
+
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
@@ -51,6 +52,7 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE_URL,
     siteName: "AegisRange",
+    locale: "en_US",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     images: [
@@ -58,7 +60,7 @@ export const metadata: Metadata = {
         url: OG_IMAGE_PATH,
         width: 1200,
         height: 630,
-        alt: "AegisRange cybersecurity simulation platform dashboard",
+        alt: "AegisRange cybersecurity simulation platform preview",
         type: "image/jpeg",
       },
     ],
@@ -71,8 +73,6 @@ export const metadata: Metadata = {
   },
 };
 
-// Inline script that runs before React hydrates so the correct theme class
-// is applied to <html> on first paint (prevents a flash of the wrong theme).
 const themeInitScript = `(() => {
   try {
     const stored = localStorage.getItem('aegisrange-theme');
