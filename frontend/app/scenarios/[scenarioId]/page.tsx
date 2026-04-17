@@ -334,6 +334,8 @@ export default function ScenarioDetailPage() {
 
           <MissionConsole
             runId={runId}
+            difficulty={difficulty.id}
+            perspective={perspective}
             disabled={status === 'idle' || status === 'error'}
             onCommandApplied={(response) => {
               // Mirror new command history into `result` so objective
