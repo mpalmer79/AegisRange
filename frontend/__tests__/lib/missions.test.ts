@@ -14,11 +14,31 @@ import {
   __setBackendAvailableForTests,
 } from '@/lib/api';
 
+/**
+ * Minimal duck-typed Response for jsdom envs where ``global.Response``
+ * isn't polyfilled. The production ``request()`` helper only reads
+ * ``ok`` / ``status`` / ``statusText`` / ``headers.get('content-type')``
+ * / ``json()`` / ``text()``, so a plain object that exposes those is
+ * enough to drive the code under test.
+ */
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+  const headersMap: Record<string, string> = {
+    'content-type': 'application/json',
+  };
+  const fake = {
+    ok: status >= 200 && status < 300,
     status,
-    headers: { 'content-type': 'application/json' },
-  });
+    statusText: '',
+    headers: {
+      get: (key: string) => headersMap[key.toLowerCase()] ?? null,
+      forEach: (_cb: (value: string, key: string) => void) => {
+        /* no-op */
+      },
+    },
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  };
+  return fake as unknown as Response;
 }
 
 function snapshotFixture(perspective: 'red' | 'blue' = 'blue') {

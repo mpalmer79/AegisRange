@@ -162,27 +162,37 @@ def _handle_failed_login(params: dict[str, Any], ctx: ScriptContext) -> None:
 
 
 def _handle_successful_login(params: dict[str, Any], ctx: ScriptContext) -> None:
+    """Authenticate the user and (unless ``emit_event=False``) emit the
+    ``authentication.login.success`` event.
+
+    ``emit_event=False`` is used by scenarios whose legacy implementation
+    calls ``identity.authenticate`` only as *setup* (to get a session
+    id) and does not push a login-success event into the pipeline —
+    scn-session-002, scn-doc-003, scn-doc-004. Keeping the event-less
+    variant preserves byte-equivalence with the legacy engine's event
+    count."""
     username = params["username"]
     password = params["password"]
     result = ctx.identity.authenticate(username, password)
-    ctx.pipeline.process(
-        _new_event(
-            event_type="authentication.login.success",
-            category="authentication",
-            actor_id=result.actor_id,
-            actor_role=result.actor_role,
-            correlation_id=ctx.correlation_id,
-            target_id=username,
-            source_ip=params.get("source_ip", "203.0.113.10"),
-            status="success",
-            status_code="200",
-            session_id=result.session_id,
-            payload={
-                "username": username,
-                "authentication_method": "password",
-            },
+    if params.get("emit_event", True):
+        ctx.pipeline.process(
+            _new_event(
+                event_type="authentication.login.success",
+                category="authentication",
+                actor_id=result.actor_id,
+                actor_role=result.actor_role,
+                correlation_id=ctx.correlation_id,
+                target_id=username,
+                source_ip=params.get("source_ip", "203.0.113.10"),
+                status="success",
+                status_code="200",
+                session_id=result.session_id,
+                payload={
+                    "username": username,
+                    "authentication_method": "password",
+                },
+            )
         )
-    )
     assert ctx.state is not None  # set in __post_init__
     ctx.state["session_id"] = result.session_id
     ctx.state["actor_id"] = result.actor_id
@@ -395,6 +405,10 @@ def _script_session_002() -> list[Beat]:
     # The scenario logs bob in with a valid password, then emits two
     # authorization.check.success events — one from the original IP
     # and one from a different IP, simulating token theft.
+    #
+    # Legacy scn-session-002 does NOT emit a login.success event — the
+    # authenticate() call is setup-only. Pass ``emit_event=False`` so
+    # the script stays byte-equivalent to the legacy engine.
     return [
         Beat(
             kind=BeatKind.SUCCESSFUL_LOGIN,
@@ -404,6 +418,7 @@ def _script_session_002() -> list[Beat]:
                 "username": "bob",
                 "password": "Hunter2_Strong_99!",
                 "source_ip": "198.51.100.10",
+                "emit_event": False,
             },
         ),
         Beat(
@@ -446,6 +461,8 @@ def _script_session_002() -> list[Beat]:
 
 
 def _script_doc_003() -> list[Beat]:
+    # Legacy scn-doc-003 does the login as setup-only, without an
+    # emitted login.success event. emit_event=False mirrors that.
     beats: list[Beat] = [
         Beat(
             kind=BeatKind.SUCCESSFUL_LOGIN,
@@ -455,6 +472,7 @@ def _script_doc_003() -> list[Beat]:
                 "username": "bob",
                 "password": "Hunter2_Strong_99!",
                 "source_ip": "198.51.100.10",
+                "emit_event": False,
             },
         )
     ]
@@ -479,6 +497,8 @@ def _script_doc_003() -> list[Beat]:
 
 
 def _script_doc_004() -> list[Beat]:
+    # Legacy scn-doc-004 does the login as setup-only, without an
+    # emitted login.success event. emit_event=False mirrors that.
     beats: list[Beat] = [
         Beat(
             kind=BeatKind.SUCCESSFUL_LOGIN,
@@ -488,6 +508,7 @@ def _script_doc_004() -> list[Beat]:
                 "username": "bob",
                 "password": "Hunter2_Strong_99!",
                 "source_ip": "198.51.100.10",
+                "emit_event": False,
             },
         )
     ]

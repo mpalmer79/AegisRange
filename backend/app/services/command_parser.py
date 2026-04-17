@@ -92,26 +92,42 @@ def parse(raw: str, *, perspective: Perspective) -> ParseOutcome:
         if spec is not None:
             return _parse_args(spec, tokens[2:], raw, perspective)
 
+    # Single-token verb — e.g. "help" (which itself takes an optional
+    # positional). We hand everything after the verb to _parse_args so
+    # positional args + flags are handled uniformly.
     spec = find_verb(name, None, perspective)
-    if spec is None:
-        return ParseOutcome(
-            err=ParseError(
-                kind="unknown_verb",
-                message=f"Unknown command '{name}'.",
-                suggestion=_closest_verb(name, perspective),
+    if spec is not None:
+        return _parse_args(spec, tokens[1:], raw, perspective)
+
+    # Not a standalone verb. Is there any verb with this name that
+    # requires a subcommand? If so, user typed an unrecognised
+    # subcommand; if not, the whole verb is unknown.
+    has_subcommand_variant = any(v.name == name for v in verbs_for(perspective))
+    if has_subcommand_variant:
+        if len(tokens) >= 2:
+            return ParseOutcome(
+                err=ParseError(
+                    kind="unknown_subcommand",
+                    message=(
+                        f"'{tokens[1]}' is not a subcommand of '{name}'. "
+                        f"Try `help {name}`."
+                    ),
+                )
             )
-        )
-    if len(tokens) >= 2 and tokens[1].startswith("--") is False:
-        # User typed a subcommand but none match this verb.
         return ParseOutcome(
             err=ParseError(
                 kind="unknown_subcommand",
-                message=(
-                    f"'{tokens[1]}' is not a subcommand of '{name}'. Try `help {name}`."
-                ),
+                message=f"'{name}' requires a subcommand. Try `help {name}`.",
             )
         )
-    return _parse_args(spec, tokens[1:], raw, perspective)
+
+    return ParseOutcome(
+        err=ParseError(
+            kind="unknown_verb",
+            message=f"Unknown command '{name}'.",
+            suggestion=_closest_verb(name, perspective),
+        )
+    )
 
 
 def _parse_args(
