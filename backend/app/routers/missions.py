@@ -32,8 +32,13 @@ from app.dependencies import (
 )
 from app.schemas import (
     IncidentResponse,
+    LeaderboardEntry,
+    LeaderboardResponse,
     MissionHelpResponse,
     MissionSnapshot,
+    ReplayCommand,
+    ReplayResponse,
+    ReportScoreRequest,
     ScenarioSummaryResponse,
     StartMissionRequest,
     SubmitCommandRequest,
@@ -129,6 +134,42 @@ async def start_mission(payload: StartMissionRequest, request: Request) -> dict:
             operated_by=operated_by,
         )
     return _snapshot(run)
+
+
+# NOTE: ``GET /leaderboard`` MUST be declared before
+# ``GET /{run_id}`` so FastAPI doesn't dispatch the literal path to
+# the dynamic-segment handler. Same constraint applies to any other
+# fixed-string route under /missions.
+
+
+@router.get("/leaderboard", response_model=LeaderboardResponse)
+def mission_leaderboard(
+    scenario_id: str | None = None,
+    perspective: str | None = None,
+    difficulty: str | None = None,
+    limit: int = 10,
+) -> dict:
+    runs = mission_service.leaderboard(
+        scenario_id=scenario_id,
+        perspective=perspective,
+        difficulty=difficulty,
+        limit=limit,
+    )
+    entries = [
+        LeaderboardEntry(
+            run_id=r.run_id,
+            scenario_id=r.scenario_id,
+            perspective=r.perspective,
+            difficulty=r.difficulty,
+            status=r.status,
+            score=int(r.score or 0),
+            duration_seconds=r.duration_seconds,
+            operated_by=r.operated_by,
+            created_at=r.created_at.isoformat(),
+        ).model_dump()
+        for r in runs
+    ]
+    return {"entries": entries}
 
 
 @router.get("/{run_id}", response_model=MissionSnapshot)
@@ -236,6 +277,56 @@ def mission_help(run_id: str, topic: str | None = None) -> dict:
             if page is not None:
                 verb_help[v.key] = page
     return {"overview": overview, "verb_help": verb_help}
+
+
+@router.post("/{run_id}/score", response_model=MissionSnapshot)
+def report_mission_score(run_id: str, payload: ReportScoreRequest) -> dict:
+    """Record the final XP score for a terminated run. Frontend posts
+    this once the mission settles so the leaderboard endpoint has
+    something to rank by."""
+    run = mission_service.report_score(
+        run_id, score=payload.score, duration_seconds=payload.duration_seconds
+    )
+    if run is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return _snapshot(run)
+
+
+@router.get("/{run_id}/replay", response_model=ReplayResponse)
+def mission_replay(run_id: str) -> dict:
+    """Structured replay of a run — header + every command + summary.
+    Designed to drive a UI that re-renders the run as a transcript
+    card; for plain text use ``GET /missions/{run_id}/transcript``."""
+    run = mission_service.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    summary = (
+        ScenarioSummaryResponse(**{**run.summary, "run_id": run.run_id}).model_dump()
+        if run.summary
+        else None
+    )
+    return {
+        "run_id": run.run_id,
+        "scenario_id": run.scenario_id,
+        "perspective": run.perspective,
+        "difficulty": run.difficulty,
+        "status": run.status,
+        "created_at": run.created_at.isoformat(),
+        "score": run.score,
+        "duration_seconds": run.duration_seconds,
+        "summary": summary,
+        "commands": [
+            ReplayCommand(
+                ts=record.ts.isoformat(),
+                raw=record.raw,
+                verb_key=record.verb_key,
+                kind=record.kind,
+                lines=record.lines,
+                effects=record.effects,
+            ).model_dump()
+            for record in run.command_history
+        ],
+    }
 
 
 @router.get("/{run_id}/transcript", response_class=PlainTextResponse)

@@ -2,7 +2,7 @@
 
 import { useParams, notFound } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { startMission, getScenarioErrorMessage, ApiError } from '@/lib/api';
+import { startMission, getScenarioErrorMessage, ApiError, reportMissionScore } from '@/lib/api';
 import { SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
 import {
   DIFFICULTIES,
@@ -27,6 +27,7 @@ import LaunchPanel from './components/LaunchPanel';
 import MissionTimeline from './components/MissionTimeline';
 import MissionConsole from './components/MissionConsole';
 import OpsManual from './components/OpsManual';
+import LeaderboardCard from './components/LeaderboardCard';
 import { useMissionStream } from './hooks/useMissionStream';
 import { ACCENTS, DEFAULT_ACCENT } from './components/accents';
 
@@ -222,6 +223,18 @@ export default function ScenarioDetailPage() {
     setNewPersonalBest(outcome.newPersonalBest);
     setPreviousBestXp(outcome.previousBestXp);
     setStreakReached(outcome.streakReached);
+
+    // Phase 8: report the final computed XP back to the backend so
+    // this run can appear on the leaderboard. Fire-and-forget — if
+    // the post fails the player still sees their local state.
+    if (result.run_id) {
+      reportMissionScore(result.run_id, {
+        score: earnedXp,
+        duration_seconds: elapsedSec,
+      }).catch(() => {
+        /* ignore; leaderboard is non-critical */
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, result]);
 
@@ -351,6 +364,13 @@ export default function ScenarioDetailPage() {
               );
             }}
             onOpenOpsManual={() => setOpsManualOpen(true)}
+          />
+
+          <LeaderboardCard
+            scenarioId={sc.id}
+            perspective={perspective}
+            difficulty={difficulty.id}
+            refetchToken={status === 'complete' ? result?.run_id : null}
           />
         </div>
 
