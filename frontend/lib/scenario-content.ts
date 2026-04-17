@@ -115,7 +115,45 @@ const blueAnyContainByCommand = (r: ScenarioResult) => {
 };
 
 // ---------- content ----------
+
+// Tutorial-specific objective checks. Each looks at the commands the
+// player has typed so far — the tutorial is about learning the verbs,
+// not about simulated world state.
+const tutorialIssued = (r: ScenarioResult, prefix: string) =>
+  (r.commands_issued ?? []).some((v) => v === prefix || v.startsWith(prefix));
+
 export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
+  'scn-tutorial-000': {
+    tagline: 'Learn the console in 60 seconds.',
+    backstory:
+      'A sandboxed warm-up run. The simulated adversary fires a single failed login so you have something to look at while getting comfortable with the four verbs you\'ll use in every mission.',
+    attacker: 'Training sparring partner',
+    target: 'Sandboxed tenant',
+    mitreTechniques: [],
+    stages: [
+      { id: 'observe', label: 'Observe', killChainPhase: 'detection', description: 'Query the SIEM for alerts.' },
+      { id: 'inspect', label: 'Inspect', killChainPhase: 'detection', description: 'Tail the raw events.' },
+      { id: 'contain', label: 'Contain', killChainPhase: 'response', description: 'Practice the containment verb.' },
+    ],
+    red: {
+      role: 'Trainee',
+      summary: 'Red practice is disabled for the tutorial. Switch to Blue to get started.',
+      objectives: [
+        { id: 'red-1', title: 'Switch to Blue', description: 'The tutorial runs on the defender side. Pick Blue and launch.', xp: 0, check: () => false },
+      ],
+    },
+    blue: {
+      role: 'Trainee Analyst',
+      summary: 'Type each of the four commands. No time pressure, no XP penalties — just get the feel of the console.',
+      objectives: [
+        { id: 'blue-1', title: 'Run `alerts list`', description: 'Type `alerts list` in the console and press Enter.', xp: 0, check: (r) => tutorialIssued(r, 'alerts list') },
+        { id: 'blue-2', title: 'Run `events tail`', description: 'Type `events tail` to see the raw events.', xp: 0, check: (r) => tutorialIssued(r, 'events tail') },
+        { id: 'blue-3', title: 'Run `status`', description: 'Type `status` to see mission state at a glance.', xp: 0, check: (r) => tutorialIssued(r, 'status') },
+        { id: 'blue-4', title: 'Practice containment', description: 'Type `contain session --user user-alice --action revoke`.', xp: 0, check: (r) => tutorialIssued(r, 'contain session') },
+      ],
+    },
+  },
+
   'scn-auth-001': {
     tagline: 'Crack the gate before the SOC wakes up.',
     backstory:

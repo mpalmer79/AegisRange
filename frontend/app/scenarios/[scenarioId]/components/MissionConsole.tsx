@@ -284,6 +284,10 @@ export default function MissionConsole({
         ref={scrollRef}
         className="max-h-[340px] min-h-[180px] overflow-y-auto px-4 py-3 text-[12.5px] leading-[1.55]"
         onClick={() => inputRef.current?.focus()}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Mission console transcript"
       >
         {transcript.map((line, i) => (
           <div

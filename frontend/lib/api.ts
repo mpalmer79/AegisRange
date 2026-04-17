@@ -404,6 +404,22 @@ export function missionStreamUrl(runId: string): string {
   return `${BASE_URL}/missions/${runId}/stream`;
 }
 
+/** Plain-text transcript of a run. Used by the "Copy transcript" button. */
+export async function getMissionTranscript(runId: string): Promise<string> {
+  if (!(await probeBackend())) {
+    throw new Error(
+      `Backend unavailable — cannot fetch transcript for ${runId}`,
+    );
+  }
+  const res = await fetch(`${BASE_URL}/missions/${runId}/transcript`, {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, res.statusText);
+  }
+  return res.text();
+}
+
 export async function submitMissionCommand(
   runId: string,
   command: string,

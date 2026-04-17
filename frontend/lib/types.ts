@@ -441,6 +441,11 @@ export interface PlatformUser {
 
 export const SCENARIO_DEFINITIONS = [
   {
+    id: 'scn-tutorial-000',
+    name: 'First-Run Tutorial',
+    description: 'A 60-second sandboxed walkthrough that teaches the four core console verbs. No XP, no time pressure, no penalties.',
+  },
+  {
     id: 'scn-auth-001',
     name: 'Brute Force Authentication',
     description: 'Simulates a brute-force login attack with multiple failed authentication attempts followed by a successful login from a suspicious IP.',

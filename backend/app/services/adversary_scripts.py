@@ -647,7 +647,23 @@ def _script_corr_006() -> list[Beat]:
     return beats
 
 
+def _script_tutorial_000() -> list[Beat]:
+    # Single failed-login beat — gives the player one event to inspect
+    # with `events tail` while learning the console. No alerts, no
+    # incident: the tutorial is about the verbs, not the detection
+    # surface.
+    return [
+        Beat(
+            kind=BeatKind.FAILED_LOGIN,
+            label="Tutorial demo: a failed login from 203.0.113.10",
+            delay_before_seconds=0.0,
+            params={"username": "alice", "source_ip": "203.0.113.10"},
+        ),
+    ]
+
+
 _SCRIPT_BUILDERS: dict[str, Any] = {
+    "scn-tutorial-000": _script_tutorial_000,
     "scn-auth-001": _script_auth_001,
     "scn-session-002": _script_session_002,
     "scn-doc-003": _script_doc_003,
