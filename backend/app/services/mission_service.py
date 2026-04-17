@@ -126,6 +126,13 @@ class MissionRun:
     # it knows the run has terminated. Used for tie-breaking on the
     # leaderboard (lower duration wins).
     duration_seconds: int | None = None
+    # Phase 9 co-op: the partner run_id if this run is paired with a
+    # mirror-perspective run (red ↔ blue). Both runs share a
+    # correlation_id so the detection pipeline sees one world; each
+    # run has its own command history and score. Cross-stream
+    # publishing (mission_service.submit_command) delivers each
+    # player's beats to the partner's SSE feed in real time.
+    coop_partner_run_id: str | None = None
 
 
 def mission_run_to_dict(run: MissionRun) -> dict[str, Any]:
@@ -144,6 +151,7 @@ def mission_run_to_dict(run: MissionRun) -> dict[str, Any]:
         "scratch_state": run.scratch_state,
         "score": run.score,
         "duration_seconds": run.duration_seconds,
+        "coop_partner_run_id": run.coop_partner_run_id,
         "command_history": [
             {
                 "ts": record.ts.isoformat(),
@@ -174,6 +182,7 @@ def mission_run_from_dict(data: dict[str, Any]) -> MissionRun:
         scratch_state=data.get("scratch_state", {}) or {},
         score=data.get("score"),
         duration_seconds=data.get("duration_seconds"),
+        coop_partner_run_id=data.get("coop_partner_run_id"),
         command_history=[
             CommandRecord(
                 ts=datetime.fromisoformat(entry["ts"]),
@@ -404,6 +413,69 @@ class MissionService:
         self.scheduler.schedule(run)
         return run
 
+    # -- co-op (Phase 9) -----------------------------------------------------
+
+    def start_coop(
+        self,
+        *,
+        scenario_id: str,
+        difficulty: Difficulty,
+        correlation_id: str,
+        operated_by_red: str | None = None,
+        operated_by_blue: str | None = None,
+    ) -> tuple[MissionRun, MissionRun]:
+        """Create a paired red+blue run sharing one correlation_id.
+
+        Neither side runs the scripted adversary — the Red player IS
+        the adversary. Both runs start ``active`` and stay that way
+        until explicit terminal events (completion, abort). The
+        scheduler is NOT invoked for either run; cross-stream
+        publishing in :meth:`submit_command` carries Red's beats to
+        Blue's SSE feed and vice versa.
+
+        Returns ``(red_run, blue_run)``.
+        """
+        if scenario_id not in SUPPORTED_SCENARIOS:
+            raise ValueError(f"Unsupported scenario: {scenario_id}")
+
+        red = MissionRun(
+            run_id=f"run-{uuid4()}",
+            scenario_id=scenario_id,
+            perspective="red",
+            difficulty=difficulty,
+            correlation_id=correlation_id,
+            created_at=utc_now(),
+            status="active",
+            operated_by=operated_by_red,
+            summary=None,
+        )
+        blue = MissionRun(
+            run_id=f"run-{uuid4()}",
+            scenario_id=scenario_id,
+            perspective="blue",
+            difficulty=difficulty,
+            correlation_id=correlation_id,
+            created_at=utc_now(),
+            status="active",
+            operated_by=operated_by_blue,
+            summary=None,
+        )
+        # Link each side to its partner so submit_command knows where
+        # to cross-publish player beats.
+        red.coop_partner_run_id = blue.run_id
+        blue.coop_partner_run_id = red.run_id
+
+        # Seed snapshots (world is empty at start).
+        red.summary = build_run_snapshot(red, self.incident_store)
+        blue.summary = build_run_snapshot(blue, self.incident_store)
+
+        # Order matters for get_by_correlation (last writer wins), but
+        # that reverse lookup isn't used anywhere load-bearing. Put
+        # red first so it's stable across restarts.
+        self.missions.put(red)
+        self.missions.put(blue)
+        return red, blue
+
     # -- commands ------------------------------------------------------------
 
     async def submit_command(
@@ -508,6 +580,20 @@ class MissionService:
             if "snapshot" not in stream_event:
                 stream_event["snapshot"] = build_run_snapshot(run, self.incident_store)
             await self.stream_hub.publish(run.run_id, stream_event)
+
+            # Phase 9 co-op: mirror the beat to the partner's stream
+            # so red's `attempt login` beats arrive live on blue's
+            # timeline (and vice versa). The partner sees the beat
+            # with a snapshot scoped to THEIR run — each player's
+            # commands_issued / xp_delta stay separate.
+            if run.coop_partner_run_id is not None:
+                partner = self.missions.get(run.coop_partner_run_id)
+                if partner is not None:
+                    partner_event = dict(stream_event)
+                    partner_event["snapshot"] = build_run_snapshot(
+                        partner, self.incident_store
+                    )
+                    await self.stream_hub.publish(partner.run_id, partner_event)
 
         return run, {
             "kind": result.kind,

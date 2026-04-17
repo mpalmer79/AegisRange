@@ -58,6 +58,7 @@ import {
   MissionStatus,
   MissionCommandResponse,
   MissionHelp,
+  CoopPair,
 } from './types';
 
 // ------------------------------------------------------------
@@ -383,6 +384,20 @@ export async function startMission(payload: {
         body: JSON.stringify(payload),
       }),
     'mission execution requires a live backend'
+  );
+}
+
+export async function startCoopMission(payload: {
+  scenario_id: string;
+  difficulty?: MissionDifficulty;
+}): Promise<CoopPair> {
+  return liveOrThrow(
+    () =>
+      request<CoopPair>('/missions/coop', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    'co-op mission requires a live backend',
   );
 }
 
