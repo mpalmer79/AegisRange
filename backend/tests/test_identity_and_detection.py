@@ -204,7 +204,10 @@ class TestDetectionRuleRegistry(unittest.TestCase):
     """Verify detection rules are structured and versioned."""
 
     def test_all_rules_registered(self) -> None:
-        self.assertEqual(len(RULE_REGISTRY), 10)
+        # 10 rules through 0.9.0 + 3 new in 0.10.0 (DET-GEO-011,
+        # DET-EXFIL-012, DET-HOUR-013). Update the count when adding
+        # or removing rules.
+        self.assertEqual(len(RULE_REGISTRY), 13)
 
     def test_all_rules_have_version(self) -> None:
         for rule in get_all_rules():

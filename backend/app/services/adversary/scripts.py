@@ -297,6 +297,72 @@ def _script_tutorial_000() -> list[Beat]:
     ]
 
 
+def _script_geo_007() -> list[Beat]:
+    """SCN-GEO-007: two successful logins from distinct geo regions in a
+    short window. Exercises DET-GEO-011 (impossible travel)."""
+    return [
+        Beat(
+            kind=BeatKind.SUCCESSFUL_LOGIN,
+            label="alice authenticates from us-east-1 (203.0.113.10)",
+            delay_before_seconds=0.0,
+            params={
+                "username": "alice",
+                "password": "Correct_Horse_42!",
+                "source_ip": "203.0.113.10",
+                "geo_region": "us-east-1",
+            },
+        ),
+        Beat(
+            kind=BeatKind.SUCCESSFUL_LOGIN,
+            label="alice authenticates from ap-south-1 — impossible travel",
+            delay_before_seconds=4.0,
+            params={
+                "username": "alice",
+                "password": "Correct_Horse_42!",
+                "source_ip": "185.60.216.35",
+                "geo_region": "ap-south-1",
+            },
+        ),
+    ]
+
+
+def _script_exfil_008() -> list[Beat]:
+    """SCN-EXFIL-008: twelve 50 MB downloads in rapid succession (>500 MB
+    total). Exercises DET-EXFIL-012 (large-volume exfiltration)."""
+    beats: list[Beat] = [
+        Beat(
+            kind=BeatKind.SUCCESSFUL_LOGIN,
+            label="bob authenticates from 198.51.100.10",
+            delay_before_seconds=0.0,
+            params={
+                "username": "bob",
+                "password": "Hunter2_Strong_99!",
+                "source_ip": "198.51.100.10",
+                "emit_event": False,
+            },
+        )
+    ]
+    # 12 × 50 MB = 600 MB, comfortably above the 500 MB threshold.
+    for idx in range(12):
+        beats.append(
+            Beat(
+                kind=BeatKind.DOCUMENT_DOWNLOAD,
+                label=f"Bulk download doc-002 ({idx + 1}/12, 50 MB)",
+                delay_before_seconds=0.25,
+                params={
+                    "role": "admin",
+                    "document_id": "doc-002",
+                    "actor_id": "user-bob",
+                    "source_ip": "198.51.100.10",
+                    "sensitivity_score": 85,
+                    "bytes_downloaded": 50 * 1024 * 1024,
+                    "enforce_access": False,
+                },
+            )
+        )
+    return beats
+
+
 _SCRIPT_BUILDERS: dict[str, Any] = {
     "scn-tutorial-000": _script_tutorial_000,
     "scn-auth-001": _script_auth_001,
@@ -305,6 +371,8 @@ _SCRIPT_BUILDERS: dict[str, Any] = {
     "scn-doc-004": _script_doc_004,
     "scn-svc-005": _script_svc_005,
     "scn-corr-006": _script_corr_006,
+    "scn-geo-007": _script_geo_007,
+    "scn-exfil-008": _script_exfil_008,
 }
 
 

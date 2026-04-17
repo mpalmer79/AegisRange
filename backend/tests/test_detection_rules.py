@@ -733,5 +733,249 @@ class TestDETPOL009(unittest.TestCase):
         self.assertIn("download_restricted", matched[0].payload["actor_risk_context"])
 
 
+# ---------------------------------------------------------------------------
+# 0.10.0 rule additions
+# ---------------------------------------------------------------------------
+
+
+class TestDETGEO011(unittest.TestCase):
+    """DET-GEO-011: Impossible Travel Between Authentications (2+ regions / 60 min)."""
+
+    def setUp(self) -> None:
+        self.store = InMemoryStore()
+        self.telemetry = TelemetryService(self.store)
+        self.detection = DetectionService(self.telemetry)
+
+    def _login_success(
+        self,
+        *,
+        region: str | None,
+        correlation_id: str,
+        actor_id: str = "user-alice",
+    ) -> Event:
+        payload: dict = {"username": actor_id}
+        if region is not None:
+            payload["geo_region"] = region
+        return _make_event(
+            event_type="authentication.login.success",
+            category="authentication",
+            actor_id=actor_id,
+            correlation_id=correlation_id,
+            target_id=actor_id,
+            status="success",
+            status_code="200",
+            payload=payload,
+        )
+
+    def test_two_regions_fires_alert(self) -> None:
+        corr = f"corr-{uuid4()}"
+        self.telemetry.emit(self._login_success(region="us-east-1", correlation_id=corr))
+        event = self._login_success(region="ap-south-1", correlation_id=corr)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-GEO-011"]
+        self.assertEqual(len(matched), 1)
+        self.assertIn("us-east-1", matched[0].payload["regions_observed"])
+        self.assertIn("ap-south-1", matched[0].payload["regions_observed"])
+
+    def test_same_region_does_not_fire(self) -> None:
+        corr = f"corr-{uuid4()}"
+        self.telemetry.emit(self._login_success(region="us-east-1", correlation_id=corr))
+        event = self._login_success(region="us-east-1", correlation_id=corr)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-GEO-011"]
+        self.assertEqual(len(matched), 0)
+
+    def test_missing_region_does_not_fire(self) -> None:
+        corr = f"corr-{uuid4()}"
+        self.telemetry.emit(self._login_success(region=None, correlation_id=corr))
+        event = self._login_success(region=None, correlation_id=corr)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-GEO-011"]
+        self.assertEqual(len(matched), 0)
+
+    def test_failure_events_ignored(self) -> None:
+        """Failed logins should not participate in impossible-travel logic."""
+        corr = f"corr-{uuid4()}"
+        # The failure event type is not "authentication.login.success"; the
+        # rule filters on event_type first, so it should never fire.
+        failure = _make_event(
+            event_type="authentication.login.failure",
+            correlation_id=corr,
+            payload={"geo_region": "ap-south-1"},
+        )
+        self.telemetry.emit(failure)
+        alerts = self.detection.evaluate(failure)
+        matched = [a for a in alerts if a.rule_id == "DET-GEO-011"]
+        self.assertEqual(len(matched), 0)
+
+
+class TestDETEXFIL012(unittest.TestCase):
+    """DET-EXFIL-012: Large-Volume Data Exfiltration (500+ MB / 10 min)."""
+
+    def setUp(self) -> None:
+        self.store = InMemoryStore()
+        self.telemetry = TelemetryService(self.store)
+        self.detection = DetectionService(self.telemetry)
+
+    def _download(
+        self,
+        *,
+        bytes_downloaded: int,
+        correlation_id: str,
+        actor_id: str = "user-bob",
+    ) -> Event:
+        return _make_event(
+            event_type="document.download.success",
+            category="document",
+            actor_id=actor_id,
+            target_type="document",
+            target_id="doc-001",
+            status="success",
+            status_code="200",
+            correlation_id=correlation_id,
+            payload={
+                "document_id": "doc-001",
+                "bytes_downloaded": bytes_downloaded,
+            },
+        )
+
+    def test_single_huge_download_fires(self) -> None:
+        corr = f"corr-{uuid4()}"
+        event = self._download(bytes_downloaded=600 * 1024 * 1024, correlation_id=corr)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-EXFIL-012"]
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0].payload["download_count"], 1)
+        self.assertGreaterEqual(matched[0].payload["total_bytes"], 500 * 1024 * 1024)
+
+    def test_many_small_downloads_cumulate(self) -> None:
+        corr = f"corr-{uuid4()}"
+        # 10 x 60MB = 600MB
+        for _ in range(9):
+            self.telemetry.emit(
+                self._download(bytes_downloaded=60 * 1024 * 1024, correlation_id=corr)
+            )
+        final = self._download(bytes_downloaded=60 * 1024 * 1024, correlation_id=corr)
+        self.telemetry.emit(final)
+        alerts = self.detection.evaluate(final)
+        matched = [a for a in alerts if a.rule_id == "DET-EXFIL-012"]
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0].payload["download_count"], 10)
+
+    def test_below_threshold_does_not_fire(self) -> None:
+        corr = f"corr-{uuid4()}"
+        event = self._download(bytes_downloaded=100 * 1024 * 1024, correlation_id=corr)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-EXFIL-012"]
+        self.assertEqual(len(matched), 0)
+
+    def test_missing_bytes_field_treated_as_zero(self) -> None:
+        """An event missing bytes_downloaded shouldn't raise; it just doesn't
+        contribute to the cumulative total."""
+        corr = f"corr-{uuid4()}"
+        event = _make_event(
+            event_type="document.download.success",
+            category="document",
+            actor_id="user-bob",
+            target_type="document",
+            target_id="doc-001",
+            status="success",
+            status_code="200",
+            correlation_id=corr,
+            payload={"document_id": "doc-001"},  # no bytes_downloaded
+        )
+        self.telemetry.emit(event)
+        # Must not raise.
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-EXFIL-012"]
+        self.assertEqual(len(matched), 0)
+
+
+class TestDETHOUR013(unittest.TestCase):
+    """DET-HOUR-013: Off-Hours Privileged Action (22:00-06:00 UTC, admin writes)."""
+
+    def setUp(self) -> None:
+        self.store = InMemoryStore()
+        self.telemetry = TelemetryService(self.store)
+        self.detection = DetectionService(self.telemetry)
+
+    def _privileged_event(
+        self,
+        *,
+        event_type: str,
+        hour: int,
+        actor_role: str = "admin",
+    ) -> Event:
+        from datetime import datetime, timezone
+
+        # Anchor on a fixed date so only the hour varies across test cases.
+        ts = datetime(2026, 4, 15, hour, 30, 0, tzinfo=timezone.utc)
+        return Event(
+            event_type=event_type,
+            category="system",
+            actor_id="user-admin",
+            actor_type="user",
+            actor_role=actor_role,
+            target_type="policy",
+            target_id="policy-001",
+            request_id=f"req-{uuid4()}",
+            correlation_id=f"corr-{uuid4()}",
+            session_id=None,
+            source_ip="203.0.113.10",
+            user_agent="test-client",
+            origin="api",
+            status="success",
+            status_code="200",
+            error_message=None,
+            severity=Severity.INFORMATIONAL,
+            confidence=Confidence.LOW,
+            payload={"policy_id": "policy-001"},
+            timestamp=ts,
+        )
+
+    def test_policy_change_at_midnight_fires(self) -> None:
+        event = self._privileged_event(event_type="policy.change.executed", hour=0)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-HOUR-013"]
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0].payload["hour_utc"], 0)
+
+    def test_policy_change_at_23h_fires(self) -> None:
+        event = self._privileged_event(event_type="policy.change.executed", hour=23)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-HOUR-013"]
+        self.assertEqual(len(matched), 1)
+
+    def test_business_hours_does_not_fire(self) -> None:
+        event = self._privileged_event(event_type="policy.change.executed", hour=10)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-HOUR-013"]
+        self.assertEqual(len(matched), 0)
+
+    def test_non_admin_role_does_not_fire(self) -> None:
+        event = self._privileged_event(
+            event_type="policy.change.executed", hour=2, actor_role="analyst"
+        )
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-HOUR-013"]
+        self.assertEqual(len(matched), 0)
+
+    def test_non_privileged_event_does_not_fire(self) -> None:
+        event = self._privileged_event(event_type="document.read.success", hour=2)
+        self.telemetry.emit(event)
+        alerts = self.detection.evaluate(event)
+        matched = [a for a in alerts if a.rule_id == "DET-HOUR-013"]
+        self.assertEqual(len(matched), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

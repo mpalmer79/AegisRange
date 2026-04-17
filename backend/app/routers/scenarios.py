@@ -94,3 +94,15 @@ def run_scenario_svc_005(request: Request) -> dict:
 def run_scenario_corr_006(request: Request) -> dict:
     """SCN-CORR-006: Multi-Signal Compromise Sequence."""
     return _run_scenario(request, "scn-corr-006")
+
+
+@router.post("/scn-geo-007", response_model=ScenarioSummaryResponse)
+def run_scenario_geo_007(request: Request) -> dict:
+    """SCN-GEO-007: Impossible-Travel Authentication (exercises DET-GEO-011)."""
+    return _run_scenario(request, "scn-geo-007")
+
+
+@router.post("/scn-exfil-008", response_model=ScenarioSummaryResponse)
+def run_scenario_exfil_008(request: Request) -> dict:
+    """SCN-EXFIL-008: Large-Volume Data Exfiltration (exercises DET-EXFIL-012)."""
+    return _run_scenario(request, "scn-exfil-008")

@@ -1,10 +1,13 @@
-"""Analytics routes (risk profiles, rule effectiveness, scenario history)."""
+"""Analytics routes (risk profiles, rule effectiveness, scenario history,
+MTTD/MTTR, actor risk trajectories, alert disposition, coverage)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
 
-from app.dependencies import require_role, risk_service
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.dependencies import analytics_service, require_role, risk_service
 from app.schemas import RiskProfileResponse, RuleEffectivenessResponse
 from app.serializers import risk_profile_to_dict
 from app.store import STORE
@@ -68,3 +71,67 @@ def get_rule_effectiveness() -> list[dict]:
 @router.get("/scenario-history", dependencies=[Depends(require_role("analyst"))])
 def get_scenario_history() -> list[dict]:
     return STORE.get_scenario_history_entries()
+
+
+# ---------------------------------------------------------------------------
+# 0.10.0 additions — MTTD/MTTR, risk trajectories, disposition, coverage
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/mttd-mttr",
+    dependencies=[Depends(require_role("analyst"))],
+)
+def get_mttd_mttr() -> dict:
+    """Platform-wide mean time to detect / respond / close, plus a
+    per-incident breakdown. Aggregates only include correlations where
+    both ends of the interval are present so in-flight investigations
+    don't skew the mean."""
+    return analytics_service.mttd_mttr_summary()
+
+
+@router.get(
+    "/risk-trajectory/{actor_id}",
+    dependencies=[Depends(require_role("analyst"))],
+)
+def get_risk_trajectory(
+    actor_id: str,
+    since: str | None = Query(
+        None,
+        description=(
+            "Optional ISO-8601 timestamp. When set, only history entries "
+            "at or after this time are returned."
+        ),
+    ),
+) -> dict:
+    """Time-series of risk-score changes for an actor."""
+    since_dt: datetime | None = None
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid 'since' timestamp: {exc}",
+            ) from exc
+    return analytics_service.risk_trajectory(actor_id, since=since_dt)
+
+
+@router.get(
+    "/alert-disposition",
+    dependencies=[Depends(require_role("analyst"))],
+)
+def get_alert_disposition() -> dict:
+    """Alerts-by-severity and incidents-by-status breakdown with a
+    stale-investigation watchlist."""
+    return analytics_service.alert_disposition_summary()
+
+
+@router.get(
+    "/coverage",
+    dependencies=[Depends(require_role("analyst"))],
+)
+def get_coverage() -> dict:
+    """Per-rule last-fired timestamp and a list of rules that have
+    never fired against the current data."""
+    return analytics_service.coverage_summary()

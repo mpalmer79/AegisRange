@@ -384,8 +384,9 @@ class TestTokenRevocationOnLogout(unittest.TestCase):
             STORE.enable_persistence(db_path=db_path)
             STORE.save()
 
-            # Reset in-memory state and reload
-            STORE.revoked_jtis = {}
+            # Reset in-memory state (through the cache so the abstraction
+            # remains coherent — in 0.10.0 the cache owns revocations).
+            STORE.auth_cache.load_revoked_jtis({})
             self.assertFalse(STORE.is_jti_revoked(jti))
 
             STORE._persistence.load()

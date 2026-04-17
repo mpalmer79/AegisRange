@@ -24,6 +24,8 @@ SCENARIO_LABEL: dict[str, str] = {
     "scn-doc-004": "SCN-DOC-004",
     "scn-svc-005": "SCN-SVC-005",
     "scn-corr-006": "SCN-CORR-006",
+    "scn-geo-007": "SCN-GEO-007",
+    "scn-exfil-008": "SCN-EXFIL-008",
 }
 
 
@@ -35,6 +37,8 @@ SUPPORTED_SCENARIOS: dict[str, str] = {
     "scn-doc-004": "run_doc_004",
     "scn-svc-005": "run_svc_005",
     "scn-corr-006": "run_corr_006",
+    "scn-geo-007": "run_geo_007",
+    "scn-exfil-008": "run_exfil_008",
 }
 
 

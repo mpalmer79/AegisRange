@@ -1,6 +1,6 @@
 # SCALING.md — horizontal scalability design
 
-**Status:** design, not implemented. This document records the 0.9.0 decision. Implementation work happens in 0.10.0+ after review.
+**Status:** Phase 1 **shipped in 0.10.0**. Phases 2–5 remain design. This document records the original 0.9.0 decision and tracks progress against it.
 
 ---
 
@@ -73,16 +73,21 @@ The phased plan below is additive: at no point does the system stop working, and
 
 ## 5. Migration plan
 
-### Phase 1 — Abstract the auth/rate-limit cache (0.10.0)
+### Phase 1 — Abstract the auth/rate-limit cache (**shipped in 0.10.0**)
 
 Currently `InMemoryStore` holds three things that are checked on every request: `revoked_jtis`, `totp_secrets`, `totp_enabled`. Plus the rate limiter already has a swappable interface.
 
-- Define `AuthCache` abstract interface: `is_jti_revoked`, `revoke_jti`, `prune_expired_revocations`, `totp_secret_for`, `set_totp_secret`, `enable_totp`, `disable_totp`, `is_totp_enabled`.
-- Ship two implementations: `InMemoryAuthCache` (default, current behavior) and `RedisAuthCache` (new, gated on `REDIS_URL` env var).
-- `InMemoryStore` delegates those methods to its configured `AuthCache`.
-- No Postgres yet. Still single-worker by default. Two-worker deployments can opt in by setting `REDIS_URL`.
+- ✅ `AuthCache` protocol defined in `app/services/auth_cache.py` with `is_jti_revoked`, `revoke_jti`, `prune_expired_revocations`, `totp_secret_for`, `set_totp_secret`, `clear_totp_secret`, `is_totp_enabled`, `enable_totp`, `disable_totp`, `all_revoked_jtis` / `load_revoked_jtis`, `all_totp_secrets` / `all_totp_enabled` / `load_totp_state`.
+- ✅ `InMemoryAuthCache` — default implementation. Accepts optional backing dict/set references so `InMemoryStore` can share state with the cache (legacy direct-attribute access stays coherent with cache reads).
+- ✅ `RedisAuthCache` — opt-in via the `REDIS_URL` env var. JTI revocations use Redis's native TTL (`SET ... EX`) so pruning is automatic.
+- ✅ `build_auth_cache(redis_url)` factory with graceful fallback to in-memory when Redis is unreachable.
+- ✅ `InMemoryStore.revoke_jti`, `is_jti_revoked`, `prune_expired_revocations` now delegate through the configured cache.
+- ✅ `PersistenceLayer.load()` routes TOTP + JTI restore through `auth_cache.load_revoked_jtis` / `load_totp_state`.
+- ✅ `tests/test_auth_cache.py` — 18 in-memory contract cases plus an opt-in Redis suite (`AEGISRANGE_TEST_REDIS_URL=redis://…` to run).
 
-Test gate: existing `test_auth_hardening.py::TestJTIRevocation`, `test_totp.py` pass against both implementations via parameterized fixtures.
+Test gate: met — `test_auth_hardening.py::TestJTIRevocation` and `test_totp.py` pass unchanged, and the new contract tests exercise both implementations against the same protocol.
+
+Still single-worker by default. Two-worker deployments can opt in by setting `REDIS_URL`. The remaining rate-limiter flip to Redis is Phase 4.
 
 ### Phase 2 — Dual-write entities to Postgres (0.10.0 or 0.11.0)
 
@@ -127,8 +132,8 @@ These are explicitly out of scope for 0.9.0–0.11.0:
 
 Read this as a contract for the next two releases:
 
-- 0.9.0 ships this document. No code changes.
-- 0.10.0 ships Phase 1 (AuthCache abstraction + Redis implementation). Opt-in via env.
+- 0.9.0 shipped this document. No code changes.
+- **0.10.0 shipped Phase 1** (AuthCache abstraction + Redis implementation). Opt-in via env.
 - 0.11.0 ships Phases 2–3 (Postgres authoritative). Fallback to SQLite for dev.
 - 0.12.0 ships Phase 4 (multi-worker) and deletes the single-worker guardrails.
 

@@ -144,9 +144,18 @@ The goal was to build something that reflects real engineering challenges, not j
 
 ---
 
-## Next Steps
+## Roadmap
 
-- Expand detection rules and scenario coverage
-- Introduce more advanced persistence and scaling strategies
-- Improve analytics and reporting depth
-- Continue refining system architecture under real-world constraints
+### Shipped in 0.10.0
+
+- **Expanded detection rules and scenario coverage.** Added DET-GEO-011 (impossible-travel authentication), DET-EXFIL-012 (large-volume data exfiltration), and DET-HOUR-013 (off-hours privileged action), each with MITRE mapping and dedicated unit tests. Added SCN-GEO-007 and SCN-EXFIL-008 scenarios to exercise them end-to-end.
+- **More advanced persistence and scaling strategies.** Shipped Phase 1 of the plan in `docs/operations/SCALING.md`: a pluggable `AuthCache` protocol (`app/services/auth_cache.py`) with in-memory and Redis-backed implementations. Multi-worker deployments can now share JWT revocations and TOTP state by setting `REDIS_URL`.
+- **Improved analytics and reporting depth.** New `AnalyticsService` + `/analytics/mttd-mttr`, `/analytics/risk-trajectory/{actor_id}`, `/analytics/alert-disposition`, and `/analytics/coverage` endpoints covering detection latency, response latency, time-to-close, per-actor risk-score time series, stale-investigation watchlists, and rule-coverage gaps.
+- **Architecture refinements.** Enriched `/health` with a per-subsystem reachability block (SQLite, auth cache backend, JWT-secret configuration, uptime, version). New `/metrics/prometheus` OpenMetrics exposition for Prometheus scraping (admin-gated). Builds on the 0.9.0 pass that split four service monoliths and fixed encapsulation leaks; the service + route layout is now set up so adding a rule or scenario is a local edit in one package.
+
+### Ahead (0.11.0+)
+
+- Postgres-authoritative persistence and a dual-write migration window (SCALING.md Phases 2–3).
+- Multi-worker deployment and removal of the single-worker guardrail (SCALING.md Phase 4).
+- Frontend `mock-data.ts` / `api.ts` package split deferred from 0.9.0.
+- Distributed tracing and richer latency histograms surfaced through the new Prometheus endpoint.

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import time
 from collections import defaultdict
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator
 
 from app.models import Alert, Event, Incident, ResponseAction
+from app.services.auth_cache import AuthCache, InMemoryAuthCache, build_auth_cache
 
 if TYPE_CHECKING:
     from app.persistence import PersistenceLayer
@@ -44,11 +44,48 @@ class InMemoryStore:
         # TOTP / MFA state
         self.totp_secrets: dict[str, str] = {}  # username → base32 secret
         self.totp_enabled: set[str] = set()  # usernames with MFA enabled
+        # Auth cache — abstracts JTI revocations and TOTP state so the
+        # backend can be swapped for Redis in multi-worker deployments
+        # (see docs/operations/SCALING.md Phase 1). When REDIS_URL is
+        # unset, this is an InMemoryAuthCache sharing references to the
+        # legacy dicts/set above, so direct-attribute reads by older
+        # code continue to see the same state as cache reads.
+        self._auth_cache: AuthCache = self._build_default_auth_cache()
         # Secondary indices for O(actor_events) lookups
         self._events_by_actor: defaultdict[str, list[Event]] = defaultdict(list)
         self._events_by_correlation: defaultdict[str, list[Event]] = defaultdict(list)
         self._events_by_type: defaultdict[str, list[Event]] = defaultdict(list)
         self._persistence: PersistenceLayer | None = None
+
+    def _build_default_auth_cache(self) -> AuthCache:
+        """Construct the default auth cache.
+
+        Reads ``settings.REDIS_URL`` at call time so test overrides (e.g.
+        monkeypatching settings) take effect. Falls back to an in-memory
+        cache that shares references with the store's legacy dicts/set."""
+        try:
+            from app.config import settings
+
+            redis_url = getattr(settings, "REDIS_URL", None)
+        except Exception:
+            redis_url = None
+        if redis_url:
+            return build_auth_cache(redis_url)
+        return InMemoryAuthCache(
+            revoked_jtis=self.revoked_jtis,
+            totp_secrets=self.totp_secrets,
+            totp_enabled=self.totp_enabled,
+        )
+
+    @property
+    def auth_cache(self) -> AuthCache:
+        """Public accessor for the auth cache. Tests inject custom
+        instances via :meth:`set_auth_cache`."""
+        return self._auth_cache
+
+    def set_auth_cache(self, cache: AuthCache) -> None:
+        """Replace the auth cache (tests + the opt-in Redis path)."""
+        self._auth_cache = cache
 
     # --- Entity write methods (incremental persistence) ---
 
@@ -104,7 +141,7 @@ class InMemoryStore:
 
     def revoke_jti(self, jti: str) -> None:
         """Mark a JWT token ID as revoked (authoritative containment state)."""
-        self.revoked_jtis[jti] = time.monotonic()
+        self._auth_cache.revoke_jti(jti)
 
     def require_step_up(self, actor_id: str) -> None:
         """Require step-up authentication for an actor."""
@@ -213,17 +250,11 @@ class InMemoryStore:
 
     def is_jti_revoked(self, jti: str) -> bool:
         """Check if a JWT token ID has been revoked."""
-        return jti in self.revoked_jtis
+        return self._auth_cache.is_jti_revoked(jti)
 
     def prune_expired_revocations(self, max_age_seconds: int = 86400) -> int:
         """Remove revoked JTIs older than *max_age_seconds*. Returns count pruned."""
-        now = time.monotonic()
-        expired = [
-            jti for jti, ts in self.revoked_jtis.items() if now - ts > max_age_seconds
-        ]
-        for jti in expired:
-            del self.revoked_jtis[jti]
-        return len(expired)
+        return self._auth_cache.prune_expired_revocations(max_age_seconds)
 
     def is_step_up_required(self, actor_id: str) -> bool:
         """Check if step-up auth is required for an actor."""

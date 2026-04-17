@@ -2,6 +2,40 @@
 
 All notable changes to AegisRange are documented in this file.
 
+## [0.10.0]
+
+### Added
+- **Observability**: `/health` now emits a `subsystems` block (per-subsystem reachability for SQLite, auth cache, JWT secret) plus `uptime_seconds` and `version`. The new block makes `/health` a meaningful readiness probe for load balancers / deploy-gate checks. The three new fields are optional on the response model, so existing clients reading the 0.8.x shape don't break.
+- New admin-gated `GET /metrics/prometheus` endpoint emitting OpenMetrics text exposition for Prometheus scraping. Covers events/alerts/responses/incidents totals, alerts-by-severity, active containments by kind, per-rule trigger counts, and incidents-by-status. Hand-rolled serializer — no new dependency.
+- `tests/test_observability.py`: 10 new cases covering the health enrichment and the Prometheus endpoint (auth gate, content shape, label escaping, label presence for new rules).
+- `README.md` Roadmap rewritten to reflect 0.10.0 shipping all four "Next Steps" items from 0.9.x: expanded detection, advanced persistence strategy (Phase 1), analytics depth, and architecture refinements.
+- **Analytics depth**: new `AnalyticsService` (`app/services/analytics_service.py`) deriving four new metric groups from the existing event/alert/response/incident graph — no new authoritative state.
+  - **MTTD / MTTR / time-to-close**: `mttd_mttr_summary()` returns aggregate means plus per-correlation breakdown. Aggregates exclude in-flight investigations so in-progress work doesn't skew the mean.
+  - **Actor risk trajectory**: `risk_trajectory(actor_id, since=…)` returns the time-series of score changes driven by `RiskProfile.score_history`, with an optional cutoff.
+  - **Alert disposition**: `alert_disposition_summary()` — alerts-by-severity, incidents-by-status, and a stale-investigation watchlist keyed on a configurable threshold.
+  - **Detection coverage**: `coverage_summary()` — per-rule last-fired timestamp plus a gap list of rules that never fired against the current data.
+- New endpoints (all gated on `require_role("analyst")`):
+  - `GET /analytics/mttd-mttr`
+  - `GET /analytics/risk-trajectory/{actor_id}` (optional `?since=ISO-8601`)
+  - `GET /analytics/alert-disposition`
+  - `GET /analytics/coverage`
+- `tests/test_analytics_service.py`: 17 cases covering each metric path plus the new HTTP gates.
+- **AuthCache abstraction** (`app/services/auth_cache.py`) — ships SCALING.md Phase 1. Defines the `AuthCache` protocol for ephemeral auth state (JTI revocations + TOTP secrets/enrollment) and two implementations: `InMemoryAuthCache` (default; shares references with the store's legacy dicts so existing direct-attribute reads stay consistent) and `RedisAuthCache` (opt-in via `REDIS_URL`; JTI revocations use native Redis TTL so pruning is automatic). A `build_auth_cache()` factory chooses the backend and falls back to in-memory if Redis is unreachable.
+- `InMemoryStore` delegates `revoke_jti`, `is_jti_revoked`, `prune_expired_revocations` through the configured auth cache, and exposes the cache via `STORE.auth_cache`.
+- `PersistenceLayer.load()` routes JTI + TOTP restore through `auth_cache.load_*` so the abstraction remains coherent across SQLite round-trips.
+- `REDIS_URL` config key (reads from env; empty string means "use in-memory"). Documented in `DEPLOY.md`.
+- `tests/test_auth_cache.py` — 18 contract tests against the in-memory cache plus an opt-in Redis suite that activates when `AEGISRANGE_TEST_REDIS_URL` is set.
+- **Three new detection rules** in `app/services/detection/rules.py`:
+  - **DET-GEO-011 — Impossible Travel Between Authentications** (HIGH / HIGH, critical): two successful authentications from distinct `geo_region` payload values within 60 minutes. MITRE T1078 / TA0001.
+  - **DET-EXFIL-012 — Large-Volume Data Exfiltration** (CRITICAL / HIGH, critical): cumulative `bytes_downloaded` by a single actor exceeds 500 MB within 10 minutes. MITRE T1048, T1567 / TA0010.
+  - **DET-HOUR-013 — Off-Hours Privileged Action** (MEDIUM / MEDIUM): admin-role privileged write (policy change, admin config, service disable) between 22:00–06:00 UTC. MITRE T1098 / TA0003.
+- **Two new scenarios** exercising the new rules end-to-end:
+  - **SCN-GEO-007** — impossible-travel authentication (fires DET-GEO-011).
+  - **SCN-EXFIL-008** — twelve 50 MB downloads in rapid succession (fires DET-EXFIL-012).
+- Scenario engine (`run_geo_007`, `run_exfil_008`) + adversary scripts (`_script_geo_007`, `_script_exfil_008`) + `POST /scenarios/scn-geo-007` / `POST /scenarios/scn-exfil-008` routes.
+- Adversary beat handlers extended with optional `geo_region` (on successful-login beats) and `bytes_downloaded` (on download beats) payload fields — additive, backwards-compatible.
+- Unit tests for each of the three new rules (`TestDETGEO011`, `TestDETEXFIL012`, `TestDETHOUR013`) plus end-to-end scenario tests (`TestSCNGEO007`, `TestSCNEXFIL008`).
+
 ## [0.9.0]
 
 ### Changed

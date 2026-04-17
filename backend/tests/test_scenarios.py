@@ -274,5 +274,71 @@ class TestSCNCORR006(ScenarioTestBase):
         self.assertIn("PB-DOC-005", playbook_ids)
 
 
+class TestSCNGEO007(ScenarioTestBase):
+    """SCN-GEO-007: Impossible-Travel Authentication → DET-GEO-011."""
+
+    def test_end_to_end(self) -> None:
+        corr = f"corr-{uuid4()}"
+        summary = self.engine.run_geo_007(corr)
+        self.assertEqual(summary["scenario_id"], "SCN-GEO-007")
+        self.assertEqual(summary["correlation_id"], corr)
+        self.assertGreater(summary["events_total"], 0)
+        self.assertGreaterEqual(summary["alerts_total"], 1)
+
+    def test_fires_impossible_travel_rule(self) -> None:
+        corr = f"corr-{uuid4()}"
+        self.engine.run_geo_007(corr)
+        rule_ids = {
+            a.rule_id for a in self.store.alerts if a.correlation_id == corr
+        }
+        self.assertIn("DET-GEO-011", rule_ids)
+
+    def test_alert_carries_regions_observed(self) -> None:
+        corr = f"corr-{uuid4()}"
+        self.engine.run_geo_007(corr)
+        geo_alerts = [
+            a
+            for a in self.store.alerts
+            if a.correlation_id == corr and a.rule_id == "DET-GEO-011"
+        ]
+        self.assertEqual(len(geo_alerts), 1)
+        regions = set(geo_alerts[0].payload["regions_observed"])
+        self.assertIn("us-east-1", regions)
+        self.assertIn("ap-south-1", regions)
+
+
+class TestSCNEXFIL008(ScenarioTestBase):
+    """SCN-EXFIL-008: Large-Volume Data Exfiltration → DET-EXFIL-012."""
+
+    def test_end_to_end(self) -> None:
+        corr = f"corr-{uuid4()}"
+        summary = self.engine.run_exfil_008(corr)
+        self.assertEqual(summary["scenario_id"], "SCN-EXFIL-008")
+        self.assertEqual(summary["correlation_id"], corr)
+        # 12 downloads → at least 12 events + the exfil alert.
+        self.assertGreaterEqual(summary["events_total"], 12)
+        self.assertGreaterEqual(summary["alerts_total"], 1)
+
+    def test_fires_exfiltration_rule(self) -> None:
+        corr = f"corr-{uuid4()}"
+        self.engine.run_exfil_008(corr)
+        rule_ids = {
+            a.rule_id for a in self.store.alerts if a.correlation_id == corr
+        }
+        self.assertIn("DET-EXFIL-012", rule_ids)
+
+    def test_alert_reports_cumulative_volume(self) -> None:
+        corr = f"corr-{uuid4()}"
+        self.engine.run_exfil_008(corr)
+        exfil_alerts = [
+            a
+            for a in self.store.alerts
+            if a.correlation_id == corr and a.rule_id == "DET-EXFIL-012"
+        ]
+        self.assertEqual(len(exfil_alerts), 1)
+        total_bytes = exfil_alerts[0].payload["total_bytes"]
+        self.assertGreaterEqual(total_bytes, 500 * 1024 * 1024)
+
+
 if __name__ == "__main__":
     unittest.main()

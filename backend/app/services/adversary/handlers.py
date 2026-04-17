@@ -56,6 +56,15 @@ def _handle_successful_login(params: dict[str, Any], ctx: ScriptContext) -> None
     password = params["password"]
     result = ctx.identity.authenticate(username, password)
     if params.get("emit_event", True):
+        payload: dict[str, Any] = {
+            "username": username,
+            "authentication_method": "password",
+        }
+        # Optional enrichment — populated by scripts that target the
+        # impossible-travel rule (DET-GEO-011).
+        geo_region = params.get("geo_region")
+        if geo_region:
+            payload["geo_region"] = geo_region
         ctx.pipeline.process(
             _new_event(
                 event_type="authentication.login.success",
@@ -68,10 +77,7 @@ def _handle_successful_login(params: dict[str, Any], ctx: ScriptContext) -> None
                 status="success",
                 status_code="200",
                 session_id=result.session_id,
-                payload={
-                    "username": username,
-                    "authentication_method": "password",
-                },
+                payload=payload,
             )
         )
     assert ctx.state is not None  # set in __post_init__
@@ -189,6 +195,16 @@ def _handle_document_download(params: dict[str, Any], ctx: ScriptContext) -> Non
         doc = ctx.documents.documents[doc_id]
 
     session_id = params.get("session_id") or (ctx.state or {}).get("session_id")
+    payload: dict[str, Any] = {
+        "document_id": doc.document_id,
+        "classification": doc.classification,
+        "sensitivity_score": params.get("sensitivity_score", 90),
+    }
+    # Optional enrichment — scripts targeting DET-EXFIL-012 set this so
+    # the cumulative-bytes rule has something to measure.
+    bytes_downloaded = params.get("bytes_downloaded")
+    if bytes_downloaded is not None:
+        payload["bytes_downloaded"] = bytes_downloaded
     ctx.pipeline.process(
         _new_event(
             event_type="document.download.success",
@@ -200,11 +216,7 @@ def _handle_document_download(params: dict[str, Any], ctx: ScriptContext) -> Non
             target_id=doc.document_id,
             session_id=session_id,
             source_ip=params.get("source_ip", "198.51.100.10"),
-            payload={
-                "document_id": doc.document_id,
-                "classification": doc.classification,
-                "sensitivity_score": params.get("sensitivity_score", 90),
-            },
+            payload=payload,
         )
     )
 
