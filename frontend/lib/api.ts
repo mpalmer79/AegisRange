@@ -353,6 +353,7 @@ export async function startMission(payload: {
   scenario_id: string;
   perspective?: MissionPerspective;
   difficulty?: MissionDifficulty;
+  mode?: 'async' | 'sync';
 }): Promise<MissionSnapshot> {
   return liveOrThrow(
     () =>
@@ -376,6 +377,11 @@ export async function getMissionIncident(runId: string): Promise<Incident> {
     () => request<Incident>(`/missions/${runId}/incident`),
     `unknown run_id: ${runId}`
   );
+}
+
+/** URL for the mission SSE stream. Use with ``new EventSource(...)``. */
+export function missionStreamUrl(runId: string): string {
+  return `${BASE_URL}/missions/${runId}/stream`;
 }
 
 export async function downloadDocument(documentId: string, body: DocumentRequest): Promise<unknown> {

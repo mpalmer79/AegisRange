@@ -172,10 +172,19 @@ MissionStatusLiteral = Literal[
 ]
 
 
+MissionExecutionMode = Literal["async", "sync"]
+
+
 class StartMissionRequest(BaseModel):
     scenario_id: str
     perspective: Perspective = "blue"
     difficulty: Difficulty = "analyst"
+    # ``async`` (default) queues the mission for timed adversary
+    # playback via the MissionScheduler and returns immediately with
+    # ``status='active'``. ``sync`` runs the scenario inline and
+    # returns with ``status='complete'`` — used by integration tests
+    # and admin scripts that need an immediate snapshot.
+    mode: MissionExecutionMode = "async"
 
 
 class MissionSnapshot(BaseModel):

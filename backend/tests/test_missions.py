@@ -19,13 +19,14 @@ class MissionApiTestBase(unittest.TestCase):
 
 
 class TestStartMission(MissionApiTestBase):
-    """``POST /missions`` creates a run, executes the scenario, and
-    returns a snapshot."""
+    """``POST /missions`` creates a run. In ``async`` mode (default) it
+    returns immediately with ``status=active``; in ``sync`` mode it
+    runs the scenario inline and returns a completed snapshot."""
 
-    def test_start_returns_run_id_and_summary(self) -> None:
+    def test_sync_start_returns_run_id_and_summary(self) -> None:
         resp = self.client.post(
             "/missions",
-            json={"scenario_id": "scn-auth-001"},
+            json={"scenario_id": "scn-auth-001", "mode": "sync"},
         )
         self.assertEqual(resp.status_code, 200, resp.text)
         data = resp.json()
@@ -40,6 +41,17 @@ class TestStartMission(MissionApiTestBase):
         self.assertGreaterEqual(data["summary"]["alerts_generated"], 1)
         self.assertIsNotNone(data["summary"]["incident_id"])
 
+    def test_async_start_returns_active(self) -> None:
+        resp = self.client.post(
+            "/missions",
+            json={"scenario_id": "scn-auth-001"},
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        data = resp.json()
+        self.assertTrue(data["run_id"].startswith("run-"))
+        self.assertEqual(data["status"], "active")
+        self.assertIsNone(data["summary"])
+
     def test_start_accepts_perspective_and_difficulty(self) -> None:
         resp = self.client.post(
             "/missions",
@@ -47,6 +59,7 @@ class TestStartMission(MissionApiTestBase):
                 "scenario_id": "scn-doc-003",
                 "perspective": "red",
                 "difficulty": "operator",
+                "mode": "sync",
             },
         )
         self.assertEqual(resp.status_code, 200, resp.text)
@@ -57,11 +70,11 @@ class TestStartMission(MissionApiTestBase):
     def test_unknown_scenario_returns_404(self) -> None:
         resp = self.client.post(
             "/missions",
-            json={"scenario_id": "scn-nope-999"},
+            json={"scenario_id": "scn-nope-999", "mode": "sync"},
         )
         self.assertEqual(resp.status_code, 404)
 
-    def test_all_six_scenarios_launch(self) -> None:
+    def test_all_six_scenarios_launch_sync(self) -> None:
         for scenario_id in [
             "scn-auth-001",
             "scn-session-002",
@@ -73,17 +86,20 @@ class TestStartMission(MissionApiTestBase):
             STORE.reset()
             mission_store.reset()
             resp = self.client.post(
-                "/missions", json={"scenario_id": scenario_id}
+                "/missions",
+                json={"scenario_id": scenario_id, "mode": "sync"},
             )
             self.assertEqual(
                 resp.status_code, 200, f"{scenario_id}: {resp.text}"
             )
             self.assertTrue(resp.json()["run_id"])
+            self.assertEqual(resp.json()["status"], "complete")
 
     def test_anonymous_start_is_allowed(self) -> None:
         """No auth header, no cookie — mission must still start."""
         resp = self.client.post(
-            "/missions", json={"scenario_id": "scn-auth-001"}
+            "/missions",
+            json={"scenario_id": "scn-auth-001", "mode": "sync"},
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(resp.json()["operated_by"])
@@ -92,7 +108,8 @@ class TestStartMission(MissionApiTestBase):
 class TestGetMission(MissionApiTestBase):
     def test_fetch_snapshot_by_run_id(self) -> None:
         start = self.client.post(
-            "/missions", json={"scenario_id": "scn-auth-001"}
+            "/missions",
+            json={"scenario_id": "scn-auth-001", "mode": "sync"},
         )
         run_id = start.json()["run_id"]
 
@@ -111,7 +128,8 @@ class TestGetMissionIncident(MissionApiTestBase):
 
     def test_incident_readable_without_auth(self) -> None:
         start = self.client.post(
-            "/missions", json={"scenario_id": "scn-auth-001"}
+            "/missions",
+            json={"scenario_id": "scn-auth-001", "mode": "sync"},
         )
         run_id = start.json()["run_id"]
 
@@ -131,7 +149,8 @@ class TestGetMissionIncident(MissionApiTestBase):
         launching a scenario then wiping STORE incidents. Exercises the
         'mission exists but no incident' branch."""
         start = self.client.post(
-            "/missions", json={"scenario_id": "scn-auth-001"}
+            "/missions",
+            json={"scenario_id": "scn-auth-001", "mode": "sync"},
         )
         run_id = start.json()["run_id"]
         STORE.incidents_by_correlation.clear()

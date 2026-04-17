@@ -2,7 +2,7 @@
 
 import { useParams, notFound } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { runScenario, getScenarioErrorMessage, ApiError } from '@/lib/api';
+import { startMission, getScenarioErrorMessage, ApiError } from '@/lib/api';
 import { SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
 import {
   DIFFICULTIES,
@@ -24,6 +24,8 @@ import MissionStages from './components/MissionStages';
 import DifficultySelector from './components/DifficultySelector';
 import MissionHUD from './components/MissionHUD';
 import LaunchPanel from './components/LaunchPanel';
+import MissionTimeline from './components/MissionTimeline';
+import { useMissionStream } from './hooks/useMissionStream';
 import { ACCENTS, DEFAULT_ACCENT } from './components/accents';
 
 /**
@@ -62,8 +64,45 @@ export default function ScenarioDetailPage() {
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [launchedAt, setLaunchedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
+  const [runId, setRunId] = useState<string | null>(null);
 
   const difficulty = DIFFICULTIES.find((d) => d.id === difficultyId) ?? DIFFICULTIES[1];
+
+  // ---------- live mission stream ----------
+  const missionStream = useMissionStream(
+    status === 'running' || status === 'complete' ? runId : null,
+  );
+
+  // Mirror streamed snapshots into the existing `result` state so the
+  // objective checks (pure functions on ScenarioResult) light up live.
+  useEffect(() => {
+    if (missionStream.snapshot) {
+      setResult(missionStream.snapshot);
+    }
+  }, [missionStream.snapshot]);
+
+  // Advance the status machine when the stream reports a terminal
+  // frame. Running → complete when the adversary script finishes;
+  // running → error on stream failure.
+  useEffect(() => {
+    if (missionStream.phase === 'complete' && status === 'running') {
+      setStatus('complete');
+      if (launchedAt != null) {
+        setElapsedSec(Math.floor((Date.now() - launchedAt) / 1000));
+      }
+    } else if (
+      (missionStream.phase === 'failed' || missionStream.phase === 'aborted') &&
+      status === 'running'
+    ) {
+      setStatus('error');
+      setErrorMsg(
+        missionStream.error ??
+          (missionStream.phase === 'aborted'
+            ? 'Mission aborted.'
+            : 'Mission failed.'),
+      );
+    }
+  }, [missionStream.phase, missionStream.error, status, launchedAt]);
 
   // Timer tick — runs only while status === 'running'
   useEffect(() => {
@@ -175,6 +214,7 @@ export default function ScenarioDetailPage() {
     setErrorMsg(null);
     setErrorDetail(null);
     setResult(null);
+    setRunId(null);
     setElapsedSec(0);
     setNewAchievements([]);
     setRankUp(null);
@@ -184,10 +224,20 @@ export default function ScenarioDetailPage() {
     const started = Date.now();
     setLaunchedAt(started);
     try {
-      const r = await runScenario(sc.id);
-      setResult(r);
-      setElapsedSec(Math.floor((Date.now() - started) / 1000));
-      setStatus('complete');
+      const snapshot = await startMission({
+        scenario_id: sc.id,
+        perspective,
+        difficulty: difficulty.id,
+      });
+      setRunId(snapshot.run_id);
+      // Terminal state will come via the SSE stream. If the scenario
+      // was already complete synchronously (shouldn't happen in async
+      // mode but harmless), mirror it now.
+      if (snapshot.status === 'complete' && snapshot.summary) {
+        setResult(snapshot.summary);
+        setElapsedSec(Math.floor((Date.now() - started) / 1000));
+        setStatus('complete');
+      }
     } catch (err) {
       setErrorMsg(getScenarioErrorMessage(err));
       setErrorDetail(err instanceof ApiError ? err.detail ?? null : null);
@@ -198,6 +248,7 @@ export default function ScenarioDetailPage() {
   const reset = () => {
     setStatus('idle');
     setResult(null);
+    setRunId(null);
     setErrorMsg(null);
     setErrorDetail(null);
     setLaunchedAt(null);
@@ -255,6 +306,14 @@ export default function ScenarioDetailPage() {
             isComplete={status === 'complete'}
             correlationId={result?.correlation_id}
           />
+
+          {(status === 'running' || status === 'complete') && (
+            <MissionTimeline
+              beats={missionStream.beats}
+              totalBeats={missionStream.totalBeats}
+              phase={missionStream.phase}
+            />
+          )}
         </div>
 
         {/* RIGHT (1/3): control tower */}
