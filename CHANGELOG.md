@@ -5,6 +5,17 @@ All notable changes to AegisRange are documented in this file.
 ## [0.10.0]
 
 ### Added
+- **Analytics depth**: new `AnalyticsService` (`app/services/analytics_service.py`) deriving four new metric groups from the existing event/alert/response/incident graph — no new authoritative state.
+  - **MTTD / MTTR / time-to-close**: `mttd_mttr_summary()` returns aggregate means plus per-correlation breakdown. Aggregates exclude in-flight investigations so in-progress work doesn't skew the mean.
+  - **Actor risk trajectory**: `risk_trajectory(actor_id, since=…)` returns the time-series of score changes driven by `RiskProfile.score_history`, with an optional cutoff.
+  - **Alert disposition**: `alert_disposition_summary()` — alerts-by-severity, incidents-by-status, and a stale-investigation watchlist keyed on a configurable threshold.
+  - **Detection coverage**: `coverage_summary()` — per-rule last-fired timestamp plus a gap list of rules that never fired against the current data.
+- New endpoints (all gated on `require_role("analyst")`):
+  - `GET /analytics/mttd-mttr`
+  - `GET /analytics/risk-trajectory/{actor_id}` (optional `?since=ISO-8601`)
+  - `GET /analytics/alert-disposition`
+  - `GET /analytics/coverage`
+- `tests/test_analytics_service.py`: 17 cases covering each metric path plus the new HTTP gates.
 - **AuthCache abstraction** (`app/services/auth_cache.py`) — ships SCALING.md Phase 1. Defines the `AuthCache` protocol for ephemeral auth state (JTI revocations + TOTP secrets/enrollment) and two implementations: `InMemoryAuthCache` (default; shares references with the store's legacy dicts so existing direct-attribute reads stay consistent) and `RedisAuthCache` (opt-in via `REDIS_URL`; JTI revocations use native Redis TTL so pruning is automatic). A `build_auth_cache()` factory chooses the backend and falls back to in-memory if Redis is unreachable.
 - `InMemoryStore` delegates `revoke_jti`, `is_jti_revoked`, `prune_expired_revocations` through the configured auth cache, and exposes the cache via `STORE.auth_cache`.
 - `PersistenceLayer.load()` routes JTI + TOTP restore through `auth_cache.load_*` so the abstraction remains coherent across SQLite round-trips.
