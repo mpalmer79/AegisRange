@@ -258,6 +258,13 @@ class MissionService:
             operated_by=operated_by,
             summary=None,
         )
+        # For Red async runs we seed an initial empty-world snapshot so
+        # callers that fetch the snapshot between commands always see a
+        # coherent shape (no null summary). Blue async runs intentionally
+        # leave summary=None until the scheduler publishes the first
+        # beat — that's the contract Phase 2 tests assert.
+        if perspective == "red":
+            run.summary = build_run_snapshot(run, self.incident_store)
         self.missions.put(run)
         self.scheduler.schedule(run)
         return run

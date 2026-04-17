@@ -42,7 +42,7 @@ from app.schemas import (
 from app.services.command_grammar import verbs_for
 from app.serializers import incident_to_dict
 from app.services.auth_service import _auth_service, _extract_bearer_token
-from app.services.mission_service import MissionRun
+from app.services.mission_service import MissionRun, build_run_snapshot
 from app.services.mission_stream import MissionStreamHub
 from app.store import STORE
 
@@ -68,11 +68,15 @@ def _resolve_operator(request: Request) -> str | None:
 
 
 def _snapshot(run: MissionRun) -> dict:
+    # Rebuild the summary from live store contents on every snapshot read
+    # so callers always see the current world (alerts/responses driven by
+    # player commands or scheduler beats), not the stale dict captured at
+    # mission start. ``run.summary == None`` for blue async runs that
+    # haven't published their first beat yet — preserve that contract.
     summary = None
     if run.summary is not None:
-        summary = ScenarioSummaryResponse(
-            **{**run.summary, "run_id": run.run_id}
-        ).model_dump()
+        live = build_run_snapshot(run, STORE)
+        summary = ScenarioSummaryResponse(**live).model_dump()
     return {
         "run_id": run.run_id,
         "scenario_id": run.scenario_id,
