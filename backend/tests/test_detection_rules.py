@@ -769,7 +769,9 @@ class TestDETGEO011(unittest.TestCase):
 
     def test_two_regions_fires_alert(self) -> None:
         corr = f"corr-{uuid4()}"
-        self.telemetry.emit(self._login_success(region="us-east-1", correlation_id=corr))
+        self.telemetry.emit(
+            self._login_success(region="us-east-1", correlation_id=corr)
+        )
         event = self._login_success(region="ap-south-1", correlation_id=corr)
         self.telemetry.emit(event)
         alerts = self.detection.evaluate(event)
@@ -780,7 +782,9 @@ class TestDETGEO011(unittest.TestCase):
 
     def test_same_region_does_not_fire(self) -> None:
         corr = f"corr-{uuid4()}"
-        self.telemetry.emit(self._login_success(region="us-east-1", correlation_id=corr))
+        self.telemetry.emit(
+            self._login_success(region="us-east-1", correlation_id=corr)
+        )
         event = self._login_success(region="us-east-1", correlation_id=corr)
         self.telemetry.emit(event)
         alerts = self.detection.evaluate(event)

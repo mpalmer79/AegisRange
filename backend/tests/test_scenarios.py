@@ -288,9 +288,7 @@ class TestSCNGEO007(ScenarioTestBase):
     def test_fires_impossible_travel_rule(self) -> None:
         corr = f"corr-{uuid4()}"
         self.engine.run_geo_007(corr)
-        rule_ids = {
-            a.rule_id for a in self.store.alerts if a.correlation_id == corr
-        }
+        rule_ids = {a.rule_id for a in self.store.alerts if a.correlation_id == corr}
         self.assertIn("DET-GEO-011", rule_ids)
 
     def test_alert_carries_regions_observed(self) -> None:
@@ -322,9 +320,7 @@ class TestSCNEXFIL008(ScenarioTestBase):
     def test_fires_exfiltration_rule(self) -> None:
         corr = f"corr-{uuid4()}"
         self.engine.run_exfil_008(corr)
-        rule_ids = {
-            a.rule_id for a in self.store.alerts if a.correlation_id == corr
-        }
+        rule_ids = {a.rule_id for a in self.store.alerts if a.correlation_id == corr}
         self.assertIn("DET-EXFIL-012", rule_ids)
 
     def test_alert_reports_cumulative_volume(self) -> None:

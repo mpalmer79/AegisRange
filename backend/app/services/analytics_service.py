@@ -106,9 +106,7 @@ class AnalyticsService:
                         min(a.created_at for a in alerts) if alerts else None
                     ),
                     first_response_at=(
-                        min(r.created_at for r in responses)
-                        if responses
-                        else None
+                        min(r.created_at for r in responses) if responses else None
                     ),
                     incident_closed_at=incident.closed_at if incident else None,
                 )
@@ -124,9 +122,7 @@ class AnalyticsService:
         mttds = [r.mttd_seconds for r in rows if r.mttd_seconds is not None]
         mttrs = [r.mttr_seconds for r in rows if r.mttr_seconds is not None]
         closes = [
-            r.time_to_close_seconds
-            for r in rows
-            if r.time_to_close_seconds is not None
+            r.time_to_close_seconds for r in rows if r.time_to_close_seconds is not None
         ]
 
         def _avg(values: list[float]) -> float | None:
@@ -145,14 +141,10 @@ class AnalyticsService:
                     "correlation_id": r.correlation_id,
                     "first_event_at": r.first_event_at.isoformat(),
                     "first_alert_at": (
-                        r.first_alert_at.isoformat()
-                        if r.first_alert_at
-                        else None
+                        r.first_alert_at.isoformat() if r.first_alert_at else None
                     ),
                     "first_response_at": (
-                        r.first_response_at.isoformat()
-                        if r.first_response_at
-                        else None
+                        r.first_response_at.isoformat() if r.first_response_at else None
                     ),
                     "incident_closed_at": (
                         r.incident_closed_at.isoformat()
@@ -163,17 +155,13 @@ class AnalyticsService:
                     "mttr_seconds": r.mttr_seconds,
                     "time_to_close_seconds": r.time_to_close_seconds,
                 }
-                for r in sorted(
-                    rows, key=lambda x: x.first_event_at, reverse=True
-                )
+                for r in sorted(rows, key=lambda x: x.first_event_at, reverse=True)
             ],
         }
 
     # -- Risk trajectory -----------------------------------------------------
 
-    def risk_trajectory(
-        self, actor_id: str, *, since: datetime | None = None
-    ) -> dict:
+    def risk_trajectory(self, actor_id: str, *, since: datetime | None = None) -> dict:
         """Return the score history for ``actor_id`` as a time series.
 
         ``since`` optionally filters out history entries older than the
@@ -239,9 +227,7 @@ class AnalyticsService:
         cutoff = utc_now() - timedelta(hours=self.STALE_INVESTIGATION_HOURS)
         non_terminal = {"open", "investigating"}
         for inc in self.store.get_all_incidents():
-            incidents_by_status[inc.status] = (
-                incidents_by_status.get(inc.status, 0) + 1
-            )
+            incidents_by_status[inc.status] = incidents_by_status.get(inc.status, 0) + 1
             if inc.status in non_terminal and inc.updated_at < cutoff:
                 stale.append(
                     {
