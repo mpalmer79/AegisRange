@@ -24,6 +24,7 @@ from app.services.pipeline_service import EventPipelineService
 from app.services.report_service import ReportService
 from app.services.response_service import ResponseOrchestrator
 from app.services.risk_service import RiskScoringService
+from app.services.help_service import HelpService
 from app.services.scenario_service import ScenarioEngine
 from app.services.mission_service import MissionService, MissionStore
 from app.services.mission_scheduler import MissionScheduler
@@ -59,6 +60,7 @@ scenario_engine = ScenarioEngine(
 
 mission_store = MissionStore()
 mission_stream_hub = MissionStreamHub()
+mission_help_service = HelpService()
 mission_scheduler = MissionScheduler(
     scenario_engine=scenario_engine,
     mission_store=mission_store,
@@ -69,6 +71,8 @@ mission_service = MissionService(
     incident_store=STORE,
     mission_store=mission_store,
     scheduler=mission_scheduler,
+    help_service=mission_help_service,
+    stream_hub=mission_stream_hub,
 )
 
 mitre_service = MitreAttackService()
