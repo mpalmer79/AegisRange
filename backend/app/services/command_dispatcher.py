@@ -431,6 +431,34 @@ def _handler_attempt_login(cmd: ParsedCommand, ctx: DispatchContext) -> CommandR
     apply_beat(beat, script_ctx)
 
     if succeeded:
+        # Emit a session.token.issued event from the same source IP so
+        # detection rules that compare session_id × source_ip (e.g.
+        # DET-SESSION-003) have a baseline to compare a later
+        # `session reuse --from <other_ip>` against. Stash the source IP
+        # on the run's scratch state so subsequent commands default to
+        # it when the user doesn't pass --from explicitly.
+        assert script_ctx.state is not None  # set in __post_init__
+        script_ctx.state["source_ip"] = source_ip
+        session_id = script_ctx.state.get("session_id")
+        if session_id is not None:
+            apply_beat(
+                Beat(
+                    kind=BeatKind.SESSION_TOKEN_ISSUED,
+                    label=(
+                        f"Session token minted for {canonical_user} from {source_ip}"
+                    ),
+                    delay_before_seconds=0.0,
+                    params={
+                        "actor_id": canonical_user,
+                        "actor_role": (script_ctx.state or {}).get(
+                            "actor_role", "analyst"
+                        ),
+                        "source_ip": source_ip,
+                        "session_id": session_id,
+                    },
+                ),
+                script_ctx,
+            )
         session_id = (script_ctx.state or {}).get("session_id", "<unknown>")
         lines = [
             f"[200] access granted as {canonical_user} from {source_ip}",
