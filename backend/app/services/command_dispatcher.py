@@ -248,6 +248,77 @@ def _handler_contain_session(cmd: ParsedCommand, ctx: DispatchContext) -> Comman
     )
 
 
+def _handler_contain_document(
+    cmd: ParsedCommand, ctx: DispatchContext
+) -> CommandResult:
+    doc_id = cmd.flags["id"]
+    action = cmd.flags["action"]
+    actor = cmd.flags.get("actor")
+    if action == "quarantine":
+        before = set(ctx.store.get_all_quarantined_artifacts())
+        ctx.store.quarantine_artifact(doc_id)
+        newly = sorted(set(ctx.store.get_all_quarantined_artifacts()) - before)
+        if newly:
+            lines = [f"Quarantined document {doc_id}. No further access."]
+        else:
+            lines = [f"{doc_id} was already quarantined. Containment recorded."]
+    else:  # restrict
+        target = actor or "user-bob"
+        before = set(ctx.store.get_all_download_restricted())
+        ctx.store.restrict_downloads(target)
+        newly = sorted(set(ctx.store.get_all_download_restricted()) - before)
+        if newly:
+            lines = [f"Download privileges revoked for {target} (doc: {doc_id})."]
+        else:
+            lines = [f"{target} was already download-restricted. Containment recorded."]
+    return CommandResult.ok(
+        *lines,
+        effects={
+            "containment_document": doc_id,
+            "containment_action": action,
+        },
+        stream_event={
+            "type": "beat",
+            "ts": utc_now().isoformat(),
+            "beat_index": -1,
+            "beat_total": -1,
+            "beat": {
+                "kind": "player_contain_document",
+                "label": f"Analyst contains {doc_id} via {action}",
+            },
+        },
+    )
+
+
+def _handler_contain_service(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
+    svc_id = cmd.flags["id"]
+    action = cmd.flags["action"]  # only 'disable' today
+    before = set(ctx.store.get_all_disabled_services())
+    ctx.store.disable_service(svc_id)
+    newly = sorted(set(ctx.store.get_all_disabled_services()) - before)
+    if newly:
+        lines = [f"Service {svc_id} disabled. Further privileged calls rejected."]
+    else:
+        lines = [f"{svc_id} was already disabled. Containment recorded."]
+    return CommandResult.ok(
+        *lines,
+        effects={
+            "containment_service": svc_id,
+            "containment_action": action,
+        },
+        stream_event={
+            "type": "beat",
+            "ts": utc_now().isoformat(),
+            "beat_index": -1,
+            "beat_total": -1,
+            "beat": {
+                "kind": "player_contain_service",
+                "label": f"Analyst disables {svc_id}",
+            },
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Red-team handlers (Phase 3b)
 #
@@ -406,6 +477,148 @@ def _handler_session_reuse(cmd: ParsedCommand, ctx: DispatchContext) -> CommandR
     )
 
 
+def _handler_doc_read(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
+    doc_id = cmd.flags["id"]
+    burst = int(cmd.flags.get("burst", 1) or 1)
+    role_override = cmd.flags.get("as")
+    source_ip_override = cmd.flags.get("from")
+    script_ctx = _script_ctx(ctx)
+
+    session_id = (script_ctx.state or {}).get("session_id")
+    actor_id = (script_ctx.state or {}).get("actor_id", "user-bob")
+    actor_role = role_override or (script_ctx.state or {}).get("actor_role", "admin")
+    source_ip = source_ip_override or (script_ctx.state or {}).get(
+        "source_ip", "198.51.100.10"
+    )
+    if session_id is None:
+        return CommandResult.error(
+            "No active session. Run `attempt login --password ...` first."
+        )
+
+    for i in range(max(1, burst)):
+        beat = Beat(
+            kind=BeatKind.DOCUMENT_READ,
+            label=(
+                f"Intruder reads {doc_id} ({i + 1}/{burst})"
+                if burst > 1
+                else f"Intruder reads {doc_id}"
+            ),
+            delay_before_seconds=0.0,
+            params={
+                "role": actor_role,
+                "document_id": doc_id,
+                "label_suffix": i if burst > 1 else None,
+                "actor_id": actor_id,
+                "source_ip": source_ip,
+                "session_id": session_id,
+                "enforce_access": False,
+            },
+        )
+        apply_beat(beat, script_ctx)
+
+    return CommandResult.ok(
+        f"[200] read {doc_id} x{burst} as {actor_id} from {source_ip}",
+        effects={
+            "doc_read_id": doc_id,
+            "doc_read_burst": burst,
+        },
+        stream_event={
+            "type": "beat",
+            "ts": utc_now().isoformat(),
+            "beat_index": -1,
+            "beat_total": -1,
+            "beat": {
+                "kind": "player_doc_read",
+                "label": f"Intruder reads {doc_id} x{burst}",
+            },
+        },
+    )
+
+
+def _handler_doc_download(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
+    doc_id = cmd.flags["id"]
+    role_override = cmd.flags.get("as")
+    source_ip_override = cmd.flags.get("from")
+    script_ctx = _script_ctx(ctx)
+
+    session_id = (script_ctx.state or {}).get("session_id")
+    actor_id = (script_ctx.state or {}).get("actor_id", "user-bob")
+    actor_role = role_override or (script_ctx.state or {}).get("actor_role", "admin")
+    source_ip = source_ip_override or (script_ctx.state or {}).get(
+        "source_ip", "198.51.100.10"
+    )
+    if session_id is None:
+        return CommandResult.error(
+            "No active session. Run `attempt login --password ...` first."
+        )
+
+    beat = Beat(
+        kind=BeatKind.DOCUMENT_DOWNLOAD,
+        label=f"Intruder downloads {doc_id}",
+        delay_before_seconds=0.0,
+        params={
+            "role": actor_role,
+            "document_id": doc_id,
+            "actor_id": actor_id,
+            "source_ip": source_ip,
+            "session_id": session_id,
+            "enforce_access": False,
+        },
+    )
+    apply_beat(beat, script_ctx)
+
+    return CommandResult.ok(
+        f"[200] downloaded {doc_id} as {actor_id} from {source_ip}",
+        effects={"doc_download_id": doc_id},
+        stream_event={
+            "type": "beat",
+            "ts": utc_now().isoformat(),
+            "beat_index": -1,
+            "beat_total": -1,
+            "beat": {
+                "kind": "player_doc_download",
+                "label": f"Intruder downloads {doc_id}",
+            },
+        },
+    )
+
+
+def _handler_svc_call(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
+    svc_id = cmd.flags["service"]
+    route = cmd.flags["op"]
+    script_ctx = _script_ctx(ctx)
+    beat = Beat(
+        kind=BeatKind.AUTHORIZATION_FAILURE,
+        label=f"{svc_id} attempts {route}",
+        delay_before_seconds=0.0,
+        params={
+            "actor_id": svc_id,
+            "actor_type": "service",
+            "actor_role": "service",
+            "route": route,
+            "source_ip": "10.0.1.50",
+        },
+    )
+    apply_beat(beat, script_ctx)
+    return CommandResult.ok(
+        f"[403] {svc_id} denied on {route} (not in service scope)",
+        effects={
+            "svc_call_service": svc_id,
+            "svc_call_route": route,
+        },
+        stream_event={
+            "type": "beat",
+            "ts": utc_now().isoformat(),
+            "beat_index": -1,
+            "beat_total": -1,
+            "beat": {
+                "kind": "player_svc_call",
+                "label": f"{svc_id} attempts {route}",
+            },
+        },
+    )
+
+
 _HANDLERS: dict[str, Callable[[ParsedCommand, DispatchContext], CommandResult]] = {
     "help": _handler_help,
     "hint": _handler_hint,
@@ -416,10 +629,15 @@ _HANDLERS: dict[str, Callable[[ParsedCommand, DispatchContext], CommandResult]] 
     "events.tail": _handler_events_tail,
     "correlate": _handler_correlate,
     "contain.session": _handler_contain_session,
+    "contain.document": _handler_contain_document,
+    "contain.service": _handler_contain_service,
     # Red
     "recon.users": _handler_recon_users,
     "attempt.login": _handler_attempt_login,
     "session.reuse": _handler_session_reuse,
+    "doc.read": _handler_doc_read,
+    "doc.download": _handler_doc_download,
+    "svc.call": _handler_svc_call,
 }
 
 
