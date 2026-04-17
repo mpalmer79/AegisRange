@@ -34,6 +34,7 @@ from app.routers import (
     incidents,
     killchain,
     metrics,
+    missions,
     mitre,
     reports,
     scenarios,
@@ -146,8 +147,8 @@ async def request_size_limit_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 _CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-_CSRF_EXEMPT_PATHS = {"/auth/login", "/auth/logout", "/health"}
-_CSRF_EXEMPT_PREFIXES = ("/scenarios/",)
+_CSRF_EXEMPT_PATHS = {"/auth/login", "/auth/logout", "/health", "/missions"}
+_CSRF_EXEMPT_PREFIXES = ("/scenarios/", "/missions/")
 
 
 @app.middleware("http")
@@ -371,6 +372,7 @@ app.include_router(auth.router)
 app.include_router(identity.router)
 app.include_router(documents.router)
 app.include_router(scenarios.router)
+app.include_router(missions.router)
 app.include_router(events.router)
 app.include_router(alerts.router)
 app.include_router(incidents.router)

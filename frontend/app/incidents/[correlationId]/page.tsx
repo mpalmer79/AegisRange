@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useIncidentDetail } from './components/useIncidentDetail';
 import IncidentHeader from './components/IncidentHeader';
@@ -16,8 +16,10 @@ import AnalystNotes from './components/AnalystNotes';
 export default function IncidentDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const correlationId =
     typeof params?.correlationId === 'string' ? params.correlationId : null;
+  const runId = searchParams?.get('run') ?? null;
 
   const {
     incident,
@@ -39,7 +41,7 @@ export default function IncidentDetailPage() {
     setNoteContent,
     handleStatusChange,
     handleSubmitNote,
-  } = useIncidentDetail(correlationId);
+  } = useIncidentDetail(correlationId, runId);
 
   if (loading) {
     return (

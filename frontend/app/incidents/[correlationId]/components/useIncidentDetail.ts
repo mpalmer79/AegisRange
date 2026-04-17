@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   getIncident,
+  getMissionIncident,
   updateIncidentStatus,
   getIncidentNotes,
   addIncidentNote,
@@ -38,7 +39,10 @@ function getResponseLabel(response: IncidentResponse) {
   return response.response_type || response.summary || 'unknown_response';
 }
 
-export function useIncidentDetail(correlationId: string | null) {
+export function useIncidentDetail(
+  correlationId: string | null,
+  runId: string | null = null,
+) {
   const [incident, setIncident] = useState<Incident | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -67,14 +71,31 @@ export function useIncidentDetail(correlationId: string | null) {
         setLoading(true);
         setError(null);
 
-        const incidentResult = await getIncident(correlationId);
+        // Prefer the per-run anonymous endpoint when we arrived via a
+        // mission launch (?run=run-...). Fall back to the auth-gated
+        // /incidents/{correlation_id} endpoint for operators reaching
+        // the page directly from the incidents list.
+        const incidentResult = runId
+          ? await getMissionIncident(runId)
+          : await getIncident(correlationId);
         setIncident(incidentResult);
 
+        // Secondary enrichment calls are auth-gated today. Run each
+        // in isolation so an anonymous mission viewer still gets a
+        // rendered incident rather than a blanket "Failed to fetch"
+        // screen when a sidebar call 401s.
+        const settle = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+          try {
+            return await fn();
+          } catch {
+            return fallback;
+          }
+        };
         const [alertsResult, eventsResult, responsesResult, notesResult] = await Promise.all([
-          getAlerts({ limit: 1000 }),
-          getEvents({ correlation_id: correlationId, limit: 200 }),
-          getResponses(),
-          getIncidentNotes(correlationId),
+          settle(() => getAlerts({ limit: 1000 }), [] as Alert[]),
+          settle(() => getEvents({ correlation_id: correlationId, limit: 200 }), [] as Event[]),
+          settle(() => getResponses(), [] as IncidentResponse[]),
+          settle(() => getIncidentNotes(correlationId), [] as IncidentNote[]),
         ]);
 
         const allAlerts = Array.isArray(alertsResult) ? alertsResult : [];
@@ -133,7 +154,7 @@ export function useIncidentDetail(correlationId: string | null) {
     }
 
     loadIncidentDetail();
-  }, [correlationId]);
+  }, [correlationId, runId]);
 
   const handleStatusChange = async (newStatus: IncidentStatus) => {
     if (!incident || !correlationId) return;

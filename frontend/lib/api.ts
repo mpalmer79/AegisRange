@@ -52,6 +52,9 @@ import {
   AuthToken,
   CurrentUser,
   PlatformUser,
+  MissionDifficulty,
+  MissionPerspective,
+  MissionSnapshot,
 } from './types';
 
 // ------------------------------------------------------------
@@ -340,6 +343,38 @@ export async function runScenario(scenarioId: string): Promise<ScenarioResult> {
         method: 'POST',
       }),
     'scenario execution requires a live authenticated backend'
+  );
+}
+
+// ============================================================
+// Missions — anonymous-friendly, keyed by run_id (UUID capability)
+// ============================================================
+export async function startMission(payload: {
+  scenario_id: string;
+  perspective?: MissionPerspective;
+  difficulty?: MissionDifficulty;
+}): Promise<MissionSnapshot> {
+  return liveOrThrow(
+    () =>
+      request<MissionSnapshot>('/missions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    'mission execution requires a live backend'
+  );
+}
+
+export async function getMission(runId: string): Promise<MissionSnapshot> {
+  return liveOrThrow(
+    () => request<MissionSnapshot>(`/missions/${runId}`),
+    `unknown run_id: ${runId}`
+  );
+}
+
+export async function getMissionIncident(runId: string): Promise<Incident> {
+  return liveOrThrow(
+    () => request<Incident>(`/missions/${runId}/incident`),
+    `unknown run_id: ${runId}`
   );
 }
 
