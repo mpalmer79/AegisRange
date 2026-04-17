@@ -438,6 +438,15 @@ export interface CurrentUser {
   username: string;
   role: string;
   display_name: string;
+  /** Numeric role level from backend ROLES (0-100). */
+  level: number;
+  /** Scopes granted to the role. */
+  scopes: string[];
+  /**
+   * Derived boolean-flag capabilities keyed on the role's level.
+   * Adding a new capability on the backend flows here automatically.
+   */
+  capabilities: string[];
 }
 
 export interface PlatformUser {

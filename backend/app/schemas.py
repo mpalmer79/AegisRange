@@ -441,6 +441,14 @@ class AuthMeResponse(BaseModel):
     username: str
     role: str
     display_name: str
+    # Numeric role level from backend ROLES (0-100). Frontend can sort
+    # users or gate UI without mirroring the role ladder.
+    level: int
+    # Scopes granted to the role (see ROLE_SCOPES).
+    scopes: list[str]
+    # Derived boolean-flag capabilities keyed on the role's level. Adding
+    # a new capability on the backend flows to the frontend automatically.
+    capabilities: list[str]
 
 
 class AuthUserResponse(BaseModel):

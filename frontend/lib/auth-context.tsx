@@ -16,23 +16,46 @@ import {
 } from './api';
 
 // ------------------------------------------------------------
-// Role hierarchy — mirrors backend ROLES dict so the frontend
-// can gate UI elements without an extra round-trip.
+// Capability gates
+//
+// The frontend used to mirror the backend's role ladder (ROLE_LEVELS
+// dict + SCENARIO_MIN_LEVEL constant). That meant adding a role or
+// retuning a level required a coordinated change on both sides. As
+// of 0.9.0 the backend ships capability flags on /auth/me; the
+// frontend consults them directly.
+//
+// Null-safe on input so pre-session / unauthenticated callers just
+// get `false` without a capability lookup.
 // ------------------------------------------------------------
-const ROLE_LEVELS: Record<string, number> = {
-  admin: 100,
-  soc_manager: 75,
-  analyst: 50,
-  red_team: 50,
-  viewer: 25,
-};
 
-/** Minimum role level required to execute scenarios (matches backend require_role("red_team")). */
-const SCENARIO_MIN_LEVEL = 50;
+interface CapabilityBearer {
+  capabilities?: readonly string[];
+}
 
-export function canRunScenarios(role: string | null): boolean {
-  if (!role) return false;
-  return (ROLE_LEVELS[role] ?? 0) >= SCENARIO_MIN_LEVEL;
+function hasCapability(
+  user: CapabilityBearer | null | undefined,
+  capability: string,
+): boolean {
+  if (!user || !user.capabilities) return false;
+  return user.capabilities.includes(capability);
+}
+
+export function canRunScenarios(
+  user: CapabilityBearer | null | undefined,
+): boolean {
+  return hasCapability(user, 'run_scenarios');
+}
+
+export function canManageIncidents(
+  user: CapabilityBearer | null | undefined,
+): boolean {
+  return hasCapability(user, 'manage_incidents');
+}
+
+export function canAdministerPlatform(
+  user: CapabilityBearer | null | undefined,
+): boolean {
+  return hasCapability(user, 'administer_platform');
 }
 
 // ------------------------------------------------------------
@@ -53,6 +76,9 @@ export const DEMO_MODE =
 const DEMO_IDENTITY = {
   username: 'demo-operator',
   role: 'red_team',
+  level: 50,
+  scopes: ['read', 'scenarios'],
+  capabilities: ['run_scenarios'],
 } as const;
 
 // ------------------------------------------------------------
@@ -90,6 +116,12 @@ function clearPersistedExpiry(): void {
 export interface AuthContextType {
   username: string | null;
   role: string | null;
+  /** Numeric role level from backend ROLES (0 when unauthenticated). */
+  level: number;
+  /** Scopes granted to the role (empty list when unauthenticated). */
+  scopes: readonly string[];
+  /** Capability flags from backend (empty list when unauthenticated). */
+  capabilities: readonly string[];
   isAuthenticated: boolean;
   loading: boolean;
   demoMode: boolean;
@@ -106,6 +138,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [role, setRole] = useState<string | null>(
     DEMO_MODE ? DEMO_IDENTITY.role : null,
+  );
+  const [level, setLevel] = useState<number>(
+    DEMO_MODE ? DEMO_IDENTITY.level : 0,
+  );
+  const [scopes, setScopes] = useState<readonly string[]>(
+    DEMO_MODE ? DEMO_IDENTITY.scopes : [],
+  );
+  const [capabilities, setCapabilities] = useState<readonly string[]>(
+    DEMO_MODE ? DEMO_IDENTITY.capabilities : [],
   );
   const [loading, setLoading] = useState(!DEMO_MODE);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -127,6 +168,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (user) {
           setUsername(user.username);
           setRole(user.role);
+          setLevel(user.level ?? 0);
+          setScopes(user.scopes ?? []);
+          setCapabilities(user.capabilities ?? []);
         } else {
           // Backend says no session — clear stale expiry.
           clearPersistedExpiry();
@@ -149,6 +193,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(token.role);
     setExpiresAt(token.expires_at);
     persistExpiry(token.expires_at);
+    // Fetch level/scopes/capabilities — the login response only carries
+    // username/role/expiry, but the UI needs capabilities to gate actions.
+    try {
+      const me = await getCurrentUser();
+      if (me) {
+        setLevel(me.level ?? 0);
+        setScopes(me.scopes ?? []);
+        setCapabilities(me.capabilities ?? []);
+      }
+    } catch {
+      // Best-effort — leave capabilities empty if the follow-up fails.
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -161,6 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetBackendProbe();
     setUsername(null);
     setRole(null);
+    setLevel(0);
+    setScopes([]);
+    setCapabilities([]);
     setExpiresAt(null);
     clearPersistedExpiry();
   }, []);
@@ -172,6 +231,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         username,
         role,
+        level,
+        scopes,
+        capabilities,
         isAuthenticated,
         loading,
         demoMode: DEMO_MODE,

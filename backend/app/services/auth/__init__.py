@@ -16,6 +16,7 @@ Public API is preserved via ``app.services.auth_service`` shim.
 
 from __future__ import annotations
 
+from .capabilities import CAPABILITY_MIN_LEVEL, capabilities_for, level_for
 from .correlation import validate_correlation_id
 from .passwords import (
     DEFAULT_PASSWORDS,
@@ -74,4 +75,7 @@ __all__ = [
     "require_identity_type",
     "get_current_user",
     "validate_correlation_id",
+    "CAPABILITY_MIN_LEVEL",
+    "capabilities_for",
+    "level_for",
 ]

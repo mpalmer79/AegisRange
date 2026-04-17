@@ -246,22 +246,26 @@ describe('AuthProvider', () => {
 });
 
 describe('canRunScenarios', () => {
-  it('returns true for roles with level >= 50', () => {
-    expect(canRunScenarios('admin')).toBe(true);
-    expect(canRunScenarios('soc_manager')).toBe(true);
-    expect(canRunScenarios('analyst')).toBe(true);
-    expect(canRunScenarios('red_team')).toBe(true);
+  it('returns true when the user carries the run_scenarios capability', () => {
+    expect(canRunScenarios({ capabilities: ['run_scenarios'] })).toBe(true);
+    expect(
+      canRunScenarios({
+        capabilities: ['run_scenarios', 'manage_incidents', 'view_analytics'],
+      }),
+    ).toBe(true);
   });
 
-  it('returns false for viewer role', () => {
-    expect(canRunScenarios('viewer')).toBe(false);
+  it('returns false when the capability is absent', () => {
+    expect(canRunScenarios({ capabilities: [] })).toBe(false);
+    expect(canRunScenarios({ capabilities: ['view_analytics'] })).toBe(false);
   });
 
-  it('returns false for null role', () => {
+  it('returns false for null or undefined input', () => {
     expect(canRunScenarios(null)).toBe(false);
+    expect(canRunScenarios(undefined)).toBe(false);
   });
 
-  it('returns false for unknown role', () => {
-    expect(canRunScenarios('unknown')).toBe(false);
+  it('returns false when capabilities field is missing', () => {
+    expect(canRunScenarios({})).toBe(false);
   });
 });

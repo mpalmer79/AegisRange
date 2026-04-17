@@ -244,5 +244,59 @@ class TestIdentityBoundarySeparation(unittest.TestCase):
         self.assertNotIn("session_id", data)
 
 
+# ---------------------------------------------------------------------------
+# Section 5 (0.9.0) — /auth/me exposes level, scopes, and capabilities so
+# the frontend doesn't mirror the role ladder.
+# ---------------------------------------------------------------------------
+
+
+class TestAuthMeCapabilities(unittest.TestCase):
+    def test_auth_me_returns_level_scopes_capabilities(self) -> None:
+        from tests.auth_helper import authenticated_client
+
+        client = authenticated_client("admin")
+        resp = client.get("/auth/me")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["username"], "admin")
+        self.assertEqual(data["role"], "admin")
+        self.assertEqual(data["level"], 100)
+        self.assertIn("scopes", data)
+        self.assertIsInstance(data["scopes"], list)
+        self.assertIn("admin", data["scopes"])
+        self.assertIn("capabilities", data)
+        self.assertIsInstance(data["capabilities"], list)
+        # admin has every capability
+        self.assertIn("run_scenarios", data["capabilities"])
+        self.assertIn("manage_incidents", data["capabilities"])
+        self.assertIn("view_analytics", data["capabilities"])
+        self.assertIn("administer_platform", data["capabilities"])
+
+    def test_auth_me_viewer_has_no_write_capabilities(self) -> None:
+        from tests.auth_helper import authenticated_client
+
+        client = authenticated_client("viewer")
+        resp = client.get("/auth/me")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["role"], "viewer")
+        self.assertEqual(data["level"], 25)
+        # viewer has no level-50+ capabilities
+        self.assertNotIn("run_scenarios", data["capabilities"])
+        self.assertNotIn("manage_incidents", data["capabilities"])
+        self.assertNotIn("view_analytics", data["capabilities"])
+        self.assertNotIn("administer_platform", data["capabilities"])
+
+    def test_auth_me_red_team_can_run_scenarios(self) -> None:
+        from tests.auth_helper import authenticated_client
+
+        client = authenticated_client("red_team")
+        resp = client.get("/auth/me")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("run_scenarios", data["capabilities"])
+        self.assertNotIn("administer_platform", data["capabilities"])
+
+
 if __name__ == "__main__":
     unittest.main()

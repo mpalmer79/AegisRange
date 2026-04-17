@@ -14,6 +14,9 @@ All notable changes to AegisRange are documented in this file.
 - `InMemoryStore` now exposes a public `get_persistence()` accessor. `main.py` and `routers/health.py` no longer reach into `STORE._persistence` directly.
 - The canonical auth service singleton is now `auth_service` (no leading underscore). All in-tree callers (`main.py`, `dependencies.py`, `routers/scenarios.py`, `routers/missions.py`, `services/auth/roles.py`) updated to use the new name.
 
+### Removed
+- Frontend `ROLE_LEVELS` and `SCENARIO_MIN_LEVEL` hardcoded constants deleted from `frontend/lib/auth-context.tsx`. The role ladder is no longer mirrored on the frontend — capability flags come from `/auth/me`. This closes the drift risk where adding a role on one side silently left the other side out of date.
+
 ### Deprecated
 - `app.services.auth_service._auth_service` is now a deprecated alias for `auth_service`. Existing imports continue to work for backwards compatibility; the alias will be removed in 0.10.0.
 
@@ -22,6 +25,11 @@ All notable changes to AegisRange are documented in this file.
 - Default simulation passwords can now be overridden at startup via `DEFAULT_PASSWORD_<USERNAME>` env vars (e.g. `DEFAULT_PASSWORD_ADMIN=…`). The source defaults remain the dev fallback; no hardcoded password was removed.
 - Production startup emits a `WARNING` listing any simulation user still seeded with the source default (so demo deployments can see at a glance which credentials are publicly known).
 - Test cases in `test_auth_hardening.py` pinning the env-override resolution and the `using_source_default` helper.
+- `GET /auth/me` now returns `level` (numeric role level), `scopes`, and `capabilities` in addition to `username`/`role`/`display_name`. The capability list is derived on the backend from `CAPABILITY_MIN_LEVEL` (`app/services/auth/capabilities.py`), so adding a new capability on the backend flows to the frontend on next login with no frontend change.
+- `AuthContext` exposes `level`, `scopes`, and `capabilities` alongside `username`/`role`. The `canRunScenarios` helper now reads from `user.capabilities` instead of a hardcoded role ladder, and sibling helpers `canManageIncidents` / `canAdministerPlatform` were added.
+- `CurrentUser` TypeScript interface (`frontend/lib/types.ts`) gained `level`, `scopes`, and `capabilities` fields.
+- Backend test cases in `test_auth_identity.py::TestAuthMeCapabilities` pin the new `/auth/me` contract.
+- Frontend test cases in `__tests__/lib/auth-context.test.tsx::canRunScenarios` pin the capability-based gate.
 
 ### Documentation
 - `docs/threat-model/CSRF_MODEL.md`: new threat-model document describing the three trust surfaces (cookie / capability / bearer) and the rule that must be answered before any new route is added to the CSRF exempt list. Linked from ARCHITECTURE.md §15.
