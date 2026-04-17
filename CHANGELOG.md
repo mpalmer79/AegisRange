@@ -19,9 +19,17 @@ All notable changes to AegisRange are documented in this file.
 
 ### Added
 - `backend/tests/test_security_hardening.py`: new cases pinning the CSRF model — cookie-authed POSTs to each `/scenarios/*` route are rejected without a token, accepted with a matching token, `/missions/*` remains capability-exempt, and Bearer-authed requests bypass CSRF regardless of path.
+- Default simulation passwords can now be overridden at startup via `DEFAULT_PASSWORD_<USERNAME>` env vars (e.g. `DEFAULT_PASSWORD_ADMIN=…`). The source defaults remain the dev fallback; no hardcoded password was removed.
+- Production startup emits a `WARNING` listing any simulation user still seeded with the source default (so demo deployments can see at a glance which credentials are publicly known).
+- Test cases in `test_auth_hardening.py` pinning the env-override resolution and the `using_source_default` helper.
 
 ### Documentation
 - `docs/threat-model/CSRF_MODEL.md`: new threat-model document describing the three trust surfaces (cookie / capability / bearer) and the rule that must be answered before any new route is added to the CSRF exempt list. Linked from ARCHITECTURE.md §15.
+- `docs/operations/SCALING.md`: new design document for horizontal scalability. Chooses Postgres (authoritative) + Redis (ephemeral cache) as the target and lays out a five-phase migration plan for 0.10.0 – 0.12.0. No code changes in 0.9.0. Linked from ARCHITECTURE.md §14.
+- `DEPLOY.md`: documented the `DEFAULT_PASSWORD_<USERNAME>` env override for production demos.
+
+### Deferred
+- Section 4 of the 0.9.0 playbook (splitting `frontend/lib/mock-data.ts` and `frontend/lib/api.ts` into packages) was attempted but not completed in this release — the refactor requires careful line-by-line extraction of ~5,400 lines across the two files and is deferred to 0.10.0 to avoid a half-landed split.
 
 ## [0.8.0] — 2026-04-14
 

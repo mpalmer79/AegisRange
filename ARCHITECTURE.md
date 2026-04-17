@@ -260,7 +260,7 @@ Non-guarantees:
 - SQLite is the persistence backend (not horizontally scalable; migration path to PostgreSQL documented in DEPLOY.md)
 - In-memory store is the authoritative runtime data source
 
-These are known and accepted for the current stage.
+These are known and accepted for the current stage. The chosen direction for horizontal scalability is **Postgres for authoritative state plus Redis for ephemeral shared cache (JTI revocations, rate limits)**; see [docs/operations/SCALING.md](docs/operations/SCALING.md) for the phased migration plan scheduled across 0.10.0 – 0.12.0.
 
 ---
 

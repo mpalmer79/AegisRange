@@ -79,6 +79,26 @@ async def lifespan(app: FastAPI):
                 "Mission runs restored from SQLite",
                 extra={"loaded": loaded},
             )
+    # Warn if any simulation user is still using the source default
+    # password in production. Dev deployments deliberately ship with
+    # known credentials (that's the point of a simulation platform);
+    # production deployments should override every one via
+    # DEFAULT_PASSWORD_<USERNAME> env vars.
+    if settings.APP_ENV == "production":
+        from app.services.auth.passwords import (
+            SOURCE_DEFAULT_PASSWORDS,
+            using_source_default,
+        )
+
+        defaults_in_use = [
+            u for u in SOURCE_DEFAULT_PASSWORDS if using_source_default(u)
+        ]
+        if defaults_in_use:
+            logger.warning(
+                "Default simulation passwords are in use in production. "
+                "Override them via DEFAULT_PASSWORD_<USERNAME> env vars.",
+                extra={"usernames": defaults_in_use},
+            )
     logger.info("AegisRange API started", extra={"env": settings.APP_ENV})
     yield
     # --- shutdown ---

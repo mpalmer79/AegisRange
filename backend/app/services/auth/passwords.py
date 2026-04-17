@@ -52,15 +52,50 @@ def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
 # Passwords meet complexity requirements (uppercase, lowercase, digit,
 # special character, ≥12 characters). Hashes are computed at module
 # load time so the plain-text passwords are never stored.
+#
+# Each default password can be overridden at startup via an env var named
+# ``DEFAULT_PASSWORD_<USERNAME_UPPER>`` (e.g. ``DEFAULT_PASSWORD_ADMIN``).
+# Deployments running in production that leave any default in place will
+# emit a WARNING at startup — see ``main.py``'s lifespan handler.
 # ---------------------------------------------------------------------------
 
-DEFAULT_PASSWORDS: dict[str, str] = {
+SOURCE_DEFAULT_PASSWORDS: dict[str, str] = {
     "admin": "Admin_Pass_2025!",
     "soc_lead": "SocLead_Pass_2025!",
     "analyst1": "Analyst1_Pass_2025!",
     "red_team1": "RedTeam1_Pass_2025!",
     "viewer1": "Viewer1_Pass_2025!",
 }
+
+
+def _resolve_default_password(username: str, fallback: str) -> str:
+    """Return the password to seed for ``username``, preferring an env
+    override over the source default."""
+    env_key = f"DEFAULT_PASSWORD_{username.upper()}"
+    return os.getenv(env_key, fallback)
+
+
+def _build_default_passwords() -> dict[str, str]:
+    """Resolve every source default through the env-override layer."""
+    return {
+        username: _resolve_default_password(username, fallback)
+        for username, fallback in SOURCE_DEFAULT_PASSWORDS.items()
+    }
+
+
+def using_source_default(username: str) -> bool:
+    """Return True when ``username`` is still seeded with the source
+    default (i.e. no ``DEFAULT_PASSWORD_<USER>`` env override is in effect)."""
+    fallback = SOURCE_DEFAULT_PASSWORDS.get(username)
+    if fallback is None:
+        return False
+    return _resolve_default_password(username, fallback) == fallback
+
+
+# Effective passwords the auth service seeds at startup. The name
+# ``DEFAULT_PASSWORDS`` is preserved for backwards compatibility with
+# tests that import it directly.
+DEFAULT_PASSWORDS: dict[str, str] = _build_default_passwords()
 
 
 def _build_default_users() -> dict[str, dict[str, str]]:
