@@ -19,35 +19,19 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
-// ---------------------------------------------------------------------------
-// Social preview metadata
-//
-// LinkedIn, Slack, and Twitter/X pull a thumbnail from the `og:image` tag
-// (with `twitter:image` as fallback). All three require:
-//   - an absolute image URL (relative paths fail silently)
-//   - the image reachable anonymously (no auth)
-//   - the image under ~5 MB
-//
-// Next.js resolves relative image paths in the metadata below against
-// `metadataBase`, so we keep the image reference relative here and let
-// the build pick the right absolute host. Override the origin per
-// environment via NEXT_PUBLIC_SITE_URL (e.g. your Railway custom domain).
-//
-// After changing any OG tag, re-scrape via LinkedIn Post Inspector
-// (https://www.linkedin.com/post-inspector/) — LinkedIn caches results
-// for ~7 days and will keep showing the old preview otherwise.
-// ---------------------------------------------------------------------------
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://aegis-range.up.railway.app";
+const SITE_URL = "https://aegis-range.up.railway.app";
 const SITE_TITLE = "AegisRange - Cybersecurity Simulation Platform";
 const SITE_DESCRIPTION =
   "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.";
-const OG_IMAGE_PATH = "/images/aegisrange-og.jpg";
+const OG_IMAGE_URL = "https://aegis-range.up.railway.app/images/aegisrange-og.jpg";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
+  alternates: {
+    canonical: SITE_URL,
+  },
   openGraph: {
     type: "website",
     url: SITE_URL,
@@ -57,7 +41,7 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [
       {
-        url: OG_IMAGE_PATH,
+        url: OG_IMAGE_URL,
         width: 1200,
         height: 630,
         alt: "AegisRange cybersecurity simulation platform preview",
@@ -69,7 +53,10 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    images: [OG_IMAGE_PATH],
+    images: [OG_IMAGE_URL],
+  },
+  icons: {
+    icon: "/favicon.ico",
   },
 };
 
