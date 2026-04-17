@@ -6,6 +6,7 @@ import type { MissionHelp, MissionPerspective } from '@/lib/types';
 
 interface Props {
   runId: string | null;
+  scenarioId: string;
   perspective: MissionPerspective;
   open: boolean;
   onClose: () => void;
@@ -13,52 +14,122 @@ interface Props {
 
 type Tab = 'quickstart' | 'verbs' | 'stuck';
 
-const BLUE_QUICKSTART: string[] = [
+const BLUE_INTRO = [
   'You are the DEFENDER (Blue). Your job is to detect what the',
   'adversary is doing, correlate it into an incident, and contain the',
-  'account before damage lands.',
+  'account/service/document before damage lands.',
   '',
-  'The Mission Console on the right runs commands that query the',
-  "simulated SIEM and push containment actions. Every line you type is",
-  "recorded in the run transcript alongside the adversary's own beats.",
+  'The Mission Console on the right runs SIEM queries and containment',
+  "verbs. Every line you type is recorded in the run transcript",
+  "alongside the adversary's own beats.",
   '',
-  'The 60-second playbook (scn-auth-001 Blue):',
-  '  1. `alerts list`        — see what the SIEM has caught so far.',
-  '  2. `alerts show <id>`    — drill into a suspicious one.',
-  '  3. `correlate`           — confirm alerts belong to one incident.',
-  '  4. `contain session --user user-alice --action revoke`',
-  '                            — kick the attacker out. Mission complete.',
-  '',
-  'If you get stuck at any point, type `hint` in the console or switch',
-  'to the Stuck? tab above. Recruit difficulty: free hints. Analyst:',
-  '-10 XP. Operator: -25 XP.',
 ];
 
-const RED_QUICKSTART: string[] = [
-  'You are the INTRUDER (Red). Your job is to land a credential, force',
-  'the defender into a containment response, and leave enough trace to',
-  'make that defender earn their keep.',
-  '',
-  'The Mission Console runs attack verbs. Unlike the Blue side, no',
-  "adversary script is playing — your commands ARE the adversary.",
-  'Each `attempt login` you type produces an authentication event that',
+const RED_INTRO = [
+  'You are the INTRUDER (Red). No adversary script is playing — your',
+  'commands ARE the adversary. Each verb you type emits an event that',
   'the defender pipeline sees immediately.',
   '',
-  'The 60-second playbook (scn-auth-001 Red):',
-  '  1. `recon users`                          — list targetable accounts.',
-  '  2. `attempt login --user alice --from 203.0.113.10`',
-  '                                            — seed a 401 (no password).',
-  '                                              Repeat ~5× to trip the',
-  '                                              brute-force detector.',
-  '  3. `attempt login --user alice --from 203.0.113.10 \\',
-  '        --password Correct_Horse_42!`       — land the success. The',
-  '                                              defender pipeline will',
-  '                                              auto-respond; that flips',
-  '                                              "Force a defensive',
-  '                                              response" to done.',
-  '',
-  'Use `hint` for the next step or F1 to re-open this manual any time.',
 ];
+
+const UNIVERSAL_OUTRO = [
+  '',
+  'If you get stuck, type `hint` in the console or switch to the Stuck?',
+  'tab. Recruit: free hints. Analyst: −10 XP. Operator: −25 XP.',
+  'F1 (or the Help button) re-opens this manual any time.',
+];
+
+/** Scenario-specific playbooks. First line is the intro, then the
+ *  numbered steps. Keys are `${scenarioId}:${perspective}`. */
+const SCENARIO_PLAYBOOKS: Record<string, string[]> = {
+  'scn-auth-001:blue': [
+    'The 60-second playbook (scn-auth-001 Blue):',
+    '  1. `alerts list`                 — what the SIEM caught so far.',
+    '  2. `alerts show <id>`            — confirm the brute-force pattern.',
+    '  3. `correlate`                   — accept the correlated incident.',
+    '  4. `contain session --user user-alice --action revoke`',
+    '                                    — kick the attacker out. Done.',
+  ],
+  'scn-auth-001:red': [
+    'The 60-second playbook (scn-auth-001 Red):',
+    '  1. `recon users`                                — list targets.',
+    '  2. `attempt login --user alice --from 203.0.113.10` (repeat ~5×).',
+    '  3. `attempt login --user alice --from 203.0.113.10 \\',
+    '        --password Correct_Horse_42!`            — land success.',
+  ],
+  'scn-session-002:blue': [
+    'The 60-second playbook (scn-session-002 Blue):',
+    '  1. `alerts list`                 — DET-SESSION-003 should light up.',
+    '  2. `events tail --user user-bob` — two auth checks, different IPs.',
+    '  3. `contain session --user user-bob --action revoke`.',
+  ],
+  'scn-session-002:red': [
+    'The 60-second playbook (scn-session-002 Red):',
+    '  1. `attempt login --user bob --from 198.51.100.10 \\',
+    '        --password Hunter2_Strong_99!`           — mint a session.',
+    '  2. `session reuse --from 203.0.113.55`         — replay elsewhere.',
+  ],
+  'scn-doc-003:blue': [
+    'The 60-second playbook (scn-doc-003 Blue):',
+    '  1. `alerts list`                                — DET-DOC-005 fires.',
+    '  2. `events tail --user user-bob --last 10`      — confirm bulk reads.',
+    '  3. `contain document --id doc-002 --action restrict --actor user-bob`',
+    '      OR `contain session --user user-bob --action revoke`.',
+  ],
+  'scn-doc-003:red': [
+    'The 60-second playbook (scn-doc-003 Red):',
+    '  1. `attempt login --user bob --from 198.51.100.10 \\',
+    '        --password Hunter2_Strong_99!`           — get a session.',
+    '  2. `doc read --id doc-002 --burst 20`          — trip bulk detector.',
+  ],
+  'scn-doc-004:blue': [
+    'The 60-second playbook (scn-doc-004 Blue):',
+    '  1. `alerts list`                                — DET-DOC-006 fires.',
+    '  2. `contain document --id doc-002 --action quarantine` AND/OR',
+    '     `contain session --user user-bob --action revoke`.',
+  ],
+  'scn-doc-004:red': [
+    'The 60-second playbook (scn-doc-004 Red):',
+    '  1. `attempt login --user bob --from 198.51.100.10 \\',
+    '        --password Hunter2_Strong_99!`.',
+    '  2. `doc read --id doc-001` / `--id doc-002` / `--id doc-003`.',
+    '  3. `doc download --id doc-001` / `--id doc-002` / `--id doc-003`.',
+  ],
+  'scn-svc-005:blue': [
+    'The 60-second playbook (scn-svc-005 Blue):',
+    '  1. `alerts list`                                — DET-SVC-007 fires.',
+    '  2. `contain service --id svc-data-processor --action disable`.',
+  ],
+  'scn-svc-005:red': [
+    'The 60-second playbook (scn-svc-005 Red):',
+    '  `svc call --service svc-data-processor --op <route>` for each of:',
+    '  `/admin/config`, `/admin/secrets`, `/admin/users`, `/admin/audit`.',
+  ],
+  'scn-corr-006:blue': [
+    'The 60-second playbook (scn-corr-006 Blue):',
+    '  1. `alerts list`                  — multiple rules fire (auth + doc).',
+    '  2. `correlate`                    — tie the chain together.',
+    '  3. Any `contain ...` verb satisfies the full-containment objective.',
+  ],
+  'scn-corr-006:red': [
+    'The 60-second playbook (scn-corr-006 Red):',
+    '  1. Credential spray: `attempt login --user alice ...` (5× + success).',
+    '  2. `doc read --id doc-001 --burst 10` / `doc read --id doc-002 --burst 10`.',
+    '  3. `doc download --id doc-001` and friends — trip the exfil detector.',
+  ],
+};
+
+function quickstartFor(
+  scenarioId: string,
+  perspective: MissionPerspective,
+): string[] {
+  const intro = perspective === 'red' ? RED_INTRO : BLUE_INTRO;
+  const play = SCENARIO_PLAYBOOKS[`${scenarioId}:${perspective}`] ?? [
+    `No Quickstart yet for ${scenarioId} ${perspective}. Type \`hint\` in the`,
+    'console for a contextual next step, or `help` for the verb list.',
+  ];
+  return [...intro, ...play, ...UNIVERSAL_OUTRO];
+}
 
 const STUCK_PROMPT: string[] = [
   'Not sure what to do next?',
@@ -88,7 +159,13 @@ const STUCK_PROMPT: string[] = [
  *   - Stuck?    — static "what to try" banner plus a link to run
  *                 `hint` in the console.
  */
-export default function OpsManual({ runId, perspective, open, onClose }: Props) {
+export default function OpsManual({
+  runId,
+  scenarioId,
+  perspective,
+  open,
+  onClose,
+}: Props) {
   const [tab, setTab] = useState<Tab>('quickstart');
   const [help, setHelp] = useState<MissionHelp | null>(null);
   const [loadingHelp, setLoadingHelp] = useState(false);
@@ -180,7 +257,7 @@ export default function OpsManual({ runId, perspective, open, onClose }: Props) 
         <div className="flex-1 overflow-y-auto px-6 py-5 text-sm leading-relaxed font-mono">
           {tab === 'quickstart' && (
             <pre className="whitespace-pre-wrap text-slate-300 font-mono">
-              {(perspective === 'red' ? RED_QUICKSTART : BLUE_QUICKSTART).join('\n')}
+              {quickstartFor(scenarioId, perspective).join('\n')}
             </pre>
           )}
 

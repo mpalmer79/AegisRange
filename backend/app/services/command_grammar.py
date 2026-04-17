@@ -219,6 +219,68 @@ _BLUE_VERBS: tuple[VerbSpec, ...] = (
             ),
         ),
     ),
+    VerbSpec(
+        name="contain",
+        subcommand="document",
+        handler="contain.document",
+        perspective="blue",
+        usage=(
+            "contain document --id <doc_id> --action <quarantine|restrict>"
+            " [--actor <id>]"
+        ),
+        description=(
+            "Contain a document under suspected exfiltration. "
+            "`quarantine` freezes the artifact; `restrict` blocks "
+            "further downloads by the named actor (defaults to the "
+            "scenario's primary actor if --actor is omitted)."
+        ),
+        flags=(
+            FlagSpec(
+                name="id",
+                type="str",
+                required=True,
+                description="Document id (e.g. doc-002).",
+            ),
+            FlagSpec(
+                name="action",
+                type="choice",
+                choices=("quarantine", "restrict"),
+                required=True,
+                description="Quarantine the doc, or restrict an actor.",
+            ),
+            FlagSpec(
+                name="actor",
+                type="str",
+                description=("Actor to restrict (only used when --action=restrict)."),
+            ),
+        ),
+    ),
+    VerbSpec(
+        name="contain",
+        subcommand="service",
+        handler="contain.service",
+        perspective="blue",
+        usage="contain service --id <svc_id> --action disable",
+        description=(
+            "Disable a service account that's overstepping its scope. "
+            "Satisfies the containment objective for SCN-SVC-005."
+        ),
+        flags=(
+            FlagSpec(
+                name="id",
+                type="str",
+                required=True,
+                description="Service id (e.g. svc-data-processor).",
+            ),
+            FlagSpec(
+                name="action",
+                type="choice",
+                choices=("disable",),
+                required=True,
+                description="Currently only `disable` is supported.",
+            ),
+        ),
+    ),
 )
 
 
@@ -299,6 +361,105 @@ _RED_VERBS: tuple[VerbSpec, ...] = (
                 type="str",
                 required=True,
                 description="Source IP the replay originates from.",
+            ),
+        ),
+    ),
+    VerbSpec(
+        name="doc",
+        subcommand="read",
+        handler="doc.read",
+        perspective="red",
+        usage=("doc read --id <doc_id> [--burst <n>] [--as <user>] [--from <ip>]"),
+        description=(
+            "Read a document. Single event by default; pass --burst N to "
+            "emit N rapid reads (tripping the bulk-access detector). "
+            "Requires an existing session — run `attempt login` first."
+        ),
+        flags=(
+            FlagSpec(
+                name="id",
+                type="str",
+                required=True,
+                description="Document id (e.g. doc-002).",
+            ),
+            FlagSpec(
+                name="burst",
+                type="int",
+                default=1,
+                description="How many rapid reads to fire (default 1).",
+            ),
+            FlagSpec(
+                name="as",
+                type="str",
+                description=(
+                    "Actor role to read as. Defaults to the role of the "
+                    "current session's actor."
+                ),
+            ),
+            FlagSpec(
+                name="from",
+                type="str",
+                description=(
+                    "Source IP the read originates from (defaults to the "
+                    "IP used by the current session)."
+                ),
+            ),
+        ),
+    ),
+    VerbSpec(
+        name="doc",
+        subcommand="download",
+        handler="doc.download",
+        perspective="red",
+        usage="doc download --id <doc_id> [--as <user>] [--from <ip>]",
+        description=(
+            "Download a document. Stages an exfiltration event; repeat "
+            "across several doc ids to provoke the exfil detector. "
+            "Requires an existing session."
+        ),
+        flags=(
+            FlagSpec(
+                name="id",
+                type="str",
+                required=True,
+                description="Document id.",
+            ),
+            FlagSpec(
+                name="as",
+                type="str",
+                description="Actor role to download as.",
+            ),
+            FlagSpec(
+                name="from",
+                type="str",
+                description="Source IP.",
+            ),
+        ),
+    ),
+    VerbSpec(
+        name="svc",
+        subcommand="call",
+        handler="svc.call",
+        perspective="red",
+        usage="svc call --service <svc_id> --op <path>",
+        description=(
+            "Make a service-account call against a privileged route. "
+            "Emits an authorization-failure event; repeat across several "
+            "routes to trip the service-misuse detector. No session "
+            "required — service credentials are long-lived."
+        ),
+        flags=(
+            FlagSpec(
+                name="service",
+                type="str",
+                required=True,
+                description="Service id (e.g. svc-data-processor).",
+            ),
+            FlagSpec(
+                name="op",
+                type="str",
+                required=True,
+                description="Route or operation to call (e.g. /admin/config).",
             ),
         ),
     ),

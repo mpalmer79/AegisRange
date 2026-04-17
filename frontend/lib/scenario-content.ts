@@ -99,14 +99,19 @@ const blueCorrelate = (r: ScenarioResult) => Boolean(r.incident_id);
 const blueRespond = (r: ScenarioResult) =>
   (r.responses_generated ?? 0) >= 1 || redTrippedDefense(r);
 
-// Phase 3: scn-auth-001 blue-3 is player-driven. The analyst must type
-// `contain session --user <id> --action <revoke|stepup>` in the console
-// to satisfy the objective — auto-response no longer counts. Other
-// scenarios still use blueRespond (the old behavior) until Phase 4
-// ports them.
+// Phase 3a: scn-auth-001 blue-3 is player-driven. The analyst must type
+// `contain session --user <id> --action <revoke|stepup>` to satisfy it.
 const blueContainByCommand = (r: ScenarioResult) => {
   const issued = r.commands_issued ?? [];
   return issued.some((v) => v.startsWith('contain session'));
+};
+
+// Phase 4: scenarios 002–006 accept ANY containment verb (session,
+// document, or service). Keeping this broader than scn-auth-001 lets
+// players pick whichever containment shape matches the scenario.
+const blueAnyContainByCommand = (r: ScenarioResult) => {
+  const issued = r.commands_issued ?? [];
+  return issued.some((v) => v.startsWith('contain '));
 };
 
 // ---------- content ----------
@@ -183,7 +188,7 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       objectives: [
         { id: 'blue-1', title: 'Detect session anomaly', description: 'Trigger a session-hijack alert.', xp: 25, check: blueDetect },
         { id: 'blue-2', title: 'Open incident', description: 'Escalate into a tracked incident.', xp: 35, check: blueCorrelate },
-        { id: 'blue-3', title: 'Revoke the session', description: 'Terminate the compromised session.', xp: 50, check: blueRespond },
+        { id: 'blue-3', title: 'Revoke the session', description: 'Run `contain session --user user-bob --action revoke` to kill the hijacked session.', xp: 50, check: blueAnyContainByCommand },
       ],
     },
   },
@@ -217,7 +222,7 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       objectives: [
         { id: 'blue-1', title: 'Detect access control violation', description: 'Trigger an unauthorized-access alert.', xp: 25, check: blueDetect },
         { id: 'blue-2', title: 'Open incident', description: 'Escalate into a tracked incident.', xp: 35, check: blueCorrelate },
-        { id: 'blue-3', title: 'Restrict the actor', description: 'Apply a download restriction or equivalent.', xp: 50, check: blueRespond },
+        { id: 'blue-3', title: 'Restrict the actor', description: 'Run `contain document --id doc-002 --action restrict --actor user-bob` or revoke the session.', xp: 50, check: blueAnyContainByCommand },
       ],
     },
   },
@@ -251,7 +256,7 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       objectives: [
         { id: 'blue-1', title: 'Detect exfil burst', description: 'Fire a data-exfil alert.', xp: 25, check: blueDetect },
         { id: 'blue-2', title: 'Open incident', description: 'Open a tracked incident for the spree.', xp: 35, check: blueCorrelate },
-        { id: 'blue-3', title: 'Quarantine and restrict', description: 'Quarantine artifacts or restrict the actor.', xp: 50, check: blueRespond },
+        { id: 'blue-3', title: 'Quarantine and restrict', description: 'Run `contain document --id doc-002 --action quarantine` or revoke/restrict the actor.', xp: 50, check: blueAnyContainByCommand },
       ],
     },
   },
@@ -286,7 +291,7 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       objectives: [
         { id: 'blue-1', title: 'Detect out-of-scope calls', description: 'Trigger a service-account anomaly alert.', xp: 25, check: blueDetect },
         { id: 'blue-2', title: 'Open incident', description: 'Escalate into a tracked incident.', xp: 35, check: blueCorrelate },
-        { id: 'blue-3', title: 'Disable the service', description: 'Disable the service or block policy changes.', xp: 50, check: blueRespond },
+        { id: 'blue-3', title: 'Disable the service', description: 'Run `contain service --id svc-data-processor --action disable` to stop the service account.', xp: 50, check: blueAnyContainByCommand },
       ],
     },
   },
@@ -324,7 +329,7 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       objectives: [
         { id: 'blue-1', title: 'Detect across surfaces', description: 'Fire alerts from multiple detection rules.', xp: 30, check: blueDetect },
         { id: 'blue-2', title: 'Open correlated incident', description: 'Promote the alerts into one incident.', xp: 40, check: blueCorrelate },
-        { id: 'blue-3', title: 'Execute full containment', description: 'Run containment across auth, session, and data surfaces.', xp: 60, check: blueRespond },
+        { id: 'blue-3', title: 'Execute full containment', description: 'Issue any `contain ...` verb — session, document, or service.', xp: 60, check: blueAnyContainByCommand },
       ],
     },
   },

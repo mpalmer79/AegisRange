@@ -129,6 +129,264 @@ _PLAYBOOKS: dict[tuple[str, str], list[dict]] = {
             ],
         },
     ],
+    # -----------------------------------------------------------------
+    # scn-session-002 (Session Hijacking)
+    # -----------------------------------------------------------------
+    ("scn-session-002", "red"): [
+        {
+            "satisfied_when": lambda issued: any(v == "attempt login" for v in issued),
+            "lines": [
+                "Sign in as bob to mint a session token:",
+                "`attempt login --user bob --from 198.51.100.10",
+                "--password Hunter2_Strong_99!`",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(v == "session reuse" for v in issued),
+            "lines": [
+                "Replay bob's session from a different IP:",
+                "`session reuse --from 203.0.113.55`",
+                "That trips DET-SESSION-003 and the defender auto-response.",
+            ],
+        },
+    ],
+    ("scn-session-002", "blue"): [
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("alerts list") for v in issued
+            ),
+            "lines": [
+                "Run `alerts list` — you should see a DET-SESSION-003 alert for",
+                "anomalous session origin.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("events tail") or v.startswith("alerts show")
+                for v in issued
+            ),
+            "lines": [
+                "Inspect: `events tail --user user-bob` reveals two",
+                "authorization.check.success events from mismatched IPs —",
+                "classic session-token reuse.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("contain session") for v in issued
+            ),
+            "lines": [
+                "Kill the hijacked session:",
+                "`contain session --user user-bob --action revoke`",
+            ],
+        },
+    ],
+    # -----------------------------------------------------------------
+    # scn-doc-003 (Bulk Document Access)
+    # -----------------------------------------------------------------
+    ("scn-doc-003", "red"): [
+        {
+            "satisfied_when": lambda issued: any(v == "attempt login" for v in issued),
+            "lines": [
+                "Start with a valid bob session:",
+                "`attempt login --user bob --from 198.51.100.10",
+                "--password Hunter2_Strong_99!`",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(v == "doc read" for v in issued),
+            "lines": [
+                "Fire a burst of reads to trip the bulk-access detector:",
+                "`doc read --id doc-002 --burst 20`",
+            ],
+        },
+    ],
+    ("scn-doc-003", "blue"): [
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("alerts list") for v in issued
+            ),
+            "lines": [
+                "`alerts list` should surface DET-DOC-005 for bulk document",
+                "access.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("events tail") for v in issued
+            ),
+            "lines": [
+                "Confirm: `events tail --user user-bob --last 10` shows many",
+                "consecutive document.read events on the same doc.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("contain session") or v.startswith("contain document")
+                for v in issued
+            ),
+            "lines": [
+                "Contain either the actor or the document:",
+                "`contain session --user user-bob --action revoke` OR",
+                "`contain document --id doc-002 --action restrict --actor user-bob`",
+            ],
+        },
+    ],
+    # -----------------------------------------------------------------
+    # scn-doc-004 (Bulk Document Exfiltration)
+    # -----------------------------------------------------------------
+    ("scn-doc-004", "red"): [
+        {
+            "satisfied_when": lambda issued: any(v == "attempt login" for v in issued),
+            "lines": [
+                "Authenticate first:",
+                "`attempt login --user bob --from 198.51.100.10",
+                "--password Hunter2_Strong_99!`",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: (
+                sum(1 for v in issued if v == "doc read") >= 2
+            ),
+            "lines": [
+                "Read a handful of restricted docs to stage the exfil:",
+                "`doc read --id doc-001` / `doc read --id doc-002` /",
+                "`doc read --id doc-003`",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(v == "doc download" for v in issued),
+            "lines": [
+                "Now download them to trip DET-DOC-006:",
+                "`doc download --id doc-001`, `doc download --id doc-002`,",
+                "`doc download --id doc-003`",
+            ],
+        },
+    ],
+    ("scn-doc-004", "blue"): [
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("alerts list") for v in issued
+            ),
+            "lines": [
+                "`alerts list` should light up DET-DOC-006 for a",
+                "read-then-download exfil pattern.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("contain document") or v.startswith("contain session")
+                for v in issued
+            ),
+            "lines": [
+                "Quarantine the exfiltrated artifact and restrict the actor:",
+                "`contain document --id doc-002 --action quarantine` AND/OR",
+                "`contain session --user user-bob --action revoke`",
+            ],
+        },
+    ],
+    # -----------------------------------------------------------------
+    # scn-svc-005 (Service Account Abuse)
+    # -----------------------------------------------------------------
+    ("scn-svc-005", "red"): [
+        {
+            "satisfied_when": lambda issued: (
+                sum(1 for v in issued if v == "svc call") >= 1
+            ),
+            "lines": [
+                "Service accounts don't need an interactive session. Fire",
+                "privileged calls:",
+                "`svc call --service svc-data-processor --op /admin/config`",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: (
+                sum(1 for v in issued if v == "svc call") >= 3
+            ),
+            "lines": [
+                "Hit a few more routes to trip DET-SVC-007:",
+                "`/admin/secrets`, `/admin/users`, `/admin/audit`.",
+            ],
+        },
+    ],
+    ("scn-svc-005", "blue"): [
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("alerts list") for v in issued
+            ),
+            "lines": [
+                "Run `alerts list` — DET-SVC-007 fires on abnormal service",
+                "account activity.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("contain service") for v in issued
+            ),
+            "lines": [
+                "Disable the misbehaving service:",
+                "`contain service --id svc-data-processor --action disable`",
+            ],
+        },
+    ],
+    # -----------------------------------------------------------------
+    # scn-corr-006 (Multi-Stage)
+    # -----------------------------------------------------------------
+    ("scn-corr-006", "red"): [
+        {
+            "satisfied_when": lambda issued: any(v == "attempt login" for v in issued),
+            "lines": [
+                "Start with credential spraying:",
+                "`attempt login --user alice --from 203.0.113.10` (repeat 5×",
+                "no --password, then land success with --password",
+                "Correct_Horse_42!).",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(v == "doc read" for v in issued),
+            "lines": [
+                "Chain into doc access: `doc read --id doc-001 --burst 10`",
+                "and `doc read --id doc-002 --burst 10`.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(v == "doc download" for v in issued),
+            "lines": [
+                "Finish with exfil: `doc download --id doc-001`,",
+                "`doc download --id doc-002`, `doc download --id doc-003`.",
+            ],
+        },
+    ],
+    ("scn-corr-006", "blue"): [
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("alerts list") for v in issued
+            ),
+            "lines": [
+                "Multi-stage: you'll see DET-AUTH-001, DET-AUTH-002,",
+                "DET-DOC-005, DET-DOC-006 all land. Start with `alerts list`.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v == "correlate" or v.startswith("correlate ") for v in issued
+            ),
+            "lines": [
+                "Correlate the chain: `correlate` to confirm the analyst",
+                "read of the linked incident.",
+            ],
+        },
+        {
+            "satisfied_when": lambda issued: any(
+                v.startswith("contain ") for v in issued
+            ),
+            "lines": [
+                "Full-spectrum response: revoke sessions, quarantine",
+                "documents, restrict the actor. Any `contain ...` verb",
+                "satisfies the objective.",
+            ],
+        },
+    ],
 }
 
 
