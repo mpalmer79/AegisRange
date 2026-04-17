@@ -118,6 +118,22 @@ export interface ScenarioResult {
   policy_change_restricted_actors: string[];
   operated_by: string | null;
   run_id?: string | null;
+  commands_issued?: string[];
+  xp_delta?: number;
+}
+
+export interface MissionCommandResponse {
+  kind: 'ok' | 'error';
+  lines: string[];
+  effects: Record<string, unknown>;
+  verb_key: string;
+  commands_issued: string[];
+  xp_delta: number;
+}
+
+export interface MissionHelp {
+  overview: string[];
+  verb_help: Record<string, string[]>;
 }
 
 export type MissionPerspective = 'red' | 'blue';

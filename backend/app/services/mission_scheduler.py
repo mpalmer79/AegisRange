@@ -202,6 +202,8 @@ class MissionScheduler:
             ),
             "operated_by": run.operated_by,
             "run_id": run.run_id,
+            "commands_issued": [r.verb_key for r in run.command_history],
+            "xp_delta": run.xp_delta,
         }
 
 

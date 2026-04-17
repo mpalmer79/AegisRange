@@ -25,13 +25,22 @@ from typing import AsyncIterator
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.dependencies import mission_scheduler, mission_service, mission_stream_hub
+from app.dependencies import (
+    mission_help_service,
+    mission_scheduler,
+    mission_service,
+    mission_stream_hub,
+)
 from app.schemas import (
     IncidentResponse,
+    MissionHelpResponse,
     MissionSnapshot,
     ScenarioSummaryResponse,
     StartMissionRequest,
+    SubmitCommandRequest,
+    SubmitCommandResponse,
 )
+from app.services.command_grammar import verbs_for
 from app.serializers import incident_to_dict
 from app.services.auth_service import _auth_service, _extract_bearer_token
 from app.services.mission_service import MissionRun
@@ -75,6 +84,8 @@ def _snapshot(run: MissionRun) -> dict:
         "created_at": run.created_at.isoformat(),
         "operated_by": run.operated_by,
         "summary": summary,
+        "commands_issued": [r.verb_key for r in run.command_history],
+        "xp_delta": run.xp_delta,
     }
 
 
@@ -185,3 +196,48 @@ async def stream_mission(run_id: str) -> StreamingResponse:
     response.headers["Cache-Control"] = "no-cache, no-transform"
     response.headers["X-Accel-Buffering"] = "no"
     return response
+
+
+# ---------------------------------------------------------------------------
+# Commands + help
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{run_id}/commands",
+    response_model=SubmitCommandResponse,
+)
+async def submit_command(
+    run_id: str, payload: SubmitCommandRequest
+) -> dict:
+    run, response = await mission_service.submit_command(
+        run_id, payload.command
+    )
+    if run is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return {
+        **response,
+        "commands_issued": [r.verb_key for r in run.command_history],
+        "xp_delta": run.xp_delta,
+    }
+
+
+@router.get("/{run_id}/help", response_model=MissionHelpResponse)
+def mission_help(run_id: str, topic: str | None = None) -> dict:
+    run = mission_service.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    overview = mission_help_service.overview(run.perspective)
+    verb_help: dict[str, list[str]] = {}
+    if topic:
+        page = mission_help_service.verb_help(topic, run.perspective)
+        if page is not None:
+            verb_help[topic] = page
+    else:
+        # Pre-compute the per-verb pages so the Ops Manual overlay can
+        # render without a second round-trip per verb.
+        for v in verbs_for(run.perspective):
+            page = mission_help_service.verb_help(v.key, run.perspective)
+            if page is not None:
+                verb_help[v.key] = page
+    return {"overview": overview, "verb_help": verb_help}

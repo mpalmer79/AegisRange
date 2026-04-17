@@ -99,6 +99,16 @@ const blueCorrelate = (r: ScenarioResult) => Boolean(r.incident_id);
 const blueRespond = (r: ScenarioResult) =>
   (r.responses_generated ?? 0) >= 1 || redTrippedDefense(r);
 
+// Phase 3: scn-auth-001 blue-3 is player-driven. The analyst must type
+// `contain session --user <id> --action <revoke|stepup>` in the console
+// to satisfy the objective — auto-response no longer counts. Other
+// scenarios still use blueRespond (the old behavior) until Phase 4
+// ports them.
+const blueContainByCommand = (r: ScenarioResult) => {
+  const issued = r.commands_issued ?? [];
+  return issued.some((v) => v.startsWith('contain session'));
+};
+
 // ---------- content ----------
 export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
   'scn-auth-001': {
@@ -131,7 +141,14 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       objectives: [
         { id: 'blue-1', title: 'Detect brute-force pattern', description: 'Trigger at least one detection rule.', xp: 25, check: blueDetect },
         { id: 'blue-2', title: 'Correlate into incident', description: 'Open a tracked incident for this correlation ID.', xp: 35, check: blueCorrelate },
-        { id: 'blue-3', title: 'Execute containment', description: 'Require step-up auth or revoke the attacker session.', xp: 50, check: blueRespond },
+        {
+          id: 'blue-3',
+          title: 'Execute containment',
+          description:
+            'Run `contain session --user user-alice --action revoke` (or `--action stepup`) in the mission console.',
+          xp: 50,
+          check: blueContainByCommand,
+        },
       ],
     },
   },

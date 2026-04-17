@@ -55,6 +55,8 @@ import {
   MissionDifficulty,
   MissionPerspective,
   MissionSnapshot,
+  MissionCommandResponse,
+  MissionHelp,
 } from './types';
 
 // ------------------------------------------------------------
@@ -382,6 +384,31 @@ export async function getMissionIncident(runId: string): Promise<Incident> {
 /** URL for the mission SSE stream. Use with ``new EventSource(...)``. */
 export function missionStreamUrl(runId: string): string {
   return `${BASE_URL}/missions/${runId}/stream`;
+}
+
+export async function submitMissionCommand(
+  runId: string,
+  command: string,
+): Promise<MissionCommandResponse> {
+  return liveOrThrow(
+    () =>
+      request<MissionCommandResponse>(`/missions/${runId}/commands`, {
+        method: 'POST',
+        body: JSON.stringify({ command }),
+      }),
+    `unknown run_id: ${runId}`,
+  );
+}
+
+export async function getMissionHelp(
+  runId: string,
+  topic?: string,
+): Promise<MissionHelp> {
+  const qs = topic ? `?topic=${encodeURIComponent(topic)}` : '';
+  return liveOrThrow(
+    () => request<MissionHelp>(`/missions/${runId}/help${qs}`),
+    `unknown run_id: ${runId}`,
+  );
 }
 
 export async function downloadDocument(documentId: string, body: DocumentRequest): Promise<unknown> {

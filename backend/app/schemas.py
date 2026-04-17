@@ -158,6 +158,10 @@ class ScenarioSummaryResponse(BaseModel):
     policy_change_restricted_actors: list[str]
     operated_by: str | None = None
     run_id: str | None = None
+    # Phase 3: commands the player has issued so far (verb keys only,
+    # not raw strings; used by objective checks and the Ops Manual).
+    commands_issued: list[str] = []
+    xp_delta: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +201,26 @@ class MissionSnapshot(BaseModel):
     created_at: str
     operated_by: str | None = None
     summary: ScenarioSummaryResponse | None = None
+    commands_issued: list[str] = []
+    xp_delta: int = 0
+
+
+class SubmitCommandRequest(BaseModel):
+    command: str
+
+
+class SubmitCommandResponse(BaseModel):
+    kind: Literal["ok", "error"]
+    lines: list[str]
+    effects: dict[str, Any] = {}
+    verb_key: str
+    commands_issued: list[str]
+    xp_delta: int
+
+
+class MissionHelpResponse(BaseModel):
+    overview: list[str]
+    verb_help: dict[str, list[str]] = {}
 
 
 # ---------------------------------------------------------------------------

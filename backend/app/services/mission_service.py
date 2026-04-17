@@ -14,7 +14,7 @@ role gate.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from threading import RLock
 from typing import Any, Literal
@@ -37,6 +37,16 @@ SUPPORTED_SCENARIOS: dict[str, str] = {
 
 
 @dataclass
+class CommandRecord:
+    ts: datetime
+    raw: str
+    verb_key: str  # e.g. "alerts list", "contain session", or "<parse-error>"
+    kind: Literal["ok", "error"]
+    lines: list[str] = field(default_factory=list)
+    effects: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class MissionRun:
     run_id: str
     scenario_id: str
@@ -47,6 +57,10 @@ class MissionRun:
     status: MissionStatus
     operated_by: str | None = None
     summary: dict[str, Any] | None = None
+    command_history: list[CommandRecord] = field(default_factory=list)
+    # Running total of XP adjustments (e.g. -10 for each hint on
+    # analyst). Positive values are bonuses.
+    xp_delta: int = 0
 
 
 class MissionStore:
@@ -101,11 +115,15 @@ class MissionService:
         incident_store,
         mission_store,
         scheduler=None,
+        help_service=None,
+        stream_hub=None,
     ) -> None:
         self.scenario_engine = scenario_engine
         self.incident_store = incident_store
         self.missions = mission_store
         self.scheduler = scheduler
+        self.help_service = help_service
+        self.stream_hub = stream_hub
 
     @staticmethod
     def is_supported(scenario_id: str) -> bool:
@@ -177,6 +195,101 @@ class MissionService:
         self.missions.put(run)
         self.scheduler.schedule(run)
         return run
+
+    # -- commands ------------------------------------------------------------
+
+    async def submit_command(
+        self, run_id: str, raw: str
+    ) -> tuple[MissionRun | None, dict[str, Any]]:
+        """Parse + dispatch a player command against a mission run.
+
+        Returns ``(run, response_dict)`` where response_dict has the
+        shape::
+
+            {
+              "kind": "ok" | "error",
+              "lines": [...],
+              "effects": {...},
+              "verb_key": "...",
+            }
+
+        If the mission is unknown, ``(None, {})`` is returned (caller
+        should 404).
+        """
+        # Lazy imports to keep module import order clean.
+        from app.services.command_dispatcher import (
+            DispatchContext,
+            dispatch,
+        )
+        from app.services.command_parser import parse
+
+        run = self.missions.get(run_id)
+        if run is None:
+            return None, {}
+        if self.help_service is None:
+            raise RuntimeError(
+                "MissionService has no help_service wired; cannot dispatch commands."
+            )
+
+        outcome = parse(raw, perspective=run.perspective)
+        if outcome.err is not None:
+            record = CommandRecord(
+                ts=utc_now(),
+                raw=raw,
+                verb_key="<parse-error>",
+                kind="error",
+                lines=[outcome.err.message]
+                + ([f"Did you mean: {outcome.err.suggestion}?"] if outcome.err.suggestion else []),
+            )
+            run.command_history.append(record)
+            self.missions.put(run)
+            return run, {
+                "kind": "error",
+                "lines": record.lines,
+                "effects": {},
+                "verb_key": record.verb_key,
+            }
+
+        assert outcome.ok is not None
+        parsed = outcome.ok
+        ctx = DispatchContext(
+            run=run,
+            scenario_engine=self.scenario_engine,
+            store=self.incident_store,
+            help_service=self.help_service,
+        )
+        result = dispatch(parsed, ctx)
+
+        # Normalised verb key: subverb-flagged verbs use "verb sub"; plain
+        # verbs use just the verb name.
+        verb_key = parsed.verb.key
+        record = CommandRecord(
+            ts=utc_now(),
+            raw=raw,
+            verb_key=verb_key,
+            kind=result.kind,
+            lines=result.lines,
+            effects=result.effects,
+        )
+        run.command_history.append(record)
+        # Apply XP side effects.
+        hint_cost = result.effects.get("hint_xp_cost")
+        if isinstance(hint_cost, int):
+            run.xp_delta -= hint_cost
+        self.missions.put(run)
+
+        # Surface the command on the SSE stream so observers (Ops
+        # Manual, transcript, replays) see it in-order with adversary
+        # beats.
+        if self.stream_hub is not None and result.stream_event is not None:
+            await self.stream_hub.publish(run.run_id, result.stream_event)
+
+        return run, {
+            "kind": result.kind,
+            "lines": result.lines,
+            "effects": result.effects,
+            "verb_key": verb_key,
+        }
 
     # -- reads ---------------------------------------------------------------
 

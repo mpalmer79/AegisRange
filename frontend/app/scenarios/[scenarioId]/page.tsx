@@ -25,6 +25,8 @@ import DifficultySelector from './components/DifficultySelector';
 import MissionHUD from './components/MissionHUD';
 import LaunchPanel from './components/LaunchPanel';
 import MissionTimeline from './components/MissionTimeline';
+import MissionConsole from './components/MissionConsole';
+import OpsManual from './components/OpsManual';
 import { useMissionStream } from './hooks/useMissionStream';
 import { ACCENTS, DEFAULT_ACCENT } from './components/accents';
 
@@ -65,8 +67,23 @@ export default function ScenarioDetailPage() {
   const [launchedAt, setLaunchedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [runId, setRunId] = useState<string | null>(null);
+  const [opsManualOpen, setOpsManualOpen] = useState(false);
 
   const difficulty = DIFFICULTIES.find((d) => d.id === difficultyId) ?? DIFFICULTIES[1];
+
+  // F1 anywhere on the page opens the Ops Manual. We don't intercept
+  // `?` globally because it conflicts with typing into inputs; the
+  // MissionConsole handles `?` locally.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setOpsManualOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // ---------- live mission stream ----------
   const missionStream = useMissionStream(
@@ -314,6 +331,25 @@ export default function ScenarioDetailPage() {
               phase={missionStream.phase}
             />
           )}
+
+          <MissionConsole
+            runId={runId}
+            disabled={status === 'idle' || status === 'error'}
+            onCommandApplied={(response) => {
+              // Mirror new command history into `result` so objective
+              // checks that read commands_issued update immediately.
+              setResult((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      commands_issued: response.commands_issued,
+                      xp_delta: response.xp_delta,
+                    }
+                  : prev,
+              );
+            }}
+            onOpenOpsManual={() => setOpsManualOpen(true)}
+          />
         </div>
 
         {/* RIGHT (1/3): control tower */}
@@ -336,6 +372,20 @@ export default function ScenarioDetailPage() {
             isRunning={status === 'running'}
             personalBest={personalBest}
           />
+
+          <button
+            type="button"
+            onClick={() => setOpsManualOpen(true)}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[11px] font-mono font-semibold tracking-widest uppercase text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/10 transition"
+            aria-label="Open Ops Manual (F1)"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Ops Manual (F1)
+          </button>
 
           <LaunchPanel
             status={status}
@@ -362,6 +412,12 @@ export default function ScenarioDetailPage() {
           />
         </div>
       </div>
+
+      <OpsManual
+        runId={runId}
+        open={opsManualOpen}
+        onClose={() => setOpsManualOpen(false)}
+      />
     </div>
   );
 }
