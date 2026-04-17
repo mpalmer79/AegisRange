@@ -319,6 +319,14 @@ class MissionService:
                 ),
             )
             run.command_history.append(record)
+            # Operator difficulty penalises sloppy typing: −1 XP per
+            # unknown-verb / unknown-subcommand parse failure. Easier
+            # ranks let parse errors slide so players can explore.
+            if run.difficulty == "operator" and outcome.err.kind in {
+                "unknown_verb",
+                "unknown_subcommand",
+            }:
+                run.xp_delta -= 1
             self.missions.put(run)
             return run, {
                 "kind": "error",

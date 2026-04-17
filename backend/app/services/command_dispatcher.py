@@ -361,15 +361,40 @@ def _script_ctx(ctx: DispatchContext) -> ScriptContext:
 
 
 def _handler_recon_users(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
-    # Free recon action — no event fires, no world mutation.
-    lines = [
-        "Visible identities on target tenant:",
-        "  user-alice       analyst   sso/password",
-        "  user-bob         admin     sso/password",
-        "",
-        "Hint: the brute-force detector trips at ~5 failed attempts "
-        "per source IP within a short window.",
-    ]
+    """Free recon action — no event, no world mutation.
+
+    Output depth depends on difficulty: Recruit sees the full intel
+    pack (users, roles, and known passwords) so the training wheels
+    are on; Analyst gets the realistic cold-SIEM view (users + roles
+    only); Operator gets just a count and has to enumerate by
+    guessing the target usernames.
+    """
+    difficulty = ctx.run.difficulty
+    if difficulty == "recruit":
+        lines = [
+            "Visible identities on target tenant:",
+            "  user-alice       analyst   sso/password   "
+            "(known pw: 'Correct_Horse_42!')",
+            "  user-bob         admin     sso/password   "
+            "(known pw: 'Hunter2_Strong_99!')",
+            "",
+            "Hint: the brute-force detector trips at ~5 failed attempts "
+            "per source IP within a short window.",
+        ]
+    elif difficulty == "analyst":
+        lines = [
+            "Visible identities on target tenant:",
+            "  user-alice       analyst   sso/password",
+            "  user-bob         admin     sso/password",
+            "",
+            "No credential intel available — you'll need to spray.",
+        ]
+    else:  # operator
+        lines = [
+            "2 identities detected. Use `attempt login --user <name>` to",
+            "probe each one; you'll learn who's reachable and which "
+            "passwords work by observation.",
+        ]
     return CommandResult.ok(*lines)
 
 
