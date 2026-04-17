@@ -342,21 +342,18 @@ _KNOWN_PASSWORDS: dict[str, str] = {
 def _script_ctx(ctx: DispatchContext) -> ScriptContext:
     """Build the ScriptContext the adversary beat handlers expect.
 
-    We keep a scratch state dict on the mission run so successive
-    player beats (e.g. login → session reuse) can share the session
-    id minted by an earlier successful login."""
-    state = getattr(ctx.run, "_red_state", None)
-    if state is None:
-        state = {}
-        # Stash on the run so subsequent commands see the same state.
-        ctx.run.__dict__["_red_state"] = state
+    The MissionRun's ``scratch_state`` dict threads state through
+    successive red-team commands (e.g. the session id minted by a
+    prior ``attempt login`` is read by ``session reuse`` /
+    ``doc read`` / ``doc download``). This dict is persisted alongside
+    the run so a worker restart mid-attack doesn't lose the session."""
     return ScriptContext(
         correlation_id=ctx.run.correlation_id,
         pipeline=ctx.scenario_engine.pipeline,
         identity=ctx.scenario_engine.identity,
         documents=ctx.scenario_engine.documents,
         store=ctx.scenario_engine.store,
-        state=state,
+        state=ctx.run.scratch_state,
     )
 
 

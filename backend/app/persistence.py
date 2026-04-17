@@ -94,6 +94,11 @@ class PersistenceLayer:
                     correlation_id TEXT NOT NULL,
                     data TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS mission_runs (
+                    run_id TEXT PRIMARY KEY,
+                    correlation_id TEXT NOT NULL,
+                    data TEXT NOT NULL
+                );
             """)
             conn.commit()
         finally:
@@ -436,6 +441,52 @@ class PersistenceLayer:
                 "INSERT INTO scenario_history (data) VALUES (?)",
                 (json.dumps(entry),),
             )
+            if should_close:
+                conn.commit()
+        finally:
+            if should_close:
+                conn.close()
+
+    # --- Mission runs (Phase 7) -------------------------------------------
+    #
+    # MissionRun is stored as a single JSON blob keyed on run_id. The
+    # correlation_id is pulled out as a second column so queries can
+    # join back to incidents / events without parsing JSON. Writes are
+    # per-call (upsert) — there's no batching path because runs are
+    # updated at human cadence, not adversary pace.
+
+    def persist_mission_run(self, run_id: str, correlation_id: str, data: dict) -> None:
+        """UPSERT a single mission run."""
+        conn, should_close = self._get_conn()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO mission_runs "
+                "(run_id, correlation_id, data) VALUES (?, ?, ?)",
+                (run_id, correlation_id, json.dumps(data)),
+            )
+            if should_close:
+                conn.commit()
+        finally:
+            if should_close:
+                conn.close()
+
+    def load_mission_runs(self) -> list[dict]:
+        """Return every persisted mission run as a list of dicts, in
+        insertion order. Callers are responsible for turning each dict
+        back into a MissionRun."""
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT data FROM mission_runs ORDER BY ROWID ASC"
+            ).fetchall()
+            return [json.loads(row[0]) for row in rows]
+        finally:
+            conn.close()
+
+    def delete_mission_run(self, run_id: str) -> None:
+        conn, should_close = self._get_conn()
+        try:
+            conn.execute("DELETE FROM mission_runs WHERE run_id = ?", (run_id,))
             if should_close:
                 conn.commit()
         finally:

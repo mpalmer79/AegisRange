@@ -109,20 +109,99 @@ class MissionRun:
     # Running total of XP adjustments (e.g. -10 for each hint on
     # analyst). Positive values are bonuses.
     xp_delta: int = 0
+    # Per-run scratch pad for beat handlers — threaded through
+    # successive red-team commands so `session reuse` / `doc read` /
+    # `doc download` can read the session id minted by an earlier
+    # `attempt login`. Persisted alongside the run so a worker restart
+    # mid-attack doesn't lose the session.
+    scratch_state: dict[str, Any] = field(default_factory=dict)
+
+
+def mission_run_to_dict(run: MissionRun) -> dict[str, Any]:
+    """Serialize a MissionRun to a JSON-safe dict."""
+    return {
+        "run_id": run.run_id,
+        "scenario_id": run.scenario_id,
+        "perspective": run.perspective,
+        "difficulty": run.difficulty,
+        "correlation_id": run.correlation_id,
+        "created_at": run.created_at.isoformat(),
+        "status": run.status,
+        "operated_by": run.operated_by,
+        "summary": run.summary,
+        "xp_delta": run.xp_delta,
+        "scratch_state": run.scratch_state,
+        "command_history": [
+            {
+                "ts": record.ts.isoformat(),
+                "raw": record.raw,
+                "verb_key": record.verb_key,
+                "kind": record.kind,
+                "lines": record.lines,
+                "effects": record.effects,
+            }
+            for record in run.command_history
+        ],
+    }
+
+
+def mission_run_from_dict(data: dict[str, Any]) -> MissionRun:
+    """Hydrate a MissionRun from a persisted dict."""
+    return MissionRun(
+        run_id=data["run_id"],
+        scenario_id=data["scenario_id"],
+        perspective=data["perspective"],
+        difficulty=data["difficulty"],
+        correlation_id=data["correlation_id"],
+        created_at=datetime.fromisoformat(data["created_at"]),
+        status=data["status"],
+        operated_by=data.get("operated_by"),
+        summary=data.get("summary"),
+        xp_delta=data.get("xp_delta", 0),
+        scratch_state=data.get("scratch_state", {}) or {},
+        command_history=[
+            CommandRecord(
+                ts=datetime.fromisoformat(entry["ts"]),
+                raw=entry["raw"],
+                verb_key=entry["verb_key"],
+                kind=entry["kind"],
+                lines=list(entry.get("lines", [])),
+                effects=dict(entry.get("effects", {})),
+            )
+            for entry in data.get("command_history", [])
+        ],
+    )
 
 
 class MissionStore:
-    """In-process registry of mission runs keyed by ``run_id``."""
+    """In-process registry of mission runs keyed by ``run_id``.
+
+    When a persistence layer is attached via :meth:`enable_persistence`,
+    every ``put()`` also upserts to SQLite. On startup the caller should
+    invoke :meth:`load_from_persistence` to restore prior runs.
+    """
 
     def __init__(self) -> None:
         self._runs: dict[str, MissionRun] = {}
         self._by_correlation: dict[str, str] = {}
         self._lock = RLock()
+        self._persistence: Any = None
+
+    def enable_persistence(self, persistence: Any) -> None:
+        """Attach a :class:`PersistenceLayer`. Subsequent ``put()`` calls
+        upsert the mission into SQLite; ``load_from_persistence`` can
+        then restore state on startup."""
+        self._persistence = persistence
 
     def put(self, run: MissionRun) -> None:
         with self._lock:
             self._runs[run.run_id] = run
             self._by_correlation[run.correlation_id] = run.run_id
+        # Persist outside the lock — SQLite has its own serialization.
+        if self._persistence is not None:
+            self._persistence.persist_mission_run(
+                run.run_id, run.correlation_id, mission_run_to_dict(run)
+            )
 
     def get(self, run_id: str) -> MissionRun | None:
         with self._lock:
@@ -143,6 +222,45 @@ class MissionStore:
         with self._lock:
             self._runs.clear()
             self._by_correlation.clear()
+
+    def load_from_persistence(self) -> int:
+        """Restore every persisted mission run into memory. Blue runs
+        still in ``active`` status at restart are marked ``failed`` —
+        the scheduler task that was playing their adversary script was
+        lost when the worker exited, and silently leaving them
+        ``active`` would wedge the UI. Red runs keep their state
+        because no scheduler task owns them; the player drives them.
+
+        Returns the number of runs loaded."""
+        if self._persistence is None:
+            return 0
+        rows = self._persistence.load_mission_runs()
+        loaded = 0
+        with self._lock:
+            for data in rows:
+                try:
+                    run = mission_run_from_dict(data)
+                except (KeyError, ValueError):
+                    # Skip corrupt rows rather than failing startup.
+                    continue
+                # Blue runs with an in-flight scheduler are dead after
+                # a restart — their asyncio task didn't survive. Mark
+                # them failed so the UI surfaces the right state.
+                if run.perspective == "blue" and run.status == "active":
+                    run.status = "failed"
+                self._runs[run.run_id] = run
+                self._by_correlation[run.correlation_id] = run.run_id
+                loaded += 1
+        # Persist the transitioned statuses so a second restart
+        # doesn't re-flip anything.
+        if self._persistence is not None:
+            for run in list(self._runs.values()):
+                self._persistence.persist_mission_run(
+                    run.run_id,
+                    run.correlation_id,
+                    mission_run_to_dict(run),
+                )
+        return loaded
 
 
 class MissionService:
