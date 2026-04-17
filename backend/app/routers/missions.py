@@ -27,7 +27,6 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies import (
     mission_help_service,
-    mission_scheduler,
     mission_service,
     mission_stream_hub,
 )

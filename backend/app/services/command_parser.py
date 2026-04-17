@@ -12,7 +12,7 @@ the usual ``--name value`` or ``--name=value`` shapes.
 from __future__ import annotations
 
 import shlex
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.services.command_grammar import (
