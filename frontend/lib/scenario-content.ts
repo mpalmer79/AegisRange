@@ -130,9 +130,9 @@ export const SCENARIO_CONTENT: Record<string, ScenarioContent> = {
       role: 'Intruder',
       summary: 'You control the outside keyboard. Find a valid credential before detection rules trip.',
       objectives: [
-        { id: 'red-1', title: 'Launch credential spray', description: 'Generate at least one login attempt.', xp: 20, check: redFoothold },
-        { id: 'red-2', title: 'Sustain attack volume', description: 'Drive five or more authentication events.', xp: 30, check: redVolume(5) },
-        { id: 'red-3', title: 'Force a defensive response', description: 'Push defenders into step-up auth or session revocation.', xp: 50, check: redTrippedDefense },
+        { id: 'red-1', title: 'Launch credential spray', description: 'Run `attempt login --user alice --from 203.0.113.10` to fire your first authentication event.', xp: 20, check: redFoothold },
+        { id: 'red-2', title: 'Sustain attack volume', description: 'Repeat `attempt login` five or more times to trip the brute-force detector.', xp: 30, check: redVolume(5) },
+        { id: 'red-3', title: 'Force a defensive response', description: 'Finish with a valid --password so the defender auto-responds (step-up or session revoke).', xp: 50, check: redTrippedDefense },
       ],
     },
     blue: {

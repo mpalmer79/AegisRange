@@ -415,6 +415,7 @@ export default function ScenarioDetailPage() {
 
       <OpsManual
         runId={runId}
+        perspective={perspective}
         open={opsManualOpen}
         onClose={() => setOpsManualOpen(false)}
       />

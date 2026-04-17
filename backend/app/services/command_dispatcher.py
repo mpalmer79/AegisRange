@@ -16,6 +16,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
 
 from app.models import utc_now
+from app.services.adversary_scripts import (
+    Beat,
+    BeatKind,
+    ScriptContext,
+    apply_beat,
+)
 from app.services.command_grammar import VerbSpec
 from app.services.command_parser import ParsedCommand
 from app.services.mission_service import MissionRun
@@ -242,15 +248,178 @@ def _handler_contain_session(cmd: ParsedCommand, ctx: DispatchContext) -> Comman
     )
 
 
+# ---------------------------------------------------------------------------
+# Red-team handlers (Phase 3b)
+#
+# The player is the adversary. Each command emits events that flow
+# through the same detection + response pipeline the Blue side reads
+# from. ``attempt login`` delegates to the adversary-script beat
+# machinery so event shapes stay byte-equivalent to the scripted
+# replay.
+# ---------------------------------------------------------------------------
+
+
+# Known-user credentials for the Phase 3b reference scenario. Keeping
+# this in the dispatcher (rather than reading IdentityService private
+# state) keeps handlers pure and testable.
+_KNOWN_PASSWORDS: dict[str, str] = {
+    "alice": "Correct_Horse_42!",
+    "bob": "Hunter2_Strong_99!",
+}
+
+
+def _script_ctx(ctx: DispatchContext) -> ScriptContext:
+    """Build the ScriptContext the adversary beat handlers expect.
+
+    We keep a scratch state dict on the mission run so successive
+    player beats (e.g. login → session reuse) can share the session
+    id minted by an earlier successful login."""
+    state = getattr(ctx.run, "_red_state", None)
+    if state is None:
+        state = {}
+        # Stash on the run so subsequent commands see the same state.
+        ctx.run.__dict__["_red_state"] = state
+    return ScriptContext(
+        correlation_id=ctx.run.correlation_id,
+        pipeline=ctx.scenario_engine.pipeline,
+        identity=ctx.scenario_engine.identity,
+        documents=ctx.scenario_engine.documents,
+        store=ctx.scenario_engine.store,
+        state=state,
+    )
+
+
+def _handler_recon_users(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
+    # Free recon action — no event fires, no world mutation.
+    lines = [
+        "Visible identities on target tenant:",
+        "  user-alice       analyst   sso/password",
+        "  user-bob         admin     sso/password",
+        "",
+        "Hint: the brute-force detector trips at ~5 failed attempts "
+        "per source IP within a short window.",
+    ]
+    return CommandResult.ok(*lines)
+
+
+def _handler_attempt_login(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
+    user = cmd.flags["user"]
+    source_ip = cmd.flags["from"]
+    password = cmd.flags.get("password")
+    # Accept either "alice" or "user-alice" for the --user flag.
+    bare_user = user.removeprefix("user-") if user.startswith("user-") else user
+    canonical_user = f"user-{bare_user}"
+
+    script_ctx = _script_ctx(ctx)
+    succeeded = password is not None and _KNOWN_PASSWORDS.get(bare_user) == password
+
+    if succeeded:
+        beat = Beat(
+            kind=BeatKind.SUCCESSFUL_LOGIN,
+            label=f"Intruder logs in as {canonical_user} from {source_ip}",
+            delay_before_seconds=0.0,
+            params={
+                "username": bare_user,
+                "password": password,
+                "source_ip": source_ip,
+            },
+        )
+    else:
+        beat = Beat(
+            kind=BeatKind.FAILED_LOGIN,
+            label=(f"Intruder fails login as {canonical_user} from {source_ip}"),
+            delay_before_seconds=0.0,
+            params={"username": bare_user, "source_ip": source_ip},
+        )
+
+    apply_beat(beat, script_ctx)
+
+    if succeeded:
+        session_id = (script_ctx.state or {}).get("session_id", "<unknown>")
+        lines = [
+            f"[200] access granted as {canonical_user} from {source_ip}",
+            f"      session_id = {session_id}",
+        ]
+        effects = {
+            "attempt_user": canonical_user,
+            "attempt_result": "success",
+            "attempt_source_ip": source_ip,
+        }
+    else:
+        reason = "no password supplied" if password is None else "invalid_credentials"
+        lines = [
+            f"[401] authentication rejected for {canonical_user} "
+            f"from {source_ip} ({reason})",
+        ]
+        effects = {
+            "attempt_user": canonical_user,
+            "attempt_result": "failure",
+            "attempt_source_ip": source_ip,
+        }
+
+    return CommandResult.ok(
+        *lines,
+        effects=effects,
+        stream_event={
+            "type": "beat",
+            "ts": utc_now().isoformat(),
+            "beat_index": -1,  # player-driven, outside any scripted sequence
+            "beat_total": -1,
+            "beat": {"kind": beat.kind.value, "label": beat.label},
+        },
+    )
+
+
+def _handler_session_reuse(cmd: ParsedCommand, ctx: DispatchContext) -> CommandResult:
+    source_ip = cmd.flags["from"]
+    script_ctx = _script_ctx(ctx)
+    session_id = (script_ctx.state or {}).get("session_id")
+    if session_id is None:
+        return CommandResult.error(
+            "You don't have a session yet. Run `attempt login` with a valid "
+            "--password first."
+        )
+    actor_id = (script_ctx.state or {}).get("actor_id", "user-unknown")
+    actor_role = (script_ctx.state or {}).get("actor_role", "analyst")
+    beat = Beat(
+        kind=BeatKind.SESSION_REUSE,
+        label=f"Intruder reuses {actor_id}'s session from {source_ip}",
+        delay_before_seconds=0.0,
+        params={
+            "actor_id": actor_id,
+            "actor_role": actor_role,
+            "source_ip": source_ip,
+            "session_id": session_id,
+        },
+    )
+    apply_beat(beat, script_ctx)
+    return CommandResult.ok(
+        f"[200] session {session_id} replayed from {source_ip}",
+        effects={"session_reused_from": source_ip},
+        stream_event={
+            "type": "beat",
+            "ts": utc_now().isoformat(),
+            "beat_index": -1,
+            "beat_total": -1,
+            "beat": {"kind": beat.kind.value, "label": beat.label},
+        },
+    )
+
+
 _HANDLERS: dict[str, Callable[[ParsedCommand, DispatchContext], CommandResult]] = {
     "help": _handler_help,
     "hint": _handler_hint,
     "status": _handler_status,
+    # Blue
     "alerts.list": _handler_alerts_list,
     "alerts.show": _handler_alerts_show,
     "events.tail": _handler_events_tail,
     "correlate": _handler_correlate,
     "contain.session": _handler_contain_session,
+    # Red
+    "recon.users": _handler_recon_users,
+    "attempt.login": _handler_attempt_login,
+    "session.reuse": _handler_session_reuse,
 }
 
 

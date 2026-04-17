@@ -23,7 +23,7 @@ from app.services.adversary_scripts import (
     apply_beat,
     build_script,
 )
-from app.services.mission_service import MissionRun, MissionStore
+from app.services.mission_service import MissionRun, MissionStore, build_run_snapshot
 from app.services.mission_stream import MissionStreamHub
 
 logger = logging.getLogger("aegisrange.mission_scheduler")
@@ -73,6 +73,25 @@ class MissionScheduler:
                     "ts": utc_now().isoformat(),
                 },
             )
+
+            # Red-team missions: the PLAYER is the adversary. The
+            # scheduler does not pre-emit the scripted beats — the
+            # player's typed commands will emit them. We just mark the
+            # run 'active' and let the command dispatcher publish its
+            # own beats. The mission stays active until the client
+            # resets it or the frontend concludes all objectives are met.
+            if run.perspective == "red":
+                # Publish an initial empty-world snapshot so the
+                # frontend HUD has something to render immediately.
+                await self._publish(
+                    run.run_id,
+                    {
+                        "type": "world_snapshot",
+                        "ts": utc_now().isoformat(),
+                        "snapshot": self._summary(run),
+                    },
+                )
+                return
 
             beats = build_script(run.scenario_id)
             multiplier = DIFFICULTY_PACING.get(run.difficulty, 1.0)
@@ -152,9 +171,25 @@ class MissionScheduler:
                 run.run_id,
                 {"type": "mission_aborted", "ts": utc_now().isoformat()},
             )
+            # Close the stream on cancellation regardless of perspective
+            # so subscribed clients terminate cleanly.
+            await self.stream_hub.close(run.run_id)
+            self._tasks.pop(run.run_id, None)
             raise
         finally:
-            await self.stream_hub.close(run.run_id)
+            # For Blue missions the adversary script has finished; close
+            # the stream. For Red missions the player's commands are the
+            # source of subsequent beats — keep the stream open until the
+            # run is explicitly ended (abort / reset). ``close()`` is
+            # idempotent so if the run already terminated above via
+            # cancellation this is a no-op.
+            if run.perspective != "red" or run.status in {
+                "complete",
+                "failed",
+                "aborted",
+                "timed_out",
+            }:
+                await self.stream_hub.close(run.run_id)
             self._tasks.pop(run.run_id, None)
 
     async def _publish(self, run_id: str, event: dict[str, Any]) -> None:
@@ -162,53 +197,7 @@ class MissionScheduler:
 
     def _summary(self, run: MissionRun) -> dict[str, Any]:
         """Build the legacy-compatible scenario summary from current
-        store contents. Reuses the scenario_engine's summary builder so
-        the shape is identical to the synchronous path."""
-        # ``ScenarioEngine._summary`` writes to scenario_history; we do
-        # *not* want an intermediate snapshot to pollute history.
-        # Inline a read-only copy instead.
-        store = self.scenario_engine.store
-        scenario_label = _SCENARIO_LABEL[run.scenario_id]
-        events_count = sum(
-            1 for e in store.get_events() if e.correlation_id == run.correlation_id
-        )
-        alerts_count = sum(
-            1 for a in store.get_alerts() if a.correlation_id == run.correlation_id
-        )
-        responses_count = sum(
-            1 for r in store.get_responses() if r.correlation_id == run.correlation_id
-        )
-        incident = store.get_incident(run.correlation_id)
-        return {
-            "scenario_id": scenario_label,
-            "correlation_id": run.correlation_id,
-            "events_total": events_count,
-            "events_generated": events_count,
-            "alerts_total": alerts_count,
-            "alerts_generated": alerts_count,
-            "responses_total": responses_count,
-            "responses_generated": responses_count,
-            "incident_id": incident.incident_id if incident else None,
-            "step_up_required": store.is_step_up_required("user-alice"),
-            "revoked_sessions": sorted(store.get_all_revoked_sessions()),
-            "download_restricted_actors": sorted(store.get_all_download_restricted()),
-            "disabled_services": sorted(store.get_all_disabled_services()),
-            "quarantined_artifacts": sorted(store.get_all_quarantined_artifacts()),
-            "policy_change_restricted_actors": sorted(
-                store.get_all_policy_change_restricted()
-            ),
-            "operated_by": run.operated_by,
-            "run_id": run.run_id,
-            "commands_issued": [r.verb_key for r in run.command_history],
-            "xp_delta": run.xp_delta,
-        }
-
-
-_SCENARIO_LABEL: dict[str, str] = {
-    "scn-auth-001": "SCN-AUTH-001",
-    "scn-session-002": "SCN-SESSION-002",
-    "scn-doc-003": "SCN-DOC-003",
-    "scn-doc-004": "SCN-DOC-004",
-    "scn-svc-005": "SCN-SVC-005",
-    "scn-corr-006": "SCN-CORR-006",
-}
+        store contents. Delegates to the shared builder so the
+        scheduler and the command-dispatch stream-event path stay in
+        lockstep."""
+        return build_run_snapshot(run, self.scenario_engine.store)
