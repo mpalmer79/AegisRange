@@ -12,6 +12,7 @@ const geistSans = localFont({
   variable: "--font-geist-sans",
   weight: "100 900",
 });
+
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
@@ -19,13 +20,36 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://aegis-range.up.railway.app"),
   title: "AegisRange - Cybersecurity Simulation Platform",
   description:
     "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.",
+  openGraph: {
+    title: "AegisRange - Cybersecurity Simulation Platform",
+    description:
+      "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.",
+    url: "https://aegis-range.up.railway.app",
+    siteName: "AegisRange",
+    images: [
+      {
+        url: "/images/aegisrange-og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "AegisRange cybersecurity simulation platform preview",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AegisRange - Cybersecurity Simulation Platform",
+    description:
+      "Security Operations Center dashboard for the AegisRange cybersecurity simulation platform.",
+    images: ["/images/aegisrange-og.jpg"],
+  },
 };
 
-// Inline script that runs before React hydrates so the correct theme class
-// is applied to <html> on first paint (prevents a flash of the wrong theme).
 const themeInitScript = `(() => {
   try {
     const stored = localStorage.getItem('aegisrange-theme');
