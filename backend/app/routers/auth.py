@@ -216,15 +216,22 @@ def platform_logout(request: Request) -> JSONResponse:
     "/me", dependencies=[Depends(require_role("viewer"))], response_model=AuthMeResponse
 )
 def get_current_user(request: Request) -> dict:
-    """Return the authenticated platform user's identity from the cookie/token."""
+    """Return the authenticated platform user's identity, level, scopes,
+    and derived capabilities so the frontend doesn't mirror the role ladder."""
+    from app.services.auth import ROLE_SCOPES, capabilities_for, level_for
+
     platform_user = getattr(request.state, "platform_user", None)
     if platform_user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     user = auth_service.get_user(platform_user.sub)
+    role = platform_user.role
     return {
         "username": platform_user.sub,
-        "role": platform_user.role,
+        "role": role,
         "display_name": user.display_name if user else platform_user.sub,
+        "level": level_for(role),
+        "scopes": list(ROLE_SCOPES.get(role, [])),
+        "capabilities": capabilities_for(role),
     }
 
 

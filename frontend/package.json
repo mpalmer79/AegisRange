@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest"
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "check:all": "npm run lint && npm run typecheck && npm run test -- --watchAll=false"
   },
   "dependencies": {
     "next": "14.2.35",

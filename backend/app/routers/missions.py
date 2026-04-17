@@ -48,7 +48,7 @@ from app.schemas import (
 )
 from app.services.command_grammar import verbs_for
 from app.serializers import incident_to_dict
-from app.services.auth_service import _auth_service, _extract_bearer_token
+from app.services.auth_service import _extract_bearer_token, auth_service
 from app.services.mission_service import MissionRun, build_run_snapshot
 from app.services.mission_stream import MissionStreamHub
 from app.store import STORE
@@ -66,7 +66,7 @@ def _resolve_operator(request: Request) -> str | None:
     token, channel = _extract_bearer_token(request)
     if token is None:
         return None
-    payload = _auth_service.verify_token(token)
+    payload = auth_service.verify_token(token)
     if payload is None:
         return None
     request.state.platform_user = payload

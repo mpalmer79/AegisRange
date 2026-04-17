@@ -260,7 +260,7 @@ Non-guarantees:
 - SQLite is the persistence backend (not horizontally scalable; migration path to PostgreSQL documented in DEPLOY.md)
 - In-memory store is the authoritative runtime data source
 
-These are known and accepted for the current stage.
+These are known and accepted for the current stage. The chosen direction for horizontal scalability is **Postgres for authoritative state plus Redis for ephemeral shared cache (JTI revocations, rate limits)**; see [docs/operations/SCALING.md](docs/operations/SCALING.md) for the phased migration plan scheduled across 0.10.0 – 0.12.0.
 
 ---
 
@@ -287,7 +287,7 @@ These are known and accepted for the current stage.
 
 ### Browser Trust Boundaries
 
-- CSRF protection: double-submit cookie pattern on state-changing requests
+- CSRF protection: double-submit cookie pattern on state-changing requests (see [docs/threat-model/CSRF_MODEL.md](docs/threat-model/CSRF_MODEL.md) for the cookie-vs-capability-vs-bearer model and the rule for adding a new exempt route)
 - SameSite=Lax cookies with Secure flag in production
 - Security headers on all responses:
   - Content-Security-Policy

@@ -2,6 +2,49 @@
 
 All notable changes to AegisRange are documented in this file.
 
+## [0.9.0]
+
+### Changed
+- CSRF middleware: `/scenarios/*` prefix is no longer exempt. Cookie-authenticated scenario execution now requires a matching `X-CSRF-Token` header, closing a silent hole where any future POST/PATCH/DELETE under `/scenarios/*` would have been unprotected against cross-origin cookie-driven calls.
+- Every remaining entry in `_CSRF_EXEMPT_PATHS` / `_CSRF_EXEMPT_PREFIXES` now carries an inline comment naming why it is exempt.
+- `services/auth_service.py` (791 lines) split into the `services/auth/` package: `passwords.py`, `roles.py`, `correlation.py`, `service.py`. Original path is now a re-export shim — every existing import of `from app.services.auth_service import ...` continues to work.
+- `services/detection_rules.py` (641 lines) split into the `services/detection/` package: `base.py`, `rules.py`, `metrics.py`. Original path is now a re-export shim.
+- `services/adversary_scripts.py` (711 lines) split into the `services/adversary/` package: `base.py`, `handlers.py`, `scripts.py`. Original path is now a re-export shim.
+- `services/mission_service.py` (662 lines) split into the `services/mission/` package: `run.py`, `store.py`, `service.py`. Original path is now a re-export shim.
+- `InMemoryStore` now exposes a public `get_persistence()` accessor. `main.py` and `routers/health.py` no longer reach into `STORE._persistence` directly.
+- The canonical auth service singleton is now `auth_service` (no leading underscore). All in-tree callers (`main.py`, `dependencies.py`, `routers/scenarios.py`, `routers/missions.py`, `services/auth/roles.py`) updated to use the new name.
+
+### Removed
+- Frontend `ROLE_LEVELS` and `SCENARIO_MIN_LEVEL` hardcoded constants deleted from `frontend/lib/auth-context.tsx`. The role ladder is no longer mirrored on the frontend — capability flags come from `/auth/me`. This closes the drift risk where adding a role on one side silently left the other side out of date.
+
+### Infrastructure
+- `backend/pyproject.toml` gained a `[tool.ruff.lint.pylint]` section with `max-branches = 14` and `max-statements = 60`. These are the shape signals that catch the next service monolith before it gets big — a new service that breaches either threshold is a signal to split it, not to raise the limit.
+- New top-level `Makefile` with `make check`, `make check-backend`, `make check-frontend`, `make lint`, `make type`, `make test`, `make install` targets. `make check` runs the same gates CI runs, so a clean local run means the push is likely green.
+- New `npm run check:all` script in `frontend/package.json` wrapping `lint` + `typecheck` + `test`. Complements `make check-frontend`.
+- New `npm run typecheck` script (just `tsc --noEmit`).
+
+### Deprecated
+- `app.services.auth_service._auth_service` is now a deprecated alias for `auth_service`. Existing imports continue to work for backwards compatibility; the alias will be removed in 0.10.0.
+
+### Added
+- `backend/tests/test_security_hardening.py`: new cases pinning the CSRF model — cookie-authed POSTs to each `/scenarios/*` route are rejected without a token, accepted with a matching token, `/missions/*` remains capability-exempt, and Bearer-authed requests bypass CSRF regardless of path.
+- Default simulation passwords can now be overridden at startup via `DEFAULT_PASSWORD_<USERNAME>` env vars (e.g. `DEFAULT_PASSWORD_ADMIN=…`). The source defaults remain the dev fallback; no hardcoded password was removed.
+- Production startup emits a `WARNING` listing any simulation user still seeded with the source default (so demo deployments can see at a glance which credentials are publicly known).
+- Test cases in `test_auth_hardening.py` pinning the env-override resolution and the `using_source_default` helper.
+- `GET /auth/me` now returns `level` (numeric role level), `scopes`, and `capabilities` in addition to `username`/`role`/`display_name`. The capability list is derived on the backend from `CAPABILITY_MIN_LEVEL` (`app/services/auth/capabilities.py`), so adding a new capability on the backend flows to the frontend on next login with no frontend change.
+- `AuthContext` exposes `level`, `scopes`, and `capabilities` alongside `username`/`role`. The `canRunScenarios` helper now reads from `user.capabilities` instead of a hardcoded role ladder, and sibling helpers `canManageIncidents` / `canAdministerPlatform` were added.
+- `CurrentUser` TypeScript interface (`frontend/lib/types.ts`) gained `level`, `scopes`, and `capabilities` fields.
+- Backend test cases in `test_auth_identity.py::TestAuthMeCapabilities` pin the new `/auth/me` contract.
+- Frontend test cases in `__tests__/lib/auth-context.test.tsx::canRunScenarios` pin the capability-based gate.
+
+### Documentation
+- `docs/threat-model/CSRF_MODEL.md`: new threat-model document describing the three trust surfaces (cookie / capability / bearer) and the rule that must be answered before any new route is added to the CSRF exempt list. Linked from ARCHITECTURE.md §15.
+- `docs/operations/SCALING.md`: new design document for horizontal scalability. Chooses Postgres (authoritative) + Redis (ephemeral cache) as the target and lays out a five-phase migration plan for 0.10.0 – 0.12.0. No code changes in 0.9.0. Linked from ARCHITECTURE.md §14.
+- `DEPLOY.md`: documented the `DEFAULT_PASSWORD_<USERNAME>` env override for production demos.
+
+### Deferred
+- Section 4 of the 0.9.0 playbook (splitting `frontend/lib/mock-data.ts` and `frontend/lib/api.ts` into packages) was attempted but not completed in this release — the refactor requires careful line-by-line extraction of ~5,400 lines across the two files and is deferred to 0.10.0 to avoid a half-landed split.
+
 ## [0.8.0] — 2026-04-14
 
 ### Added

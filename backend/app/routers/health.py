@@ -23,5 +23,5 @@ def health() -> dict:
             "responses": len(STORE.responses),
         },
         "containment": STORE.get_containment_counts(),
-        "persistence": STORE._persistence is not None,
+        "persistence": STORE.get_persistence() is not None,
     }

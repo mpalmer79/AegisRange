@@ -365,5 +365,74 @@ class TestJWTKeyRotation(unittest.TestCase):
         self.assertIn("kid", header)
 
 
+# ---------------------------------------------------------------------------
+# Phase 7 (0.9.0) — default-password env overrides
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultPasswordEnvOverride(unittest.TestCase):
+    """Verify DEFAULT_PASSWORD_<USERNAME> env vars override source defaults.
+
+    The override is resolved at import time on the auth package, so these
+    tests exercise the resolution helpers directly rather than round-tripping
+    through module reload (which would conflict with the other tests' cached
+    _auth_service singleton)."""
+
+    def test_env_override_wins_over_source_default(self) -> None:
+        import os
+
+        from app.services.auth.passwords import (
+            SOURCE_DEFAULT_PASSWORDS,
+            _resolve_default_password,
+        )
+
+        fallback = SOURCE_DEFAULT_PASSWORDS["admin"]
+        os.environ["DEFAULT_PASSWORD_ADMIN"] = "Override_Prod_Pass_99!"
+        try:
+            self.assertEqual(
+                _resolve_default_password("admin", fallback),
+                "Override_Prod_Pass_99!",
+            )
+        finally:
+            del os.environ["DEFAULT_PASSWORD_ADMIN"]
+
+    def test_no_env_override_returns_source_default(self) -> None:
+        from app.services.auth.passwords import (
+            SOURCE_DEFAULT_PASSWORDS,
+            _resolve_default_password,
+        )
+
+        fallback = SOURCE_DEFAULT_PASSWORDS["viewer1"]
+        # Make sure no override is set for this username.
+        import os
+
+        os.environ.pop("DEFAULT_PASSWORD_VIEWER1", None)
+        self.assertEqual(_resolve_default_password("viewer1", fallback), fallback)
+
+    def test_using_source_default_reports_true_when_unset(self) -> None:
+        from app.services.auth.passwords import using_source_default
+
+        import os
+
+        os.environ.pop("DEFAULT_PASSWORD_SOC_LEAD", None)
+        self.assertTrue(using_source_default("soc_lead"))
+
+    def test_using_source_default_reports_false_when_overridden(self) -> None:
+        import os
+
+        from app.services.auth.passwords import using_source_default
+
+        os.environ["DEFAULT_PASSWORD_SOC_LEAD"] = "Different_Strong_Pass_42!"
+        try:
+            self.assertFalse(using_source_default("soc_lead"))
+        finally:
+            del os.environ["DEFAULT_PASSWORD_SOC_LEAD"]
+
+    def test_unknown_username_is_not_a_default(self) -> None:
+        from app.services.auth.passwords import using_source_default
+
+        self.assertFalse(using_source_default("no-such-user"))
+
+
 if __name__ == "__main__":
     unittest.main()

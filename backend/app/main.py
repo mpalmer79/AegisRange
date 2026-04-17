@@ -71,12 +71,33 @@ async def lifespan(app: FastAPI):
         # restart doesn't drop them.
         from app.dependencies import mission_store
 
-        if STORE._persistence is not None:
-            mission_store.enable_persistence(STORE._persistence)
+        persistence = STORE.get_persistence()
+        if persistence is not None:
+            mission_store.enable_persistence(persistence)
             loaded = mission_store.load_from_persistence()
             logger.info(
                 "Mission runs restored from SQLite",
                 extra={"loaded": loaded},
+            )
+    # Warn if any simulation user is still using the source default
+    # password in production. Dev deployments deliberately ship with
+    # known credentials (that's the point of a simulation platform);
+    # production deployments should override every one via
+    # DEFAULT_PASSWORD_<USERNAME> env vars.
+    if settings.APP_ENV == "production":
+        from app.services.auth.passwords import (
+            SOURCE_DEFAULT_PASSWORDS,
+            using_source_default,
+        )
+
+        defaults_in_use = [
+            u for u in SOURCE_DEFAULT_PASSWORDS if using_source_default(u)
+        ]
+        if defaults_in_use:
+            logger.warning(
+                "Default simulation passwords are in use in production. "
+                "Override them via DEFAULT_PASSWORD_<USERNAME> env vars.",
+                extra={"usernames": defaults_in_use},
             )
     logger.info("AegisRange API started", extra={"env": settings.APP_ENV})
     yield
@@ -160,8 +181,19 @@ async def request_size_limit_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 _CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-_CSRF_EXEMPT_PATHS = {"/auth/login", "/auth/logout", "/health", "/missions"}
-_CSRF_EXEMPT_PREFIXES = ("/scenarios/", "/missions/")
+# Each entry must document why it is exempt. Adding a route here is a
+# threat-model decision — see docs/threat-model/CSRF_MODEL.md.
+_CSRF_EXEMPT_PATHS = {
+    "/auth/login",  # pre-auth: no cookie yet, CSRF model doesn't apply
+    "/auth/logout",  # idempotent teardown of the cookie it depends on
+    "/health",  # unauthenticated readiness probe
+    "/missions",  # mission creation — capability-only surface (see below)
+}
+# /missions/* is exempt because the run_id UUID in the URL IS the capability;
+# no cookie is trusted on that surface (see routers/missions.py). /scenarios/*
+# is NOT exempt: it is cookie-authed from the browser and must carry a
+# matching CSRF token like any other state-changing request.
+_CSRF_EXEMPT_PREFIXES = ("/missions/",)
 
 
 @app.middleware("http")
@@ -311,10 +343,10 @@ async def rate_limit_middleware(request: Request, call_next):
         cookie_token = request.cookies.get(settings.AUTH_COOKIE_NAME)
         user_id = None
         if auth_header.lower().startswith("bearer ") or cookie_token:
-            from app.services.auth_service import _auth_service
+            from app.services.auth_service import auth_service
 
             token = cookie_token or auth_header.split()[-1]
-            payload = _auth_service.verify_token(token)
+            payload = auth_service.verify_token(token)
             if payload:
                 user_id = payload.sub
         if user_id:

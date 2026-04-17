@@ -14,7 +14,7 @@ from fastapi import APIRouter, Request
 
 from app.dependencies import mission_service
 from app.schemas import ScenarioSummaryResponse
-from app.services.auth_service import _auth_service, _extract_bearer_token
+from app.services.auth_service import _extract_bearer_token, auth_service
 
 logger = logging.getLogger("aegisrange")
 router = APIRouter(
@@ -32,7 +32,7 @@ def _resolve_operator(request: Request) -> str | None:
     token, channel = _extract_bearer_token(request)
     if token is None:
         return None
-    payload = _auth_service.verify_token(token)
+    payload = auth_service.verify_token(token)
     if payload is None:
         return None
     request.state.platform_user = payload
