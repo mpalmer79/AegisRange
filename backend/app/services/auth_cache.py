@@ -96,9 +96,7 @@ class AuthCache(Protocol):
     def all_totp_enabled(self) -> set[str]:
         """Snapshot set of enrolled usernames, used by the persistence layer."""
 
-    def load_totp_state(
-        self, secrets: dict[str, str], enabled: set[str]
-    ) -> None:
+    def load_totp_state(self, secrets: dict[str, str], enabled: set[str]) -> None:
         """Replace current TOTP state with the restored values."""
 
 
@@ -154,9 +152,7 @@ class InMemoryAuthCache:
     def prune_expired_revocations(self, max_age_seconds: int = 86400) -> int:
         now = time.monotonic()
         expired = [
-            j
-            for j, ts in self._revoked_jtis.items()
-            if now - ts > max_age_seconds
+            j for j, ts in self._revoked_jtis.items() if now - ts > max_age_seconds
         ]
         for j in expired:
             del self._revoked_jtis[j]
@@ -197,9 +193,7 @@ class InMemoryAuthCache:
     def all_totp_enabled(self) -> set[str]:
         return set(self._totp_enabled)
 
-    def load_totp_state(
-        self, secrets: dict[str, str], enabled: set[str]
-    ) -> None:
+    def load_totp_state(self, secrets: dict[str, str], enabled: set[str]) -> None:
         # Mutate in place so shared references stay consistent.
         self._totp_secrets.clear()
         self._totp_secrets.update(secrets)
@@ -330,9 +324,7 @@ class RedisAuthCache:
             enabled.add(key[len(_NS_TOTP_ENABLED) :])
         return enabled
 
-    def load_totp_state(
-        self, secrets: dict[str, str], enabled: set[str]
-    ) -> None:
+    def load_totp_state(self, secrets: dict[str, str], enabled: set[str]) -> None:
         pipe = self._client.pipeline()
         for username, secret in secrets.items():
             pipe.set(f"{_NS_TOTP_SECRET}{username}", secret)

@@ -64,9 +64,7 @@ class TestPrometheusMetrics(unittest.TestCase):
         client = authenticated_client("admin")
         resp = client.get("/metrics/prometheus")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(
-            "text/plain", resp.headers.get("content-type", "").lower()
-        )
+        self.assertIn("text/plain", resp.headers.get("content-type", "").lower())
         body = resp.text
         # Required OpenMetrics framing.
         self.assertIn("# HELP aegisrange_events_total", body)
@@ -105,9 +103,7 @@ class TestPrometheusMetrics(unittest.TestCase):
             client = authenticated_client("admin")
             resp = client.get("/metrics/prometheus")
             body = resp.text
-            self.assertIn(
-                'aegisrange_alerts_by_severity{severity="high"} 1', body
-            )
+            self.assertIn('aegisrange_alerts_by_severity{severity="high"} 1', body)
         finally:
             # conftest autouse fixture resets the store between tests.
             pass

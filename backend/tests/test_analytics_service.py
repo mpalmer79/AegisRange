@@ -221,9 +221,7 @@ class TestAlertDisposition(unittest.TestCase):
     def test_counts_by_severity_and_status(self) -> None:
         now = datetime.now(timezone.utc)
         self.store.extend_alerts(
-            [
-                _mk_alert(correlation_id=f"c{i}", ts=now) for i in range(2)
-            ]
+            [_mk_alert(correlation_id=f"c{i}", ts=now) for i in range(2)]
         )
         inc1 = Incident(
             incident_type="auth",
