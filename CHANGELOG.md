@@ -17,6 +17,12 @@ All notable changes to AegisRange are documented in this file.
 ### Removed
 - Frontend `ROLE_LEVELS` and `SCENARIO_MIN_LEVEL` hardcoded constants deleted from `frontend/lib/auth-context.tsx`. The role ladder is no longer mirrored on the frontend — capability flags come from `/auth/me`. This closes the drift risk where adding a role on one side silently left the other side out of date.
 
+### Infrastructure
+- `backend/pyproject.toml` gained a `[tool.ruff.lint.pylint]` section with `max-branches = 14` and `max-statements = 60`. These are the shape signals that catch the next service monolith before it gets big — a new service that breaches either threshold is a signal to split it, not to raise the limit.
+- New top-level `Makefile` with `make check`, `make check-backend`, `make check-frontend`, `make lint`, `make type`, `make test`, `make install` targets. `make check` runs the same gates CI runs, so a clean local run means the push is likely green.
+- New `npm run check:all` script in `frontend/package.json` wrapping `lint` + `typecheck` + `test`. Complements `make check-frontend`.
+- New `npm run typecheck` script (just `tsc --noEmit`).
+
 ### Deprecated
 - `app.services.auth_service._auth_service` is now a deprecated alias for `auth_service`. Existing imports continue to work for backwards compatibility; the alias will be removed in 0.10.0.
 
