@@ -141,6 +141,44 @@ export interface MissionSnapshot {
   summary: ScenarioResult | null;
 }
 
+export interface MissionBeatDescriptor {
+  kind: string;
+  label: string;
+}
+
+export type MissionStreamEvent =
+  | {
+      type: 'mission_started';
+      run_id: string;
+      scenario_id: string;
+      perspective: MissionPerspective;
+      difficulty: MissionDifficulty;
+      ts: string;
+    }
+  | {
+      type: 'beat';
+      ts: string;
+      beat_index: number;
+      beat_total: number;
+      beat: MissionBeatDescriptor;
+      snapshot: ScenarioResult;
+    }
+  | {
+      type: 'mission_complete';
+      ts: string;
+      snapshot: ScenarioResult;
+    }
+  | {
+      type: 'mission_failed';
+      ts: string;
+      error: string;
+      beat_index: number;
+    }
+  | {
+      type: 'mission_aborted';
+      ts: string;
+    };
+
 export interface LoginRequest {
   username: string;
   password: string;

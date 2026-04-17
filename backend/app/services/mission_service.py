@@ -86,21 +86,34 @@ class MissionStore:
 class MissionService:
     """Orchestrates mission lifecycle.
 
-    Phase 1 delegates execution to the synchronous scenario engine. Phases
-    2+ will replace the delegate with a per-run world plus an adversary
-    scheduler.
+    - :meth:`start_sync` runs the scenario synchronously and returns a
+      :class:`MissionRun` already in ``complete`` status. Used by the
+      legacy ``POST /scenarios/{id}`` route.
+    - :meth:`start_async` creates a run in ``active`` status and hands
+      it to the :class:`MissionScheduler` for timed playback. Used by
+      ``POST /missions``.
     """
 
-    def __init__(self, *, scenario_engine, incident_store, mission_store) -> None:
+    def __init__(
+        self,
+        *,
+        scenario_engine,
+        incident_store,
+        mission_store,
+        scheduler=None,
+    ) -> None:
         self.scenario_engine = scenario_engine
         self.incident_store = incident_store
         self.missions = mission_store
+        self.scheduler = scheduler
 
     @staticmethod
     def is_supported(scenario_id: str) -> bool:
         return scenario_id in SUPPORTED_SCENARIOS
 
-    def start(
+    # -- synchronous (legacy) ------------------------------------------------
+
+    def start_sync(
         self,
         *,
         scenario_id: str,
@@ -128,6 +141,44 @@ class MissionService:
         )
         self.missions.put(run)
         return run
+
+    # Back-compat alias for Phase 1 callers.
+    start = start_sync
+
+    # -- asynchronous (streamed adversary) ----------------------------------
+
+    def start_async(
+        self,
+        *,
+        scenario_id: str,
+        perspective: Perspective,
+        difficulty: Difficulty,
+        correlation_id: str,
+        operated_by: str | None = None,
+    ) -> MissionRun:
+        if scenario_id not in SUPPORTED_SCENARIOS:
+            raise ValueError(f"Unsupported scenario: {scenario_id}")
+        if self.scheduler is None:
+            raise RuntimeError(
+                "MissionService was constructed without a scheduler; "
+                "async missions are not available."
+            )
+        run = MissionRun(
+            run_id=f"run-{uuid4()}",
+            scenario_id=scenario_id,
+            perspective=perspective,
+            difficulty=difficulty,
+            correlation_id=correlation_id,
+            created_at=utc_now(),
+            status="active",
+            operated_by=operated_by,
+            summary=None,
+        )
+        self.missions.put(run)
+        self.scheduler.schedule(run)
+        return run
+
+    # -- reads ---------------------------------------------------------------
 
     def get(self, run_id: str) -> MissionRun | None:
         return self.missions.get(run_id)

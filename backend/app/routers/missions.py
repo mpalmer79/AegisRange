@@ -1,22 +1,31 @@
 """Mission runtime routes.
 
-Phase 1 surface: a mission is created via ``POST /missions`` and its
-generated incident can be fetched anonymously via
-``GET /missions/{run_id}/incident``. Later phases will add command
-dispatch, SSE streaming, and per-run world snapshots.
+Phase 2 surface:
 
-The capability model is ``run_id`` — a UUID that is returned to the
-client on creation. No auth or role is required: anyone holding the
-``run_id`` may read that run.
+- ``POST /missions`` creates a mission in ``active`` status and hands
+  it to the :class:`MissionScheduler` for timed adversary playback.
+  Returns immediately with a ``run_id``.
+- ``GET /missions/{run_id}`` returns the current snapshot.
+- ``GET /missions/{run_id}/incident`` returns the generated incident
+  (anonymous — the ``run_id`` is the capability).
+- ``GET /missions/{run_id}/stream`` is a Server-Sent Events stream
+  of world updates published by the scheduler.
+
+No auth or role is required on ``/missions/*``. Holding the ``run_id``
+(a UUID) is the capability.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
-from app.dependencies import mission_service
+from app.dependencies import mission_scheduler, mission_service, mission_stream_hub
 from app.schemas import (
     IncidentResponse,
     MissionSnapshot,
@@ -26,6 +35,7 @@ from app.schemas import (
 from app.serializers import incident_to_dict
 from app.services.auth_service import _auth_service, _extract_bearer_token
 from app.services.mission_service import MissionRun
+from app.services.mission_stream import MissionStreamHub
 from app.store import STORE
 
 logger = logging.getLogger("aegisrange")
@@ -69,7 +79,7 @@ def _snapshot(run: MissionRun) -> dict:
 
 
 @router.post("", response_model=MissionSnapshot)
-def start_mission(payload: StartMissionRequest, request: Request) -> dict:
+async def start_mission(payload: StartMissionRequest, request: Request) -> dict:
     if not mission_service.is_supported(payload.scenario_id):
         raise HTTPException(
             status_code=404,
@@ -78,22 +88,32 @@ def start_mission(payload: StartMissionRequest, request: Request) -> dict:
     correlation_id = request.state.correlation_id
     operated_by = _resolve_operator(request)
     logger.info(
-        "Mission started",
+        "Mission starting",
         extra={
             "scenario": payload.scenario_id,
             "perspective": payload.perspective,
             "difficulty": payload.difficulty,
+            "mode": payload.mode,
             "correlation_id": correlation_id,
             "operated_by": operated_by,
         },
     )
-    run = mission_service.start(
-        scenario_id=payload.scenario_id,
-        perspective=payload.perspective,
-        difficulty=payload.difficulty,
-        correlation_id=correlation_id,
-        operated_by=operated_by,
-    )
+    if payload.mode == "sync":
+        run = mission_service.start_sync(
+            scenario_id=payload.scenario_id,
+            perspective=payload.perspective,
+            difficulty=payload.difficulty,
+            correlation_id=correlation_id,
+            operated_by=operated_by,
+        )
+    else:
+        run = mission_service.start_async(
+            scenario_id=payload.scenario_id,
+            perspective=payload.perspective,
+            difficulty=payload.difficulty,
+            correlation_id=correlation_id,
+            operated_by=operated_by,
+        )
     return _snapshot(run)
 
 
@@ -116,3 +136,52 @@ def get_mission_incident(run_id: str) -> dict:
         )
     notes = STORE.get_incident_notes_for(incident.correlation_id)
     return incident_to_dict(incident, notes=notes)
+
+
+# ---------------------------------------------------------------------------
+# SSE stream
+# ---------------------------------------------------------------------------
+
+
+async def _sse_event_stream(
+    run_id: str, hub: MissionStreamHub
+) -> AsyncIterator[bytes]:
+    """Yield SSE-formatted frames until the mission ends."""
+    queue = await hub.subscribe(run_id)
+    try:
+        # Prelude: hint to clients that we're connected.
+        yield b": connected\n\n"
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=15.0)
+            except asyncio.TimeoutError:
+                # Keepalive comment — no-op for the consumer, keeps
+                # browser / proxy connections warm.
+                yield b": keepalive\n\n"
+                continue
+            if event == MissionStreamHub.CLOSE_SENTINEL:
+                break
+            assert isinstance(event, dict)
+            payload = json.dumps(event, default=str).encode("utf-8")
+            yield b"event: " + event["type"].encode("utf-8") + b"\n"
+            yield b"data: " + payload + b"\n\n"
+    finally:
+        await hub.unsubscribe(run_id, queue)
+
+
+@router.get("/{run_id}/stream")
+async def stream_mission(run_id: str) -> StreamingResponse:
+    run = mission_service.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    # Re-use ``_sse_event_stream``; the hub replays any buffered events
+    # (``mission_started`` + early beats) to new subscribers and, for
+    # already-terminal runs, delivers the backlog then the close
+    # sentinel without blocking.
+    response = StreamingResponse(
+        _sse_event_stream(run_id, mission_stream_hub),
+        media_type="text/event-stream",
+    )
+    response.headers["Cache-Control"] = "no-cache, no-transform"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
