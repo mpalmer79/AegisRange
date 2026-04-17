@@ -65,6 +65,19 @@ async def lifespan(app: FastAPI):
             "SQLite persistence enabled",
             extra={"env": settings.APP_ENV, "db_path": settings.DB_PATH},
         )
+        # Phase 7: piggyback on the same persistence layer to durably
+        # store mission runs (player-driven state that the world store
+        # doesn't capture). Restore prior runs into memory so a worker
+        # restart doesn't drop them.
+        from app.dependencies import mission_store
+
+        if STORE._persistence is not None:
+            mission_store.enable_persistence(STORE._persistence)
+            loaded = mission_store.load_from_persistence()
+            logger.info(
+                "Mission runs restored from SQLite",
+                extra={"loaded": loaded},
+            )
     logger.info("AegisRange API started", extra={"env": settings.APP_ENV})
     yield
     # --- shutdown ---
