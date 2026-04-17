@@ -201,6 +201,7 @@ class MissionSnapshot(BaseModel):
     summary: ScenarioSummaryResponse | None = None
     commands_issued: list[str] = []
     xp_delta: int = 0
+    coop_partner_run_id: str | None = None
 
 
 class SubmitCommandRequest(BaseModel):
@@ -265,6 +266,20 @@ class ReplayResponse(BaseModel):
     duration_seconds: int | None = None
     summary: ScenarioSummaryResponse | None = None
     commands: list[ReplayCommand]
+
+
+# -- Phase 9: co-op ---------------------------------------------------------
+
+
+class StartCoopRequest(BaseModel):
+    scenario_id: str
+    difficulty: Difficulty = "analyst"
+
+
+class CoopPair(BaseModel):
+    correlation_id: str
+    red: MissionSnapshot
+    blue: MissionSnapshot
 
 
 # ---------------------------------------------------------------------------

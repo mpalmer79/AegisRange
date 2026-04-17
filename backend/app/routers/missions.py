@@ -31,6 +31,7 @@ from app.dependencies import (
     mission_stream_hub,
 )
 from app.schemas import (
+    CoopPair,
     IncidentResponse,
     LeaderboardEntry,
     LeaderboardResponse,
@@ -40,6 +41,7 @@ from app.schemas import (
     ReplayResponse,
     ReportScoreRequest,
     ScenarioSummaryResponse,
+    StartCoopRequest,
     StartMissionRequest,
     SubmitCommandRequest,
     SubmitCommandResponse,
@@ -94,6 +96,7 @@ def _snapshot(run: MissionRun) -> dict:
         "summary": summary,
         "commands_issued": [r.verb_key for r in run.command_history],
         "xp_delta": run.xp_delta,
+        "coop_partner_run_id": run.coop_partner_run_id,
     }
 
 
@@ -136,10 +139,45 @@ async def start_mission(payload: StartMissionRequest, request: Request) -> dict:
     return _snapshot(run)
 
 
-# NOTE: ``GET /leaderboard`` MUST be declared before
-# ``GET /{run_id}`` so FastAPI doesn't dispatch the literal path to
-# the dynamic-segment handler. Same constraint applies to any other
-# fixed-string route under /missions.
+# NOTE: ``GET /leaderboard`` and ``POST /coop`` MUST be declared
+# before the dynamic ``/{run_id}`` routes so FastAPI doesn't dispatch
+# the literal paths to the dynamic-segment handler.
+
+
+@router.post("/coop", response_model=CoopPair)
+def start_coop_mission(payload: StartCoopRequest, request: Request) -> dict:
+    """Create a co-op mission pair — one Red run and one Blue run
+    sharing a correlation_id. Returns both snapshots; the frontend
+    shows the initiating player's run directly and a shareable link
+    for the partner's run_id."""
+    if not mission_service.is_supported(payload.scenario_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown scenario '{payload.scenario_id}'",
+        )
+    correlation_id = request.state.correlation_id
+    operator = _resolve_operator(request)
+    logger.info(
+        "Co-op mission starting",
+        extra={
+            "scenario": payload.scenario_id,
+            "difficulty": payload.difficulty,
+            "correlation_id": correlation_id,
+            "operated_by": operator,
+        },
+    )
+    red, blue = mission_service.start_coop(
+        scenario_id=payload.scenario_id,
+        difficulty=payload.difficulty,
+        correlation_id=correlation_id,
+        operated_by_red=operator,
+        operated_by_blue=None,
+    )
+    return {
+        "correlation_id": correlation_id,
+        "red": _snapshot(red),
+        "blue": _snapshot(blue),
+    }
 
 
 @router.get("/leaderboard", response_model=LeaderboardResponse)

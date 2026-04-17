@@ -155,6 +155,15 @@ export interface MissionSnapshot {
   created_at: string;
   operated_by: string | null;
   summary: ScenarioResult | null;
+  commands_issued?: string[];
+  xp_delta?: number;
+  coop_partner_run_id?: string | null;
+}
+
+export interface CoopPair {
+  correlation_id: string;
+  red: MissionSnapshot;
+  blue: MissionSnapshot;
 }
 
 export interface MissionBeatDescriptor {

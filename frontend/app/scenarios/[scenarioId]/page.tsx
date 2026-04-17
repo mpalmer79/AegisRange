@@ -1,9 +1,16 @@
 'use client';
 
-import { useParams, notFound } from 'next/navigation';
+import { useParams, notFound, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { startMission, getScenarioErrorMessage, ApiError, reportMissionScore } from '@/lib/api';
-import { SCENARIO_DEFINITIONS, ScenarioResult } from '@/lib/types';
+import {
+  startMission,
+  startCoopMission,
+  getMission,
+  getScenarioErrorMessage,
+  ApiError,
+  reportMissionScore,
+} from '@/lib/api';
+import { SCENARIO_DEFINITIONS, ScenarioResult, CoopPair } from '@/lib/types';
 import {
   DIFFICULTIES,
   DifficultyId,
@@ -28,6 +35,7 @@ import MissionTimeline from './components/MissionTimeline';
 import MissionConsole from './components/MissionConsole';
 import OpsManual from './components/OpsManual';
 import LeaderboardCard from './components/LeaderboardCard';
+import CoopLaunchModal from './components/CoopLaunchModal';
 import { useMissionStream } from './hooks/useMissionStream';
 import { ACCENTS, DEFAULT_ACCENT } from './components/accents';
 
@@ -69,6 +77,10 @@ export default function ScenarioDetailPage() {
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [runId, setRunId] = useState<string | null>(null);
   const [opsManualOpen, setOpsManualOpen] = useState(false);
+  const [coopPair, setCoopPair] = useState<CoopPair | null>(null);
+  const [coopModalOpen, setCoopModalOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const joinRunId = searchParams?.get('run') ?? null;
 
   const difficulty = DIFFICULTIES.find((d) => d.id === difficultyId) ?? DIFFICULTIES[1];
 
@@ -85,6 +97,38 @@ export default function ScenarioDetailPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Phase 9 co-op: if the URL carries ?run=<id>, drop the player into
+  // that existing run instead of starting a fresh one. We flip status
+  // to 'running' so the stream hook subscribes and the console arms.
+  // The perspective is inferred from the run's data so the player
+  // sees the right objectives + verbs.
+  useEffect(() => {
+    if (!joinRunId || runId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getMission(joinRunId);
+        if (cancelled) return;
+        if (snap.scenario_id !== sc.id) return; // wrong scenario page
+        setRunId(snap.run_id);
+        if (snap.perspective !== perspective) {
+          setPerspective(snap.perspective);
+        }
+        setStatus(snap.status === 'complete' ? 'complete' : 'running');
+        setLaunchedAt(Date.now());
+        if (snap.summary) {
+          setResult(snap.summary);
+        }
+      } catch {
+        /* invalid / expired run id — silently ignore, user can launch fresh */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joinRunId]);
 
   // ---------- live mission stream ----------
   const missionStream = useMissionStream(
@@ -275,6 +319,23 @@ export default function ScenarioDetailPage() {
     }
   };
 
+  const launchCoop = async () => {
+    setErrorMsg(null);
+    setErrorDetail(null);
+    try {
+      const pair = await startCoopMission({
+        scenario_id: sc.id,
+        difficulty: difficulty.id,
+      });
+      setCoopPair(pair);
+      setCoopModalOpen(true);
+    } catch (err) {
+      setErrorMsg(getScenarioErrorMessage(err));
+      setErrorDetail(err instanceof ApiError ? err.detail ?? null : null);
+      setStatus('error');
+    }
+  };
+
   const reset = () => {
     setStatus('idle');
     setResult(null);
@@ -397,6 +458,22 @@ export default function ScenarioDetailPage() {
 
           <button
             type="button"
+            onClick={launchCoop}
+            disabled={status === 'running'}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[11px] font-mono font-semibold tracking-widest uppercase text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/10 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Launch Co-op Mission"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 00-3-3.87" />
+              <path d="M16 3.13a4 4 0 010 7.75" />
+            </svg>
+            Launch Co-op
+          </button>
+
+          <button
+            type="button"
             onClick={() => setOpsManualOpen(true)}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[11px] font-mono font-semibold tracking-widest uppercase text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/10 transition"
             aria-label="Open Ops Manual (F1)"
@@ -441,6 +518,19 @@ export default function ScenarioDetailPage() {
         perspective={perspective}
         open={opsManualOpen}
         onClose={() => setOpsManualOpen(false)}
+      />
+
+      <CoopLaunchModal
+        open={coopModalOpen}
+        pair={coopPair}
+        currentPerspective={perspective}
+        onClose={() => setCoopModalOpen(false)}
+        onKeepMyRun={(myRunId) => {
+          setRunId(myRunId);
+          setStatus('running');
+          setLaunchedAt(Date.now());
+          setResult(null);
+        }}
       />
     </div>
   );
