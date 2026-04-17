@@ -7,6 +7,10 @@ All notable changes to AegisRange are documented in this file.
 ### Changed
 - CSRF middleware: `/scenarios/*` prefix is no longer exempt. Cookie-authenticated scenario execution now requires a matching `X-CSRF-Token` header, closing a silent hole where any future POST/PATCH/DELETE under `/scenarios/*` would have been unprotected against cross-origin cookie-driven calls.
 - Every remaining entry in `_CSRF_EXEMPT_PATHS` / `_CSRF_EXEMPT_PREFIXES` now carries an inline comment naming why it is exempt.
+- `services/auth_service.py` (791 lines) split into the `services/auth/` package: `passwords.py`, `roles.py`, `correlation.py`, `service.py`. Original path is now a re-export shim — every existing import of `from app.services.auth_service import ...` continues to work.
+- `services/detection_rules.py` (641 lines) split into the `services/detection/` package: `base.py`, `rules.py`, `metrics.py`. Original path is now a re-export shim.
+- `services/adversary_scripts.py` (711 lines) split into the `services/adversary/` package: `base.py`, `handlers.py`, `scripts.py`. Original path is now a re-export shim.
+- `services/mission_service.py` (662 lines) split into the `services/mission/` package: `run.py`, `store.py`, `service.py`. Original path is now a re-export shim.
 
 ### Added
 - `backend/tests/test_security_hardening.py`: new cases pinning the CSRF model — cookie-authed POSTs to each `/scenarios/*` route are rejected without a token, accepted with a matching token, `/missions/*` remains capability-exempt, and Bearer-authed requests bypass CSRF regardless of path.
