@@ -71,8 +71,9 @@ async def lifespan(app: FastAPI):
         # restart doesn't drop them.
         from app.dependencies import mission_store
 
-        if STORE._persistence is not None:
-            mission_store.enable_persistence(STORE._persistence)
+        persistence = STORE.get_persistence()
+        if persistence is not None:
+            mission_store.enable_persistence(persistence)
             loaded = mission_store.load_from_persistence()
             logger.info(
                 "Mission runs restored from SQLite",
@@ -322,10 +323,10 @@ async def rate_limit_middleware(request: Request, call_next):
         cookie_token = request.cookies.get(settings.AUTH_COOKIE_NAME)
         user_id = None
         if auth_header.lower().startswith("bearer ") or cookie_token:
-            from app.services.auth_service import _auth_service
+            from app.services.auth_service import auth_service
 
             token = cookie_token or auth_header.split()[-1]
-            payload = _auth_service.verify_token(token)
+            payload = auth_service.verify_token(token)
             if payload:
                 user_id = payload.sub
         if user_id:

@@ -353,6 +353,14 @@ class InMemoryStore:
         self._persistence = PersistenceLayer(self, db_path=db_path)
         self._persistence.load()
 
+    def get_persistence(self) -> "PersistenceLayer | None":
+        """Return the attached persistence layer, or ``None`` if persistence
+        is disabled. The layer itself remains an internal attribute; this
+        accessor only widens the read path so callers (mission store,
+        health endpoint) can see whether persistence is enabled without
+        reaching past the underscore."""
+        return self._persistence
+
     def save(self) -> None:
         """Persist operational state to SQLite (no-op if persistence not enabled).
 

@@ -388,7 +388,10 @@ class AuthService:
 # Module-level service instance (reads secret from config)
 # ---------------------------------------------------------------------------
 
-_auth_service = AuthService()
+auth_service = AuthService()
+# DEPRECATED: the underscore name shipped as the canonical public singleton
+# through 0.8.x. Use ``auth_service`` instead. Scheduled for removal in 0.10.0.
+_auth_service = auth_service
 
 
 def get_current_user(token: str) -> TokenPayload:
@@ -396,7 +399,7 @@ def get_current_user(token: str) -> TokenPayload:
 
     Raises ``HTTPException(401)`` when the token is missing or invalid.
     """
-    payload = _auth_service.verify_token(token)
+    payload = auth_service.verify_token(token)
     if payload is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return payload

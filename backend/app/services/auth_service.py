@@ -19,7 +19,8 @@ from app.services.auth import (  # noqa: F401
     AuthUser,
     IdentityType,
     TokenPayload,
-    _auth_service,
+    _auth_service,  # deprecated alias; prefer ``auth_service``
+    auth_service,
     _build_default_users,
     _extract_bearer_token,
     _hash_password,
@@ -46,6 +47,7 @@ __all__ = [
     "ENDPOINT_ROLES",
     "DEFAULT_PASSWORDS",
     "DEFAULT_USERS",
+    "auth_service",
     "_auth_service",
     "_hash_password",
     "_verify_password",

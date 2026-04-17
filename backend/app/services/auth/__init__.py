@@ -43,7 +43,8 @@ from .service import (
     AuthService,
     AuthUser,
     TokenPayload,
-    _auth_service,
+    _auth_service,  # deprecated alias; prefer ``auth_service``
+    auth_service,
     get_current_user,
 )
 
@@ -58,6 +59,7 @@ __all__ = [
     "ENDPOINT_ROLES",
     "DEFAULT_PASSWORDS",
     "DEFAULT_USERS",
+    "auth_service",
     "_auth_service",
     "_hash_password",
     "_verify_password",

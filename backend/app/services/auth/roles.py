@@ -87,7 +87,7 @@ def _extract_bearer_token(request: Request) -> tuple[str | None, AuthChannel | N
 
 def require_role(minimum_role: str):
     """Return a FastAPI dependency that enforces a minimum role level."""
-    from .service import _auth_service  # avoid circular import at module load
+    from .service import auth_service  # avoid circular import at module load
 
     minimum_level: int = ROLES.get(minimum_role, {}).get("level", 0)  # type: ignore[union-attr, assignment]
 
@@ -96,7 +96,7 @@ def require_role(minimum_role: str):
         if token is None:
             raise HTTPException(status_code=401, detail="Missing authentication token")
 
-        payload = _auth_service.verify_token(token)
+        payload = auth_service.verify_token(token)
         if payload is None:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -124,14 +124,14 @@ def require_role(minimum_role: str):
 
 def require_scope(required_scope: str):
     """Return a FastAPI dependency that enforces a specific scope."""
-    from .service import _auth_service
+    from .service import auth_service
 
     def _dependency(request: Request):
         token, channel = _extract_bearer_token(request)
         if token is None:
             raise HTTPException(status_code=401, detail="Missing authentication token")
 
-        payload = _auth_service.verify_token(token)
+        payload = auth_service.verify_token(token)
         if payload is None:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -150,14 +150,14 @@ def require_scope(required_scope: str):
 
 def require_identity_type(allowed_type: str):
     """Return a FastAPI dependency that enforces a specific identity type."""
-    from .service import _auth_service
+    from .service import auth_service
 
     def _dependency(request: Request):
         token, channel = _extract_bearer_token(request)
         if token is None:
             raise HTTPException(status_code=401, detail="Missing authentication token")
 
-        payload = _auth_service.verify_token(token)
+        payload = auth_service.verify_token(token)
         if payload is None:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
